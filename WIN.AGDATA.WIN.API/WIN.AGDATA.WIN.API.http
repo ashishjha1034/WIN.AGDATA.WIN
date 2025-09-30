@@ -1,0 +1,6 @@
+@WIN.AGDATA.WIN.API_HostAddress = http://localhost:5155
+
+GET {{WIN.AGDATA.WIN.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

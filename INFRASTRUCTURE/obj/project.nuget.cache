@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "vb9XKxOsnRY=",
+  "success": true,
+  "projectFilePath": "D:\\AGDATA\\WIN.AGDATA.WIN\\INFRASTRUCTURE\\INFRASTRUCTURE.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\ashis\\.nuget\\packages\\microsoft.openapi\\1.6.14\\microsoft.openapi.1.6.14.nupkg.sha512",
+    "C:\\Users\\ashis\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\6.6.2\\swashbuckle.aspnetcore.swagger.6.6.2.nupkg.sha512",
+    "C:\\Users\\ashis\\.nuget\\packages\\swashbuckle.aspnetcore.swaggergen\\6.6.2\\swashbuckle.aspnetcore.swaggergen.6.6.2.nupkg.sha512"
+  ],
+  "logs": []
+}
