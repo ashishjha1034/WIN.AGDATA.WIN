@@ -36,3 +36,5 @@ D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\refint\API.dll
 D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\API.pdb
 D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\API.genruntimeconfig.cache
 D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\ref\API.dll
+D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\API.sourcelink.json
+D:\AGDATA\WIN.AGDATA.WIN\WIN.AGDATA.WIN.API\obj\Debug\net8.0\API.MvcApplicationPartsAssemblyInfo.cs
