@@ -1,0 +1,20 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build outputs
+bin/
+obj/
+Debug/
+Release/
+
+# Temporary files
+*.cache
+*.db
+*.pdb
+*.dll
+*.exe
+
+# Rider / JetBrains IDEs
+.idea/
