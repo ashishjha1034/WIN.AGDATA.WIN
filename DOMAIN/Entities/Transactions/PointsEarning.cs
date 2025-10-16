@@ -3,9 +3,9 @@ using WIN.AGDATA.WIN.Domain.Exceptions;
 
 public class PointsEarning : PointsTransaction
 {
-    public string EventId { get; } // Changed from Guid to string
+    public string EventId { get; } 
 
-    public PointsEarning(string employeeId, int points, string eventId, string description) // Changed Guid to string
+    public PointsEarning(string employeeId, int points, string eventId, string description) 
         : base(employeeId, Math.Abs(points), description)
     {
         ValidateEventId(eventId);

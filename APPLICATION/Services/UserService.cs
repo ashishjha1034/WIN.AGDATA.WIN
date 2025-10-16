@@ -1,91 +1,199 @@
 ﻿using Domain.Entities.Users;
-using System.Xml.Linq;
+using Microsoft.Extensions.Logging;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Domain.Enums;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
-namespace WIN.AGDATA.WIN.Application.Services
+namespace WIN.AGDATA.WIN.Application.Services;
+
+public class UserService : IUserService
 {
-    public class UserService : IUserService
+    private readonly IUserRepository _userRepository;
+    private readonly ILogger<UserService> _logger;
+
+    public UserService(IUserRepository userRepository, ILogger<UserService> logger)
     {
-        private readonly List<User> _users = new();
-        private readonly object _lock = new object();
+        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public User CreateUser(string employeeId, string email, string firstName, string lastName)
+    public User CreateUser(string employeeId, string email, string firstName, string lastName)
+    {
+        try
         {
-            lock (_lock)
-            {
-                ValidateUserDoesNotExist(employeeId, email);
+            var existingUser = _userRepository.GetByEmployeeId(employeeId);
+            if (existingUser != null)
+                throw new DomainException($"User with Employee ID '{employeeId}' already exists");
 
-                var user = new User(employeeId, email, firstName, lastName);
-                _users.Add(user);
-                return user;
-            }
+            var existingByEmail = _userRepository.GetByEmail(email);
+            if (existingByEmail != null)
+                throw new DomainException($"User with email '{email}' already exists");
+
+            var user = new User(employeeId, email, firstName, lastName);
+            _userRepository.Add(user);
+
+            _logger.LogInformation("User created successfully: {EmployeeId}", employeeId);
+            return user;
         }
-
-        public User? GetUserByEmail(string email)
+        catch (Exception ex)
         {
-            lock (_lock)
-                return _users.FirstOrDefault(u =>
-                    string.Equals(u.Identity.Email, email, StringComparison.OrdinalIgnoreCase));
+            _logger.LogError(ex, "Failed to create user: {EmployeeId}", employeeId);
+            throw;
         }
+    }
 
-        public User? GetUserByEmployeeId(string employeeId)
+    public User CreateAdmin(string employeeId, string email, string firstName, string lastName, string createdBy)
+    {
+        try
         {
-            lock (_lock)
-                return _users.FirstOrDefault(u =>
-                    string.Equals(u.Identity.EmployeeId, employeeId, StringComparison.OrdinalIgnoreCase));
-        }
+            var user = new User(employeeId, email, firstName, lastName, UserRole.Admin, createdBy);
+            _userRepository.Add(user);
 
-        public List<User> GetAllUsers()
+            _logger.LogInformation("Admin user created successfully: {EmployeeId} by {CreatedBy}", employeeId, createdBy);
+            return user;
+        }
+        catch (Exception ex)
         {
-            lock (_lock)
-                return _users.ToList();
+            _logger.LogError(ex, "Failed to create admin user: {EmployeeId}", employeeId);
+            throw;
         }
+    }
 
-        public void UpdateUserEmail(string employeeId, string newEmail)
+    public User? GetUserByEmail(string email)
+    {
+        return _userRepository.GetByEmail(email);
+    }
+
+    public User? GetUserByEmployeeId(string employeeId)
+    {
+        return _userRepository.GetByEmployeeId(employeeId);
+    }
+
+    public List<User> GetAllUsers()
+    {
+        return _userRepository.GetAll();
+    }
+
+    public List<User> GetAllAdmins()
+    {
+        return _userRepository.GetByRole(UserRole.Admin);
+    }
+
+    public void UpdateUserEmail(string employeeId, string newEmail, string modifiedBy)
+    {
+        try
         {
-            lock (_lock)
-            {
-                var user = GetUserByEmployeeId(employeeId)
-                    ?? throw new DomainException($"User with Employee ID {employeeId} not found");
+            var user = GetUserOrThrow(employeeId);
 
-                if (_users.Any(u => u != user &&
-                    string.Equals(u.Identity.Email, newEmail, StringComparison.OrdinalIgnoreCase)))
-                    throw new DomainException($"Email {newEmail} is already in use");
+            var existingUser = _userRepository.GetByEmail(newEmail);
+            if (existingUser != null && existingUser.Identity.EmployeeId != employeeId)
+                throw new DomainException($"Email '{newEmail}' is already in use");
 
-                user.UpdateEmail(newEmail);
-            }
+            var emailAddress = new EmailAddress(newEmail);
+            user.UpdateEmail(emailAddress, modifiedBy);
+
+            _userRepository.Update(user);
+            _logger.LogInformation("User email updated: {EmployeeId} to {Email} by {ModifiedBy}", employeeId, newEmail, modifiedBy);
         }
-
-        public void DeactivateUser(string employeeId)
+        catch (Exception ex)
         {
-            lock (_lock)
-            {
-                var user = GetUserByEmployeeId(employeeId)
-                    ?? throw new DomainException($"User with Employee ID {employeeId} not found");
-                user.Deactivate();
-            }
+            _logger.LogError(ex, "Failed to update user email: {EmployeeId}", employeeId);
+            throw;
         }
+    }
 
-        public void ReactivateUser(string employeeId)
+    public void UpdateUserInfo(string employeeId, string firstName, string lastName, string modifiedBy)
+    {
+        try
         {
-            lock (_lock)
-            {
-                var user = GetUserByEmployeeId(employeeId)
-                    ?? throw new DomainException($"User with Employee ID {employeeId} not found");
-                user.Reactivate();
-            }
-        }
+            var user = GetUserOrThrow(employeeId);
+            user.UpdateUserInfo(firstName, lastName, modifiedBy);
 
-        private void ValidateUserDoesNotExist(string employeeId, string email)
+            _userRepository.Update(user);
+            _logger.LogInformation("User info updated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+        }
+        catch (Exception ex)
         {
-            if (_users.Any(u =>
-                string.Equals(u.Identity.EmployeeId, employeeId, StringComparison.OrdinalIgnoreCase)))
-                throw new DomainException($"User with Employee ID {employeeId} already exists");
-
-            if (_users.Any(u =>
-                string.Equals(u.Identity.Email, email, StringComparison.OrdinalIgnoreCase)))
-                throw new DomainException($"User with email {email} already exists");
+            _logger.LogError(ex, "Failed to update user info: {EmployeeId}", employeeId);
+            throw;
         }
+    }
+
+    public void DeactivateUser(string employeeId, string modifiedBy = "SYSTEM")
+    {
+        try
+        {
+            var user = GetUserOrThrow(employeeId);
+            user.Deactivate(modifiedBy);
+
+            _userRepository.Update(user);
+            _logger.LogInformation("User deactivated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to deactivate user: {EmployeeId}", employeeId);
+            throw;
+        }
+    }
+
+    public void ReactivateUser(string employeeId, string modifiedBy = "SYSTEM")
+    {
+        try
+        {
+            var user = GetUserOrThrow(employeeId);
+            user.Reactivate(modifiedBy);
+
+            _userRepository.Update(user);
+            _logger.LogInformation("User reactivated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reactivate user: {EmployeeId}", employeeId);
+            throw;
+        }
+    }
+
+    public void PromoteToAdmin(string employeeId, string modifiedBy)
+    {
+        try
+        {
+            var user = GetUserOrThrow(employeeId);
+            user.PromoteToAdmin(modifiedBy);
+
+            _userRepository.Update(user);
+            _logger.LogInformation("User promoted to admin: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to promote user to admin: {EmployeeId}", employeeId);
+            throw;
+        }
+    }
+
+    public void DemoteToEmployee(string employeeId, string modifiedBy)
+    {
+        try
+        {
+            var user = GetUserOrThrow(employeeId);
+            user.DemoteToEmployee(modifiedBy);
+
+            _userRepository.Update(user);
+            _logger.LogInformation("User demoted to employee: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to demote user to employee: {EmployeeId}", employeeId);
+            throw;
+        }
+    }
+
+    private User GetUserOrThrow(string employeeId)
+    {
+        var user = _userRepository.GetByEmployeeId(employeeId);
+        if (user == null)
+            throw new DomainException($"User not found: {employeeId}");
+
+        return user;
     }
 }

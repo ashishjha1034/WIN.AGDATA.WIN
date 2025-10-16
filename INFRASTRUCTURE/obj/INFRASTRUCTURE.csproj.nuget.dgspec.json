@@ -32,8 +32,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj": {
-                "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj"
+              "D:\\AGDATA\\WIN.AGDATA.WIN\\DOMAIN\\DOMAIN.csproj": {
+                "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\DOMAIN\\DOMAIN.csproj"
               }
             }
           }
@@ -53,6 +53,16 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.Extensions.DependencyInjection.Abstractions": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.Extensions.Logging.Abstractions": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -73,12 +83,12 @@
         }
       }
     },
-    "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj": {
+    "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\DOMAIN.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj",
-        "projectName": "Domain",
-        "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj",
+        "projectUniqueName": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\DOMAIN.csproj",
+        "projectName": "DOMAIN",
+        "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\DOMAIN.csproj",
         "packagesPath": "C:\\Users\\ashis\\.nuget\\packages\\",
         "outputPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\obj\\",
         "projectStyle": "PackageReference",
@@ -118,6 +128,22 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.NET.Test.Sdk": {
+              "target": "Package",
+              "version": "[18.0.0, )"
+            },
+            "xunit": {
+              "target": "Package",
+              "version": "[2.9.3, )"
+            },
+            "xunit.runner.visualstudio": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[3.1.5, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -169,8 +195,8 @@
               "D:\\AGDATA\\WIN.AGDATA.WIN\\APPLICATION\\APPLICATION.csproj": {
                 "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\APPLICATION\\APPLICATION.csproj"
               },
-              "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj": {
-                "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj"
+              "D:\\AGDATA\\WIN.AGDATA.WIN\\DOMAIN\\DOMAIN.csproj": {
+                "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\DOMAIN\\DOMAIN.csproj"
               }
             }
           }
@@ -191,9 +217,21 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
-            "Swashbuckle.AspNetCore.SwaggerGen": {
+            "Microsoft.EntityFrameworkCore.SqlServer": {
               "target": "Package",
-              "version": "[6.6.2, )"
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.EntityFrameworkCore.Tools": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.Extensions.DependencyInjection.Abstractions": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.Extensions.Logging.Abstractions": {
+              "target": "Package",
+              "version": "[8.0.0, )"
             }
           },
           "imports": [

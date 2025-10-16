@@ -4,15 +4,15 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Products
 {
     public class Product
     {
-        public Identity Identity { get; }
-        public Pricing Pricing { get; }
-        public Inventory Inventory { get; }
+        public ProductIdentity Identity { get; }
+        public ProductPricing Pricing { get; }
+        public ProductInventory Inventory { get; }
 
         public Product(string name, string description, int requiredPoints, int stockQuantity = 0)
         {
-            Identity = new Identity(name, description);
-            Pricing = new Pricing(requiredPoints);
-            Inventory = new Inventory(stockQuantity);
+            Identity = new ProductIdentity(name, description);
+            Pricing = new ProductPricing(requiredPoints);
+            Inventory = new ProductInventory(stockQuantity);
         }
         public void UpdateDetails(string name, string description, int points)
         {

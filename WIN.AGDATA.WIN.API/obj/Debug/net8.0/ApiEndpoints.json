@@ -1,6 +1,6 @@
 [
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.EventsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
     "Method": "CreateEvent",
     "RelativePath": "api/Events",
     "HttpMethod": "POST",
@@ -9,14 +9,14 @@
     "Parameters": [
       {
         "Name": "request",
-        "Type": "WIN_AGDATA_WIN.API.Controllers.CreateEventRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.CreateEventRequest",
         "IsRequired": true
       }
     ],
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.EventsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
     "Method": "GetAllEvents",
     "RelativePath": "api/Events",
     "HttpMethod": "GET",
@@ -26,8 +26,8 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.EventsController",
-    "Method": "GetEvent",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "GetEventById",
     "RelativePath": "api/Events/{eventId}",
     "HttpMethod": "GET",
     "IsController": true,
@@ -42,7 +42,7 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.EventsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
     "Method": "CompleteEvent",
     "RelativePath": "api/Events/{eventId}/complete",
     "HttpMethod": "POST",
@@ -56,16 +56,16 @@
       },
       {
         "Name": "request",
-        "Type": "WIN_AGDATA_WIN.API.Controllers.CompleteEventRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.CompleteEventRequest",
         "IsRequired": true
       }
     ],
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.EventsController",
-    "Method": "AddPrizeTier",
-    "RelativePath": "api/Events/{eventId}/prize-tiers",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "DeactivateEvent",
+    "RelativePath": "api/Events/{eventId}/deactivate",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,
@@ -77,7 +77,95 @@
       },
       {
         "Name": "request",
-        "Type": "WIN_AGDATA_WIN.API.Controllers.AddPrizeTierRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.DeactivateEventRequest",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "AddPrizeTier",
+    "RelativePath": "api/Events/{eventId}/prizes",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "eventId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.AddPrizeTierRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "ReactivateEvent",
+    "RelativePath": "api/Events/{eventId}/reactivate",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "eventId",
+        "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "GetActiveEvents",
+    "RelativePath": "api/Events/active",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "ProcessExpiredEvents",
+    "RelativePath": "api/Events/process-expired",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.EventsController",
+    "Method": "GetUpcomingEvents",
+    "RelativePath": "api/Events/upcoming",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.PointsController",
+    "Method": "AddPointsToUser",
+    "RelativePath": "api/Points/{employeeId}/add",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "employeeId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.AddPointsRequest",
         "IsRequired": true
       }
     ],
@@ -85,8 +173,8 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.PointsController",
-    "Method": "GetUserBalance",
-    "RelativePath": "api/Points/user/{employeeId}/balance",
+    "Method": "GetUserPointsBalance",
+    "RelativePath": "api/Points/{employeeId}/balance",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
@@ -101,8 +189,29 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.PointsController",
-    "Method": "GetUserTransactionHistory",
-    "RelativePath": "api/Points/user/{employeeId}/history",
+    "Method": "CanUserRedeem",
+    "RelativePath": "api/Points/{employeeId}/can-redeem/{requiredPoints}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "employeeId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "requiredPoints",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.PointsController",
+    "Method": "GetUserPointsHistory",
+    "RelativePath": "api/Points/{employeeId}/history",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
@@ -143,7 +252,7 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.ProductsController",
-    "Method": "GetProduct",
+    "Method": "GetProductById",
     "RelativePath": "api/Products/{productId}",
     "HttpMethod": "GET",
     "IsController": true,
@@ -159,8 +268,8 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.ProductsController",
-    "Method": "UpdateProduct",
-    "RelativePath": "api/Products/{productId}",
+    "Method": "UpdateProductPricing",
+    "RelativePath": "api/Products/{productId}/pricing",
     "HttpMethod": "PUT",
     "IsController": true,
     "Order": 0,
@@ -172,7 +281,7 @@
       },
       {
         "Name": "request",
-        "Type": "WIN.AGDATA.WIN.API.Controllers.UpdateProductRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.UpdatePricingRequest",
         "IsRequired": true
       }
     ],
@@ -180,23 +289,7 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.ProductsController",
-    "Method": "DeleteProduct",
-    "RelativePath": "api/Products/{productId}",
-    "HttpMethod": "DELETE",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [
-      {
-        "Name": "productId",
-        "Type": "System.Guid",
-        "IsRequired": true
-      }
-    ],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.ProductsController",
-    "Method": "UpdateStock",
+    "Method": "UpdateProductStock",
     "RelativePath": "api/Products/{productId}/stock",
     "HttpMethod": "PUT",
     "IsController": true,
@@ -216,7 +309,17 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.ProductsController",
+    "Method": "GetAvailableProducts",
+    "RelativePath": "api/Products/available",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
     "Method": "RequestRedemption",
     "RelativePath": "api/Redemptions",
     "HttpMethod": "POST",
@@ -225,14 +328,30 @@
     "Parameters": [
       {
         "Name": "request",
-        "Type": "WIN_AGDATA_WIN.API.Controllers.RequestRedemptionRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.RedemptionRequest",
         "IsRequired": true
       }
     ],
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
+    "Method": "GetRedemptionById",
+    "RelativePath": "api/Redemptions/{redemptionId}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "redemptionId",
+        "Type": "System.Guid",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
     "Method": "ApproveRedemption",
     "RelativePath": "api/Redemptions/{redemptionId}/approve",
     "HttpMethod": "POST",
@@ -248,8 +367,8 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
-    "Method": "MarkRedemptionDelivered",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
+    "Method": "MarkAsDelivered",
     "RelativePath": "api/Redemptions/{redemptionId}/deliver",
     "HttpMethod": "POST",
     "IsController": true,
@@ -264,7 +383,7 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
     "Method": "RejectRedemption",
     "RelativePath": "api/Redemptions/{redemptionId}/reject",
     "HttpMethod": "POST",
@@ -278,14 +397,14 @@
       },
       {
         "Name": "request",
-        "Type": "WIN_AGDATA_WIN.API.Controllers.RejectRedemptionRequest",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.RejectRedemptionRequest",
         "IsRequired": true
       }
     ],
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
     "Method": "GetPendingRedemptions",
     "RelativePath": "api/Redemptions/pending",
     "HttpMethod": "GET",
@@ -295,7 +414,7 @@
     "ReturnTypes": []
   },
   {
-    "ContainingType": "WIN_AGDATA_WIN.API.Controllers.RedemptionsController",
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.RedemptionsController",
     "Method": "GetUserRedemptions",
     "RelativePath": "api/Redemptions/user/{employeeId}",
     "HttpMethod": "GET",
@@ -364,6 +483,32 @@
         "Name": "employeeId",
         "Type": "System.String",
         "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.ModificationRequest",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
+    "Method": "DemoteToEmployee",
+    "RelativePath": "api/Users/{employeeId}/demote",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "employeeId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.ModificationRequest",
+        "IsRequired": true
       }
     ],
     "ReturnTypes": []
@@ -391,6 +536,48 @@
   },
   {
     "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
+    "Method": "UpdateUserInfo",
+    "RelativePath": "api/Users/{employeeId}/info",
+    "HttpMethod": "PUT",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "employeeId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.UpdateUserInfoRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
+    "Method": "PromoteToAdmin",
+    "RelativePath": "api/Users/{employeeId}/promote",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "employeeId",
+        "Type": "System.String",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.ModificationRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
     "Method": "ReactivateUser",
     "RelativePath": "api/Users/{employeeId}/reactivate",
     "HttpMethod": "POST",
@@ -401,8 +588,39 @@
         "Name": "employeeId",
         "Type": "System.String",
         "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.ModificationRequest",
+        "IsRequired": false
       }
     ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
+    "Method": "CreateAdmin",
+    "RelativePath": "api/Users/admin",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "WIN.AGDATA.WIN.API.Controllers.CreateAdminRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "WIN.AGDATA.WIN.API.Controllers.UsersController",
+    "Method": "GetAllAdmins",
+    "RelativePath": "api/Users/admins",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
     "ReturnTypes": []
   },
   {

@@ -1,0 +1,12 @@
+﻿global using System;
+global using System.Collections.Generic;
+global using System.ComponentModel.DataAnnotations;
+global using System.Linq;
+global using WIN.AGDATA.WIN.Domain.Exceptions;
+global using WIN.AGDATA.WIN.Domain.ValueObjects;
+global using Domain.Entities.Users;
+global using WIN.AGDATA.WIN.Domain.Entities.Events;
+global using WIN.AGDATA.WIN.Domain.Entities.Products;
+global using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
+global using WIN.AGDATA.WIN.Domain.Enums;

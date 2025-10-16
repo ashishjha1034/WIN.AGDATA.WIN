@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "AGDATA Reward Points API",
-    "version": "v1"
+    "title": "API",
+    "version": "1.0"
   },
   "paths": {
     "/api/Events": {
@@ -31,7 +31,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       },
@@ -41,7 +41,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -56,6 +56,7 @@
             "name": "eventId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -63,7 +64,31 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Events/active": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Events/upcoming": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -78,6 +103,7 @@
             "name": "eventId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -104,12 +130,12 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
     },
-    "/api/Events/{eventId}/prize-tiers": {
+    "/api/Events/{eventId}/deactivate": {
       "post": {
         "tags": [
           "Events"
@@ -119,6 +145,72 @@
             "name": "eventId",
             "in": "path",
             "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateEventRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateEventRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Events/{eventId}/reactivate": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Events/{eventId}/prizes": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -145,12 +237,24 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
     },
-    "/api/Points/user/{employeeId}/balance": {
+    "/api/Events/process-expired": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Points/{employeeId}/balance": {
       "get": {
         "tags": [
           "Points"
@@ -160,6 +264,7 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -167,12 +272,12 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
     },
-    "/api/Points/user/{employeeId}/history": {
+    "/api/Points/{employeeId}/history": {
       "get": {
         "tags": [
           "Points"
@@ -182,6 +287,7 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -189,7 +295,82 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Points/{employeeId}/add": {
+      "post": {
+        "tags": [
+          "Points"
+        ],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPointsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPointsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPointsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Points/{employeeId}/can-redeem/{requiredPoints}": {
+      "get": {
+        "tags": [
+          "Points"
+        ],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "requiredPoints",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -220,7 +401,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       },
@@ -230,7 +411,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -245,6 +426,7 @@
             "name": "productId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -253,68 +435,19 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
-      },
-      "put": {
+      }
+    },
+    "/api/Products/available": {
+      "get": {
         "tags": [
           "Products"
         ],
-        "parameters": [
-          {
-            "name": "productId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProductRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProductRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProductRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
-            "description": "OK"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Products"
-        ],
-        "parameters": [
-          {
-            "name": "productId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -329,6 +462,7 @@
             "name": "productId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -356,7 +490,50 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Products/{productId}/pricing": {
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePricingRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePricingRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePricingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -370,24 +547,48 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestRedemptionRequest"
+                "$ref": "#/components/schemas/RedemptionRequest"
               }
             },
             "text/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestRedemptionRequest"
+                "$ref": "#/components/schemas/RedemptionRequest"
               }
             },
             "application/*+json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestRedemptionRequest"
+                "$ref": "#/components/schemas/RedemptionRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Redemptions/{redemptionId}": {
+      "get": {
+        "tags": [
+          "Redemptions"
+        ],
+        "parameters": [
+          {
+            "name": "redemptionId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -402,6 +603,7 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -409,7 +611,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -421,7 +623,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -436,6 +638,7 @@
             "name": "redemptionId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -444,7 +647,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -459,6 +662,7 @@
             "name": "redemptionId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -486,7 +690,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -501,6 +705,7 @@
             "name": "redemptionId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -509,7 +714,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -540,7 +745,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       },
@@ -550,7 +755,38 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Users/admin": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAdminRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAdminRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAdminRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -565,6 +801,7 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -572,7 +809,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -587,6 +824,7 @@
             "name": "email",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -594,7 +832,19 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Users/admins": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -609,6 +859,7 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
@@ -635,7 +886,49 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Users/{employeeId}/info": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInfoRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInfoRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -650,14 +943,34 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
           }
         }
       }
@@ -672,14 +985,118 @@
             "name": "employeeId",
             "in": "path",
             "required": true,
+            "style": "simple",
             "schema": {
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Users/{employeeId}/promote": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/Users/{employeeId}/demote": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
@@ -687,6 +1104,24 @@
   },
   "components": {
     "schemas": {
+      "AddPointsRequest": {
+        "type": "object",
+        "properties": {
+          "points": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "eventId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "AddPrizeTierRequest": {
         "type": "object",
         "properties": {
@@ -718,9 +1153,39 @@
         },
         "additionalProperties": false
       },
+      "CreateAdminRequest": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateEventRequest": {
         "type": "object",
         "properties": {
+          "eventId": {
+            "type": "string",
+            "nullable": true
+          },
           "name": {
             "type": "string",
             "nullable": true
@@ -733,7 +1198,7 @@
             "type": "string",
             "format": "date-time"
           },
-          "prizeTiers": {
+          "prizes": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PrizeTierRequest"
@@ -787,6 +1252,26 @@
         },
         "additionalProperties": false
       },
+      "DeactivateEventRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModificationRequest": {
+        "type": "object",
+        "properties": {
+          "modifiedBy": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "PrizeTierRequest": {
         "type": "object",
         "properties": {
@@ -805,17 +1290,7 @@
         },
         "additionalProperties": false
       },
-      "RejectRedemptionRequest": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "RequestRedemptionRequest": {
+      "RedemptionRequest": {
         "type": "object",
         "properties": {
           "employeeId": {
@@ -829,28 +1304,34 @@
         },
         "additionalProperties": false
       },
-      "UpdateEmailRequest": {
+      "RejectRedemptionRequest": {
         "type": "object",
         "properties": {
-          "newEmail": {
+          "reason": {
             "type": "string",
             "nullable": true
           }
         },
         "additionalProperties": false
       },
-      "UpdateProductRequest": {
+      "UpdateEmailRequest": {
         "type": "object",
         "properties": {
-          "name": {
+          "newEmail": {
             "type": "string",
             "nullable": true
           },
-          "description": {
+          "modifiedBy": {
             "type": "string",
             "nullable": true
-          },
-          "requiredPoints": {
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdatePricingRequest": {
+        "type": "object",
+        "properties": {
+          "newPoints": {
             "type": "integer",
             "format": "int32"
           }
@@ -860,9 +1341,27 @@
       "UpdateStockRequest": {
         "type": "object",
         "properties": {
-          "newStock": {
+          "newQuantity": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateUserInfoRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "modifiedBy": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -870,17 +1369,13 @@
       "WinnerRequest": {
         "type": "object",
         "properties": {
-          "employeeEmail": {
+          "employeeId": {
             "type": "string",
             "nullable": true
           },
           "rank": {
             "type": "integer",
             "format": "int32"
-          },
-          "employeeName": {
-            "type": "string",
-            "nullable": true
           }
         },
         "additionalProperties": false
