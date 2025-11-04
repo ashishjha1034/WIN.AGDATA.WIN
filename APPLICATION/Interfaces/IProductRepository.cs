@@ -1,18 +1,13 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Products;
+﻿using System;
+using System.Collections.Generic;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
+namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IProductRepository
 {
+    Product? GetById(Guid productId);
+    List<Product> GetAll();
     void Add(Product product);
     void Update(Product product);
     void Delete(Guid productId);
-
-    Product? GetById(Guid productId);
-    Product? GetByName(string name);
-    List<Product> GetAll();
-    List<Product> GetAvailable();
-    List<Product> GetByPointsRange(int minPoints, int maxPoints);
-
-    bool ExistsById(Guid productId);
 }

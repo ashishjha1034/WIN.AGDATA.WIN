@@ -1,70 +1,140 @@
-﻿using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Domain.Entities.Transactions;
-using WIN.AGDATA.WIN.Domain.Exceptions;
-using WIN_AGDATA_WIN.Application.Interfaces;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using WIN.AGDATA.WIN.Application.Interfaces;
 
-namespace WIN.AGDATA.WIN.Application.Services
+
+namespace WIN.AGDATA.WIN.Application.Services;
+
+public class PointsService : IPointsService,IPointsManagementService
 {
-    public class PointsService : IPointsService
+    private readonly IUserRepository _userRepository;
+    private readonly ITransactionRepository _transactionRepository;
+    private readonly ILogger<PointsService> _logger;
+
+    public PointsService(
+        IUserRepository userRepository,
+        ITransactionRepository transactionRepository,
+        ILogger<PointsService> logger)
     {
-        private readonly List<PointsTransaction> _transactions = new();
-        private readonly IUserService _userService;
-        private readonly object _lock = new object();
+        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+        _transactionRepository = transactionRepository ?? throw new ArgumentNullException(nameof(transactionRepository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public PointsService(IUserService userService)
+    public int GetUserPointsBalance(string employeeId)
+    {
+        try
         {
-            _userService = userService;
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
+
+            return user.Points.CurrentBalance;
         }
-
-        public void AllocatePoints(string employeeId, int points, string eventId, string description) // Changed Guid to string
+        catch (Exception ex)
         {
-            lock (_lock)
-            {
-                var user = _userService.GetUserByEmployeeId(employeeId)
-                    ?? throw new DomainException($"User with Employee ID {employeeId} not found");
-
-                if (!user.Status.IsActive)
-                    throw new DomainException($"Cannot allocate points to inactive user: {employeeId}");
-
-                var transaction = new PointsEarning(employeeId, points, eventId, description); // This also needs update
-                _transactions.Add(transaction);
-
-                user.Points.Add(points);
-            }
-        }
-
-        public void SpendPoints(string employeeId, int points, Guid redemptionId, string description)
-        {
-            lock (_lock)
-            {
-                var user = _userService.GetUserByEmployeeId(employeeId)
-                    ?? throw new DomainException($"User with Employee ID {employeeId} not found");
-
-                if (!user.Status.IsActive)
-                    throw new DomainException($"Cannot spend points for inactive user: {employeeId}");
-
-                var transaction = new PointsSpending(employeeId, points, redemptionId, description);
-                _transactions.Add(transaction);
-
-                user.Points.Deduct(points);
-            }
-        }
-
-        public List<PointsTransaction> GetUserTransactionHistory(string employeeId)
-        {
-            lock (_lock)
-                return _transactions
-                    .Where(t => string.Equals(t.EmployeeId, employeeId, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(t => t.TransactionDate)
-                    .ToList();
-        }
-
-        public int GetUserPointsBalance(string employeeId)
-        {
-            var user = _userService.GetUserByEmployeeId(employeeId)
-                ?? throw new DomainException($"User with Employee ID {employeeId} not found");
-
-            return user.Points.Balance;
+            _logger.LogError(ex, $"Error getting points balance for: {employeeId}");
+            throw;
         }
     }
+
+    public List<PointsTransaction> GetUserTransactionHistory(string employeeId)
+    {
+        try
+        {
+            return _transactionRepository.GetByEmployeeId(employeeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error getting transaction history for: {employeeId}");
+            throw;
+        }
+    }
+
+    public void AddPoints(string employeeId, int points, string reason, string? eventId = null)
+    {
+        try
+        {
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
+
+            user.EarnPoints(points, "SYSTEM");
+            _userRepository.Update(user);
+
+            var transaction = new PointsTransaction(employeeId, points, PointsTransactionType.Earning, reason, eventId);
+            _transactionRepository.Add(transaction);
+
+            _logger.LogInformation($"Points added to {employeeId}: {points}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error adding points to: {employeeId}");
+            throw;
+        }
+    }
+
+    public void SpendPoints(string employeeId, int points, string reason, Guid? redemptionId = null)
+    {
+        try
+        {
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
+
+            user.SpendPoints(points, "SYSTEM");
+            _userRepository.Update(user);
+
+            var transaction = new PointsTransaction(employeeId, points, PointsTransactionType.Spending, reason, null, redemptionId);
+            _transactionRepository.Add(transaction);
+
+            _logger.LogInformation($"Points spent by {employeeId}: {points}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error spending points for: {employeeId}");
+            throw;
+        }
+    }
+
+    public void RefundPoints(string employeeId, int points, string reason)
+    {
+        try
+        {
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
+
+            user.RefundPoints(points, "SYSTEM");
+            _userRepository.Update(user);
+
+            var transaction = new PointsTransaction(employeeId, points, PointsTransactionType.Refund, reason);
+            _transactionRepository.Add(transaction);
+
+            _logger.LogInformation($"Points refunded to {employeeId}: {points}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error refunding points for: {employeeId}");
+            throw;
+        }
+    }
+    public void AddPointsToUser(string employeeId, int points, string reason, string eventId)
+    {
+        _logger.LogInformation($"Added {points} points to {employeeId}: {reason}");
+    }
+
+    public void DeductPointsFromUser(string employeeId, int points, string reason)
+    {
+        _logger.LogInformation($"Deducted {points} points from {employeeId}: {reason}");
+    }
+
+    public void RefundPointsToUser(string employeeId, int points, string reason)
+    {
+        _logger.LogInformation($"Refunded {points} points to {employeeId}: {reason}");
+    }
+
+
 }

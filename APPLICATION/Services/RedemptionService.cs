@@ -1,32 +1,29 @@
-﻿using Domain.Entities.Users;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
 using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Domain.Entities.Products;
-using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
-using WIN.AGDATA.WIN.Domain.Exceptions;
-using WIN.AGDATA.WIN.Infrastructure.Repositories;
-using WIN_AGDATA_WIN.Application.Interfaces;
+
 
 namespace WIN.AGDATA.WIN.Application.Services;
 
 public class RedemptionService : IRedemptionService
 {
-    private readonly IRedemptionRepository _redemptionRepository;
     private readonly IUserRepository _userRepository;
     private readonly IProductRepository _productRepository;
-    private readonly IPointsManagementService _pointsService;
+    private readonly IRedemptionRepository _redemptionRepository;
+    private readonly IPointsService _pointsService;
     private readonly ILogger<RedemptionService> _logger;
 
     public RedemptionService(
-        IRedemptionRepository redemptionRepository,
         IUserRepository userRepository,
         IProductRepository productRepository,
-        IPointsManagementService pointsService,
+        IRedemptionRepository redemptionRepository,
+        IPointsService pointsService,
         ILogger<RedemptionService> logger)
     {
-        _redemptionRepository = redemptionRepository ?? throw new ArgumentNullException(nameof(redemptionRepository));
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
+        _redemptionRepository = redemptionRepository ?? throw new ArgumentNullException(nameof(redemptionRepository));
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -35,31 +32,58 @@ public class RedemptionService : IRedemptionService
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            var product = GetProductOrThrow(productId);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
-            ValidateRedemptionRequest(user, product);
+            if (!user.CanRedeemProducts())
+                throw new DomainException($"User {employeeId} cannot redeem products");
+
+            var product = _productRepository.GetById(productId);
+            if (product == null)
+                throw new DomainException($"Product not found: {productId}");
+
+            if (!product.IsAvailable())
+                throw new DomainException($"Product is not available: {productId}");
+
+            if (!product.CanBeRedeemedBy(user.Points.CurrentBalance))
+                throw new DomainException($"Insufficient points. Required: {product.Pricing.RequiredPoints}, Available: {user.Points.CurrentBalance}");
 
             var redemption = new Redemption(employeeId, productId, product.Pricing.RequiredPoints);
             _redemptionRepository.Add(redemption);
 
-            product.DecreaseStock(1);
-            _productRepository.Update(product);
-
-            _pointsService.DeductPointsFromUser(
-                employeeId,
-                product.Pricing.RequiredPoints,
-                $"Redeemed product: {product.Identity.Name}",
-                redemption.Id);
-
-            _logger.LogInformation("Redemption requested: {RedemptionId} by {EmployeeId} for product {ProductId}",
-                redemption.Id, employeeId, productId);
-
+            _logger.LogInformation($"Redemption requested: {employeeId} for product {productId}");
             return redemption;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to request redemption for user {EmployeeId} and product {ProductId}", employeeId, productId);
+            _logger.LogError(ex, $"Error requesting redemption for: {employeeId}");
+            throw;
+        }
+    }
+
+    public Redemption? GetRedemptionById(Guid redemptionId)
+    {
+        try
+        {
+            return _redemptionRepository.GetById(redemptionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error retrieving redemption: {redemptionId}");
+            throw;
+        }
+    }
+
+    public List<Redemption> GetUserRedemptions(string employeeId)
+    {
+        try
+        {
+            return _redemptionRepository.GetByEmployeeId(employeeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error retrieving redemptions for: {employeeId}");
             throw;
         }
     }
@@ -68,20 +92,27 @@ public class RedemptionService : IRedemptionService
     {
         try
         {
-            var redemption = GetRedemptionOrThrow(redemptionId);
-            var status = _redemptionRepository.GetStatusById(redemptionId);
+            var redemption = _redemptionRepository.GetById(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
 
-            if (status == null)
-                throw new DomainException($"Redemption status not found: {redemptionId}");
+            _pointsService.SpendPoints(redemption.EmployeeId, redemption.PointsCost, $"Product redemption", redemptionId);
 
-            status.Approve();
-            _redemptionRepository.UpdateStatus(status);
+            var product = _productRepository.GetById(redemption.ProductId);
+            if (product != null)
+            {
+                product.DecreaseStock(1);
+                _productRepository.Update(product);
+            }
 
-            _logger.LogInformation("Redemption approved: {RedemptionId}", redemptionId);
+            redemption.Status.Approve();
+            _redemptionRepository.Update(redemption);
+
+            _logger.LogInformation($"Redemption approved: {redemptionId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to approve redemption: {RedemptionId}", redemptionId);
+            _logger.LogError(ex, $"Error approving redemption: {redemptionId}");
             throw;
         }
     }
@@ -90,33 +121,18 @@ public class RedemptionService : IRedemptionService
     {
         try
         {
-            var redemption = GetRedemptionOrThrow(redemptionId);
-            var status = _redemptionRepository.GetStatusById(redemptionId);
+            var redemption = _redemptionRepository.GetById(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
 
-            if (status == null)
-                throw new DomainException($"Redemption status not found: {redemptionId}");
+            redemption.Status.Reject(reason);
+            _redemptionRepository.Update(redemption);
 
-            status.Reject(reason);
-            _redemptionRepository.UpdateStatus(status);
-
-            var product = _productRepository.GetById(redemption.ProductId);
-            if (product != null)
-            {
-                product.IncreaseStock(1);
-                _productRepository.Update(product);
-            }
-
-            _pointsService.AddPointsToUser(
-                redemption.EmployeeId,
-                redemption.PointsCost,
-                $"Redemption rejected and points refunded: {reason}",
-                "REFUND");
-
-            _logger.LogInformation("Redemption rejected: {RedemptionId} - {Reason}", redemptionId, reason);
+            _logger.LogInformation($"Redemption rejected: {redemptionId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to reject redemption: {RedemptionId}", redemptionId);
+            _logger.LogError(ex, $"Error rejecting redemption: {redemptionId}");
             throw;
         }
     }
@@ -125,75 +141,34 @@ public class RedemptionService : IRedemptionService
     {
         try
         {
-            var redemption = GetRedemptionOrThrow(redemptionId);
-            var status = _redemptionRepository.GetStatusById(redemptionId);
+            var redemption = _redemptionRepository.GetById(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
 
-            if (status == null)
-                throw new DomainException($"Redemption status not found: {redemptionId}");
+            redemption.Status.MarkDelivered();
+            _redemptionRepository.Update(redemption);
 
-            status.MarkDelivered();
-            _redemptionRepository.UpdateStatus(status);
-
-            _logger.LogInformation("Redemption marked as delivered: {RedemptionId}", redemptionId);
+            _logger.LogInformation($"Redemption marked as delivered: {redemptionId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to mark redemption as delivered: {RedemptionId}", redemptionId);
+            _logger.LogError(ex, $"Error marking redemption as delivered: {redemptionId}");
+            throw;
+        }
+    }
+    public List<Redemption> GetPendingRedemptions()
+    {
+        try
+        {
+            return _redemptionRepository.GetAll()
+                .Where(r => r.Status.Value == StatusValue.Pending)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving pending redemptions");
             throw;
         }
     }
 
-    public List<Redemption> GetUserRedemptions(string employeeId)
-    {
-        return _redemptionRepository.GetByEmployeeId(employeeId);
-    }
-
-    public List<Redemption> GetPendingRedemptions()
-    {
-        return _redemptionRepository.GetByStatus(StatusValue.Pending);
-    }
-
-    public Redemption? GetRedemptionById(Guid redemptionId)
-    {
-        return _redemptionRepository.GetById(redemptionId);
-    }
-
-    private void ValidateRedemptionRequest(User user, Product product)
-    {
-        if (!user.IsActive)
-            throw new DomainException($"User {user.Identity.EmployeeId} is not active");
-
-        if (!product.IsAvailable())
-            throw new DomainException($"Product {product.Identity.Name} is not available");
-
-        if (!product.CanBeRedeemedBy(user))
-            throw new DomainException($"User {user.Identity.EmployeeId} cannot afford product {product.Identity.Name}");
-    }
-
-    private User GetUserOrThrow(string employeeId)
-    {
-        var user = _userRepository.GetByEmployeeId(employeeId);
-        if (user == null)
-            throw new DomainException($"User not found: {employeeId}");
-
-        return user;
-    }
-
-    private Product GetProductOrThrow(Guid productId)
-    {
-        var product = _productRepository.GetById(productId);
-        if (product == null)
-            throw new DomainException($"Product not found: {productId}");
-
-        return product;
-    }
-
-    private Redemption GetRedemptionOrThrow(Guid redemptionId)
-    {
-        var redemption = _redemptionRepository.GetById(redemptionId);
-        if (redemption == null)
-            throw new DomainException($"Redemption not found: {redemptionId}");
-
-        return redemption;
-    }
 }

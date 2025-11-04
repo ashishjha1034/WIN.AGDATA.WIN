@@ -8,11 +8,12 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<IUserService, UserService>();
         services.AddScoped<IEventService, EventService>();
-        // services.AddScoped<IProductService, ProductService>();  // Comment out temporarily
-        // services.AddScoped<IRedemptionService, RedemptionService>(); // Comment out temporarily
-
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IPointsService, PointsService>();
+        services.AddScoped<IPointsManagementService, PointsService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IRedemptionService, RedemptionService>();
         return services;
     }
 }

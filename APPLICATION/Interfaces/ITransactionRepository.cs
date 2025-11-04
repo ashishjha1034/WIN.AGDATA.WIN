@@ -1,13 +1,11 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Transactions;
-
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
+﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface ITransactionRepository
 {
-    void Add(PointsTransaction transaction);
-    PointsTransaction? GetById(Guid id);
+    PointsTransaction? GetById(Guid transactionId);
     List<PointsTransaction> GetByEmployeeId(string employeeId);
-    List<PointsTransaction> GetByEventId(string eventId);
-    List<PointsTransaction> GetByRedemptionId(Guid redemptionId);
     List<PointsTransaction> GetAll();
+    void Add(PointsTransaction transaction);
+    void Update(PointsTransaction transaction);  // ← ADD THIS
+    void Delete(Guid transactionId);             // ← ADD THIS
 }

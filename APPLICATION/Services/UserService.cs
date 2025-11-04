@@ -1,9 +1,8 @@
-﻿using Domain.Entities.Users;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Domain.Enums;
-using WIN.AGDATA.WIN.Domain.Exceptions;
-using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Application.Services;
 
@@ -22,178 +21,162 @@ public class UserService : IUserService
     {
         try
         {
+            // Check if employee already exists
             var existingUser = _userRepository.GetByEmployeeId(employeeId);
             if (existingUser != null)
-                throw new DomainException($"User with Employee ID '{employeeId}' already exists");
+                throw new DomainException($"User with employee ID '{employeeId}' already exists");
 
-            var existingByEmail = _userRepository.GetByEmail(email);
-            if (existingByEmail != null)
-                throw new DomainException($"User with email '{email}' already exists");
-
-            var user = new User(employeeId, email, firstName, lastName);
+            var user = new User(employeeId, email, firstName, lastName, "SYSTEM");
             _userRepository.Add(user);
 
-            _logger.LogInformation("User created successfully: {EmployeeId}", employeeId);
+            _logger.LogInformation($"User created: {employeeId}");
             return user;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create user: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error creating user: {employeeId}");
             throw;
         }
     }
 
-    public User CreateAdmin(string employeeId, string email, string firstName, string lastName, string createdBy)
+    public User? GetUserById(Guid userId)
     {
         try
         {
-            var user = new User(employeeId, email, firstName, lastName, UserRole.Admin, createdBy);
-            _userRepository.Add(user);
-
-            _logger.LogInformation("Admin user created successfully: {EmployeeId} by {CreatedBy}", employeeId, createdBy);
-            return user;
+            return _userRepository.GetById(userId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create admin user: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error retrieving user: {userId}");
             throw;
         }
-    }
-
-    public User? GetUserByEmail(string email)
-    {
-        return _userRepository.GetByEmail(email);
     }
 
     public User? GetUserByEmployeeId(string employeeId)
     {
-        return _userRepository.GetByEmployeeId(employeeId);
+        try
+        {
+            return _userRepository.GetByEmployeeId(employeeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error retrieving user by employee ID: {employeeId}");
+            throw;
+        }
     }
 
     public List<User> GetAllUsers()
     {
-        return _userRepository.GetAll();
-    }
-
-    public List<User> GetAllAdmins()
-    {
-        return _userRepository.GetByRole(UserRole.Admin);
-    }
-
-    public void UpdateUserEmail(string employeeId, string newEmail, string modifiedBy)
-    {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-
-            var existingUser = _userRepository.GetByEmail(newEmail);
-            if (existingUser != null && existingUser.Identity.EmployeeId != employeeId)
-                throw new DomainException($"Email '{newEmail}' is already in use");
-
-            var emailAddress = new EmailAddress(newEmail);
-            user.UpdateEmail(emailAddress, modifiedBy);
-
-            _userRepository.Update(user);
-            _logger.LogInformation("User email updated: {EmployeeId} to {Email} by {ModifiedBy}", employeeId, newEmail, modifiedBy);
+            return _userRepository.GetAll();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update user email: {EmployeeId}", employeeId);
+            _logger.LogError(ex, "Error retrieving all users");
             throw;
         }
     }
 
-    public void UpdateUserInfo(string employeeId, string firstName, string lastName, string modifiedBy)
+    public void UpdateUserInfo(string employeeId, string firstName, string lastName, string email)
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            user.UpdateUserInfo(firstName, lastName, modifiedBy);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
+            // Use the new atomic update method
+            user.UpdateUserInfo(firstName, lastName, email, "SYSTEM");
             _userRepository.Update(user);
-            _logger.LogInformation("User info updated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+
+            _logger.LogInformation($"User info updated: {employeeId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update user info: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error updating user info: {employeeId}");
             throw;
         }
     }
 
-    public void DeactivateUser(string employeeId, string modifiedBy = "SYSTEM")
+    public void PromoteToAdmin(string employeeId)
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            user.Deactivate(modifiedBy);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
+            user.PromoteToAdmin("SYSTEM");
             _userRepository.Update(user);
-            _logger.LogInformation("User deactivated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+
+            _logger.LogInformation($"User promoted to admin: {employeeId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to deactivate user: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error promoting user: {employeeId}");
             throw;
         }
     }
 
-    public void ReactivateUser(string employeeId, string modifiedBy = "SYSTEM")
+    public void DemoteToEmployee(string employeeId)
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            user.Reactivate(modifiedBy);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
+            user.DemoteToEmployee("SYSTEM");
             _userRepository.Update(user);
-            _logger.LogInformation("User reactivated: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+
+            _logger.LogInformation($"User demoted to employee: {employeeId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to reactivate user: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error demoting user: {employeeId}");
             throw;
         }
     }
 
-    public void PromoteToAdmin(string employeeId, string modifiedBy)
+    public void DeactivateUser(string employeeId, string reason)
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            user.PromoteToAdmin(modifiedBy);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
+            user.Deactivate(reason, "SYSTEM");
             _userRepository.Update(user);
-            _logger.LogInformation("User promoted to admin: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+
+            _logger.LogInformation($"User deactivated: {employeeId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to promote user to admin: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error deactivating user: {employeeId}");
             throw;
         }
     }
 
-    public void DemoteToEmployee(string employeeId, string modifiedBy)
+    public void ActivateUser(string employeeId)
     {
         try
         {
-            var user = GetUserOrThrow(employeeId);
-            user.DemoteToEmployee(modifiedBy);
+            var user = _userRepository.GetByEmployeeId(employeeId);
+            if (user == null)
+                throw new DomainException($"User not found: {employeeId}");
 
+            user.Activate("SYSTEM");
             _userRepository.Update(user);
-            _logger.LogInformation("User demoted to employee: {EmployeeId} by {ModifiedBy}", employeeId, modifiedBy);
+
+            _logger.LogInformation($"User activated: {employeeId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to demote user to employee: {EmployeeId}", employeeId);
+            _logger.LogError(ex, $"Error activating user: {employeeId}");
             throw;
         }
-    }
-
-    private User GetUserOrThrow(string employeeId)
-    {
-        var user = _userRepository.GetByEmployeeId(employeeId);
-        if (user == null)
-            throw new DomainException($"User not found: {employeeId}");
-
-        return user;
     }
 }
+    

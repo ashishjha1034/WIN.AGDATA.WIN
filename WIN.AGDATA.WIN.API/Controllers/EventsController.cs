@@ -2,7 +2,6 @@
 using System.Reflection;
 using WIN.AGDATA.WIN.Application.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
-using WIN_AGDATA_WIN.Domain.Entities.Events;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -20,7 +19,7 @@ public class EventsController : ApiControllerBase
     {
         try
         {
-            var prizes = request.Prizes.Select(p => new EventPrizeTier(p.Rank, p.Points, p.Description)).ToList();
+            var prizes = request.Prizes.Select(p => new PrizeTier(p.Rank, p.Points, p.Description)).ToList();
             var eventObj = _eventService.CreateEvent(request.EventId, request.Name, request.Description, request.EventDate, prizes);
 
             return CreatedAtAction(nameof(GetEventById),
@@ -97,7 +96,7 @@ public class EventsController : ApiControllerBase
     {
         try
         {
-            var winners = request.Winners.Select(w => new EventWinner(w.EmployeeId, w.Rank)).ToList();
+            var winners = request.Winners.Select(w => new Winner(w.EmployeeId, w.Rank)).ToList();
             _eventService.CompleteEvent(eventId, winners);
 
             return Ok(new { message = "Event completed successfully" });
@@ -141,7 +140,7 @@ public class EventsController : ApiControllerBase
     {
         try
         {
-            var prizeTier = new EventPrizeTier(request.Rank, request.Points, request.Description);
+            var prizeTier = new PrizeTier(request.Rank, request.Points, request.Description);
             _eventService.AddPrizeTier(eventId, prizeTier);
 
             return Ok(new { message = "Prize tier added successfully" });

@@ -1,16 +1,19 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
-public class PointsController : ApiControllerBase
+[ApiController]
+[Route("api/[controller]")]
+public class PointsController : ControllerBase
 {
-    private readonly IPointsManagementService _pointsService;
+    private readonly IPointsService _pointsService;
+    private readonly ILogger<PointsController> _logger;
 
-    public PointsController(IPointsManagementService pointsService)
+    public PointsController(IPointsService pointsService, ILogger<PointsController> logger)
     {
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     [HttpGet("{employeeId}/balance")]
@@ -19,74 +22,95 @@ public class PointsController : ApiControllerBase
         try
         {
             var balance = _pointsService.GetUserPointsBalance(employeeId);
-            return Ok(new { employeeId, balance });
+            return Ok(new { balance });
         }
         catch (Exception ex)
         {
-            return HandleException(ex);
+            _logger.LogError(ex, "Error getting points balance");
+            return BadRequest(ex.Message);
         }
     }
 
     [HttpGet("{employeeId}/history")]
-    public IActionResult GetUserPointsHistory(string employeeId)
+    public IActionResult GetUserTransactionHistory(string employeeId)
     {
         try
         {
-            var history = _pointsService.GetUserPointsHistory(employeeId);
-            var response = history.Select(t => new TransactionResponse(t));
-            return Ok(response);
+            var history = _pointsService.GetUserTransactionHistory(employeeId);
+            return Ok(history);
         }
         catch (Exception ex)
         {
-            return HandleException(ex);
+            _logger.LogError(ex, "Error getting transaction history");
+            return BadRequest(ex.Message);
         }
     }
 
-    [HttpPost("{employeeId}/add")]
-    public IActionResult AddPointsToUser(string employeeId, [FromBody] AddPointsRequest request)
+    [HttpPost("add")]
+    public IActionResult AddPoints([FromBody] AddPointsRequest request)
     {
         try
         {
-            _pointsService.AddPointsToUser(employeeId, request.Points, request.Reason, request.EventId);
-            return Ok(new { message = "Points added successfully" });
+            _pointsService.AddPoints(request.EmployeeId, request.Points, request.Reason, request.EventId);
+            return Ok("Points added successfully");
         }
         catch (Exception ex)
         {
-            return HandleException(ex);
+            _logger.LogError(ex, "Error adding points");
+            return BadRequest(ex.Message);
         }
     }
 
-    [HttpGet("{employeeId}/can-redeem/{requiredPoints:int}")]
-    public IActionResult CanUserRedeem(string employeeId, int requiredPoints)
+    [HttpPost("spend")]
+    public IActionResult SpendPoints([FromBody] SpendPointsRequest request)
     {
         try
         {
-            var canRedeem = _pointsService.CanUserRedeem(employeeId, requiredPoints);
-            return Ok(new { employeeId, requiredPoints, canRedeem });
+            _pointsService.SpendPoints(request.EmployeeId, request.Points, request.Reason, request.RedemptionId);
+            return Ok("Points spent successfully");
         }
         catch (Exception ex)
         {
-            return HandleException(ex);
+            _logger.LogError(ex, "Error spending points");
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPost("refund")]
+    public IActionResult RefundPoints([FromBody] RefundPointsRequest request)
+    {
+        try
+        {
+            _pointsService.RefundPoints(request.EmployeeId, request.Points, request.Reason);
+            return Ok("Points refunded successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refunding points");
+            return BadRequest(ex.Message);
         }
     }
 }
 
-public record AddPointsRequest(int Points, string Reason, string EventId);
-
-public record TransactionResponse(
-    Guid Id,
-    string EmployeeId,
-    int Points,
-    string Description,
-    DateTime TransactionDate,
-    string Type)
+public class AddPointsRequest
 {
-    public TransactionResponse(PointsTransaction transaction) : this(
-        transaction.Id,
-        transaction.EmployeeId,
-        transaction.Points,
-        transaction.Description,
-        transaction.TransactionDate,
-        transaction.GetType().Name)
-    { }
+    public string EmployeeId { get; set; }
+    public int Points { get; set; }
+    public string Reason { get; set; }
+    public string? EventId { get; set; }
+}
+
+public class SpendPointsRequest
+{
+    public string EmployeeId { get; set; }
+    public int Points { get; set; }
+    public string Reason { get; set; }
+    public Guid? RedemptionId { get; set; }
+}
+
+public class RefundPointsRequest
+{
+    public string EmployeeId { get; set; }
+    public int Points { get; set; }
+    public string Reason { get; set; }
 }

@@ -957,9 +957,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj",
-      "projectName": "Domain",
-      "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\Domain.csproj",
+      "projectUniqueName": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\DOMAIN.csproj",
+      "projectName": "DOMAIN",
+      "projectPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\DOMAIN.csproj",
       "packagesPath": "C:\\Users\\ashis\\.nuget\\packages\\",
       "outputPath": "D:\\AGDATA\\WIN.AGDATA.WIN\\Domain\\obj\\",
       "projectStyle": "PackageReference",

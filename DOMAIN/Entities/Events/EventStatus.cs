@@ -1,16 +1,31 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
 public class EventStatus
 {
+    [Required]
     public bool IsActive { get; private set; }
+
+    [Required]
     public bool IsCompleted { get; private set; }
-    public List<EventWinner> Winners { get; private set; } = new();
-    public DateTime CreatedAt { get; }
+
     public DateTime? CompletedAt { get; private set; }
-    public DateTime? DeactivatedAt { get; private set; }
+
+    [StringLength(255)]
     public string? DeactivationReason { get; private set; }
+
+    public DateTime? DeactivatedAt { get; private set; }
+
+    [Required]
+    public DateTime CreatedAt { get; private set; }
+
+    public List<Winner> Winners { get; private set; } = new();
+
+    public bool CanBeModified => IsActive && !IsCompleted;
 
     public EventStatus()
     {
@@ -19,59 +34,44 @@ public class EventStatus
         CreatedAt = DateTime.UtcNow;
     }
 
-    public void Deactivate(string reason = "Manual deactivation")
-    {
-        if (!IsActive)
-            throw new DomainException("Event is already inactive");
-
-        if (IsCompleted)
-            throw new DomainException("Cannot deactivate completed event");
-
-        IsActive = false;
-        DeactivatedAt = DateTime.UtcNow;
-        DeactivationReason = reason?.Trim() ?? "Manual deactivation";
-    }
-
-    public void Reactivate()
-    {
-        if (IsActive)
-            throw new DomainException("Event is already active");
-
-        if (IsCompleted)
-            throw new DomainException("Cannot reactivate completed event");
-
-        IsActive = true;
-        DeactivatedAt = null;
-        DeactivationReason = null;
-    }
-
-    public void Complete(List<EventWinner> winners)
+    public void Complete(List<Winner> winners)
     {
         if (!IsActive)
             throw new DomainException("Cannot complete inactive event");
 
         if (IsCompleted)
-            throw new DomainException("Event is already completed");
+            throw new DomainException("Event already completed");
 
         if (winners == null || !winners.Any())
-            throw new DomainException("At least one winner required");
+            throw new DomainException("At least one winner is required");
 
-        Winners = winners.ToList();
+        Winners = winners;
         IsCompleted = true;
         CompletedAt = DateTime.UtcNow;
-        IsActive = false;
     }
 
-    public void AutoDeactivateIfExpired(DateTime eventDate)
+    public void Deactivate(string reason)
     {
-        if (!IsActive || IsCompleted) return;
+        if (!IsActive)
+            throw new DomainException("Event already inactive");
 
-        if (eventDate < DateTime.UtcNow.AddDays(-30))
-        {
-            Deactivate("Auto-deactivated: Event expired");
-        }
+        IsActive = false;
+        DeactivationReason = reason;
+        DeactivatedAt = DateTime.UtcNow;
     }
 
-    public bool CanAcceptParticipants => IsActive && !IsCompleted;
-    public bool CanBeModified => IsActive && !IsCompleted;
+    public void Reactivate()
+    {
+        if (IsCompleted)
+            throw new DomainException("Cannot reactivate completed event");
+
+        IsActive = true;
+        DeactivationReason = null;
+        DeactivatedAt = null;
+    }
+
+    public override string? ToString() => $"Status: {(IsActive ? "Active" : "Inactive")}, Completed: {IsCompleted}";
+
+
+
 }

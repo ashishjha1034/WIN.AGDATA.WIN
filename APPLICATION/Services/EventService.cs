@@ -1,13 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Domain.Entities.Events;
-using Domain.Entities.Users;
-using WIN.AGDATA.WIN.Domain.Exceptions;
 using WIN.AGDATA.WIN.Infrastructure.Repositories;
-using WIN_AGDATA_WIN.Domain.Entities.Events;
 
 namespace WIN.AGDATA.WIN.Application.Services;
-
 
 public class EventService : IEventService
 {
@@ -28,119 +27,126 @@ public class EventService : IEventService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public Event CreateEvent(string eventId, string name, string description, DateTime eventDate, List<EventPrizeTier> prizes)
+    public Event CreateEvent(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes)
     {
         try
         {
             if (_eventRepository.ExistsById(eventId))
                 throw new DomainException($"Event with ID '{eventId}' already exists");
 
-            var eventObj = new Event(eventId, name, description, eventDate, prizes);
-            _eventRepository.Add(eventObj);
+            var @event = new Event(eventId, name, description, eventDate, prizes, "SYSTEM");
+            _eventRepository.Add(@event);
 
-            _logger.LogInformation("Event created successfully: {EventId}", eventId);
-            return eventObj;
+            _logger.LogInformation($"Event created: {eventId}");
+            return @event;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create event: {EventId}", eventId);
+            _logger.LogError(ex, $"Error creating event: {eventId}");
             throw;
         }
     }
 
     public Event? GetEventById(string eventId)
     {
-        return _eventRepository.GetById(eventId);
+        try
+        {
+            return _eventRepository.GetById(eventId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error retrieving event: {eventId}");
+            throw;
+        }
     }
 
     public List<Event> GetAllEvents()
     {
-        return _eventRepository.GetAll();
+        try
+        {
+            return _eventRepository.GetAll();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all events");
+            throw;
+        }
     }
 
     public List<Event> GetActiveEvents()
     {
-        return _eventRepository.GetActiveEvents();
+        try
+        {
+            return _eventRepository.GetAll().Where(e => e.Status.IsActive && !e.Status.IsCompleted).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving active events");
+            throw;
+        }
     }
 
     public List<Event> GetUpcomingEvents()
     {
-        return _eventRepository.GetUpcomingEvents();
-    }
-
-    public void CompleteEvent(string eventId, List<EventWinner> winners)
-    {
         try
         {
-            var eventObj = GetEventOrThrow(eventId);
-
-            ValidateEventCompletion(eventObj, winners);
-
-            eventObj.CompleteEvent(winners);
-            _eventRepository.Update(eventObj);
-
-            AwardPointsToWinners(eventObj, winners);
-
-            _logger.LogInformation("Event completed successfully: {EventId} with {WinnerCount} winners", eventId, winners.Count);
+            return _eventRepository.GetAll().Where(e => e.Info.IsUpcoming && e.Status.IsActive).ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to complete event: {EventId}", eventId);
+            _logger.LogError(ex, "Error retrieving upcoming events");
             throw;
         }
     }
 
-    public void DeactivateEvent(string eventId, string reason = "Manual deactivation")
+    public List<Event> GetDowncomingEvents()
     {
         try
         {
-            var eventObj = GetEventOrThrow(eventId);
-            eventObj.Status.Deactivate(reason);
-            _eventRepository.Update(eventObj);
-
-            _logger.LogInformation("Event deactivated: {EventId} - {Reason}", eventId, reason);
+            return _eventRepository.GetAll().Where(e => !e.Info.IsUpcoming && e.Status.IsActive).ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to deactivate event: {EventId}", eventId);
+            _logger.LogError(ex, "Error retrieving downcoming events");
             throw;
         }
     }
 
-    public void ReactivateEvent(string eventId)
+    public void CompleteEvent(string eventId, List<Winner> winners)
     {
         try
         {
-            var eventObj = GetEventOrThrow(eventId);
-            eventObj.Status.Reactivate();
-            _eventRepository.Update(eventObj);
+            var @event = _eventRepository.GetById(eventId);
+            if (@event == null)
+                throw new DomainException($"Event not found: {eventId}");
 
-            _logger.LogInformation("Event reactivated: {EventId}", eventId);
+            foreach (var winner in winners)
+            {
+                var user = _userRepository.GetByEmployeeId(winner.EmployeeId);
+                if (user == null)
+                    throw new DomainException($"User not found: {winner.EmployeeId}");
+
+                if (!user.CanParticipateInEvents())
+                    throw new DomainException($"User {winner.EmployeeId} cannot participate in events");
+            }
+
+            @event.CompleteEvent(winners);
+
+            foreach (var winner in winners)
+            {
+                var pointsForRank = @event.GetPointsForRank(winner.Rank);
+                if (pointsForRank.HasValue)
+                {
+                    _pointsService.AddPointsToUser(winner.EmployeeId, pointsForRank.Value, $"Won event {eventId}", eventId);
+                }
+            }
+
+            _eventRepository.Update(@event);
+            _logger.LogInformation($"Event completed: {eventId}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to reactivate event: {EventId}", eventId);
-            throw;
-        }
-    }
-
-    public void AddPrizeTier(string eventId, EventPrizeTier prizeTier)
-    {
-        try
-        {
-            var eventObj = GetEventOrThrow(eventId);
-
-            if (!eventObj.Status.CanBeModified)
-                throw new DomainException("Cannot modify inactive or completed event");
-
-            eventObj.AddPrizeTier(prizeTier);
-            _eventRepository.Update(eventObj);
-
-            _logger.LogInformation("Prize tier added to event {EventId}: Rank {Rank} - {Points} points", eventId, prizeTier.Rank, prizeTier.Points);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to add prize tier to event: {EventId}", eventId);
+            _logger.LogError(ex, $"Error completing event: {eventId}");
             throw;
         }
     }
@@ -149,67 +155,82 @@ public class EventService : IEventService
     {
         try
         {
-            var activeEvents = _eventRepository.GetActiveEvents();
-            var expiredCount = 0;
+            var expiredEvents = _eventRepository.GetAll()
+                .Where(e => e.Info.EventDate < DateTime.UtcNow && e.Status.IsActive && !e.Status.IsCompleted)
+                .ToList();
 
-            foreach (var eventObj in activeEvents)
+            foreach (var @event in expiredEvents)
             {
-                eventObj.Status.AutoDeactivateIfExpired(eventObj.Info.EventDate);
-                if (!eventObj.Status.IsActive)
-                {
-                    _eventRepository.Update(eventObj);
-                    expiredCount++;
-                }
+                @event.Deactivate("SYSTEM - Auto-deactivated expired event", "SYSTEM");
+                _eventRepository.Update(@event);
             }
 
-            if (expiredCount > 0)
-                _logger.LogInformation("Auto-deactivated {ExpiredCount} expired events", expiredCount);
+            _logger.LogInformation($"Processed {expiredEvents.Count} expired events");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process expired events");
+            _logger.LogError(ex, "Error processing expired events");
             throw;
         }
     }
 
-    private void ValidateEventCompletion(Event eventObj, List<EventWinner> winners)
+    public void DeactivateEvent(string eventId, string reason)
     {
-        if (!eventObj.Status.CanBeModified)
-            throw new DomainException("Cannot complete inactive or completed event");
-
-        foreach (var winner in winners)
+        try
         {
-            var user = _userRepository.GetByEmployeeId(winner.EmployeeId);
-            if (user == null)
-                throw new DomainException($"Winner user not found: {winner.EmployeeId}");
+            var @event = _eventRepository.GetById(eventId);
+            if (@event == null)
+                throw new DomainException($"Event not found: {eventId}");
 
-            if (!user.CanParticipateInEvents)
-                throw new DomainException($"User {winner.EmployeeId} cannot participate in events");
+            @event.Deactivate(reason, "SYSTEM");
+            _eventRepository.Update(@event);
+
+            _logger.LogInformation($"Event deactivated: {eventId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error deactivating event: {eventId}");
+            throw;
         }
     }
 
-    private void AwardPointsToWinners(Event eventObj, List<EventWinner> winners)
+    public void ReactivateEvent(string eventId)
     {
-        foreach (var winner in winners)
+        try
         {
-            var points = eventObj.GetPointsForRank(winner.Rank);
-            if (points.HasValue)
-            {
-                _pointsService.AddPointsToUser(
-                    winner.EmployeeId,
-                    points.Value,
-                    $"Won {winner.Rank} place in event {eventObj.EventId}",
-                    eventObj.EventId);
-            }
+            var @event = _eventRepository.GetById(eventId);
+            if (@event == null)
+                throw new DomainException($"Event not found: {eventId}");
+
+            @event.Activate("SYSTEM");
+            _eventRepository.Update(@event);
+
+            _logger.LogInformation($"Event reactivated: {eventId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error reactivating event: {eventId}");
+            throw;
         }
     }
 
-    private Event GetEventOrThrow(string eventId)
+    public void AddPrizeTier(string eventId, PrizeTier prizeTier)
     {
-        var eventObj = _eventRepository.GetById(eventId);
-        if (eventObj == null)
-            throw new DomainException($"Event not found: {eventId}");
+        try
+        {
+            var @event = _eventRepository.GetById(eventId);
+            if (@event == null)
+                throw new DomainException($"Event not found: {eventId}");
 
-        return eventObj;
+            @event.AddPrizeTier(prizeTier);
+            _eventRepository.Update(@event);
+
+            _logger.LogInformation($"Prize tier added to event: {eventId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error adding prize tier to event: {eventId}");
+            throw;
+        }
     }
 }

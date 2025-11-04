@@ -1,4 +1,4 @@
-﻿using WIN_AGDATA_WIN.Domain.Entities.Events;
+﻿using WIN.AGDATA.WIN.Domain.Entities.Events;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
 

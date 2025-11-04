@@ -1,40 +1,43 @@
-﻿namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-public class EventWinner
+namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+
+
+public class Winner
 {
     [Required]
-    public string EmployeeId { get; }
+    [StringLength(20, MinimumLength = 3)]
+    public string EmployeeId { get; private set; }
 
+    [Required]
     [Range(1, 5)]
-    public int Rank { get; }
+    public int Rank { get; private set; }
 
-    public DateTime WonAt { get; }
+    [Required]
+    public DateTime WonAt { get; private set; }
 
-    public EventWinner(string employeeId, int rank)
+    private Winner() { }
+
+    public Winner(string employeeId, int rank)
     {
-        EmployeeId = ValidateAndNormalizeEmployeeId(employeeId);
-        Rank = ValidateRank(rank);
+        // Use ValidationGuards for consistent validation
+        EmployeeId = ValidationGuards.ValidateAndNormalizeId(employeeId, "Employee ID");
+        ValidationGuards.ValidateRank(rank);
+
+        Rank = rank;
         WonAt = DateTime.UtcNow;
     }
 
-    private static string ValidateAndNormalizeEmployeeId(string employeeId)
-    {
-        if (string.IsNullOrWhiteSpace(employeeId))
-            throw new DomainException("Employee ID is required");
-
-        return employeeId.Trim().ToUpperInvariant();
-    }
-
-    private static int ValidateRank(int rank)
-    {
-        if (rank < 1 || rank > 5)
-            throw new DomainException("Winner rank must be between 1 and 5");
-
-        return rank;
-    }
-
     public override bool Equals(object? obj)
-        => obj is EventWinner winner && EmployeeId == winner.EmployeeId && Rank == winner.Rank;
+    {
+        if (obj is not Winner other)
+            return false;
+
+        return EmployeeId == other.EmployeeId && Rank == other.Rank;
+    }
 
     public override int GetHashCode() => HashCode.Combine(EmployeeId, Rank);
+
+    public override string? ToString() => $"{EmployeeId} - Rank {Rank}";
 }

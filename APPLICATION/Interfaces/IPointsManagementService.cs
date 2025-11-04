@@ -1,12 +1,9 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Transactions;
-
-namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IPointsManagementService
 {
-    void AddPointsToUser(string employeeId, int points, string reason, string eventId);
-    void DeductPointsFromUser(string employeeId, int points, string reason, Guid redemptionId);
-    bool CanUserRedeem(string employeeId, int requiredPoints);
+    void AddPointsToUser(string employeeId, int points, string reason, string? eventId = null);
+    void DeductPointsFromUser(string employeeId, int points, string reason);
+    void RefundPointsToUser(string employeeId, int points, string reason);
     int GetUserPointsBalance(string employeeId);
-    List<PointsTransaction> GetUserPointsHistory(string employeeId);
 }

@@ -1,14 +1,14 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Products;
-
-namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IProductService
 {
-    Product CreateProduct(string name, string description, int requiredPoints, int stockQuantity = 0);
+    Product CreateProduct(string name, string description, int requiredPoints, int stockQuantity);
+    Product? GetProductById(Guid productId);
     List<Product> GetAllProducts();
     List<Product> GetAvailableProducts();
-    Product? GetProductById(Guid productId);
-
-    void UpdateProductStock(Guid productId, int newQuantity);
-    void UpdateProductPricing(Guid productId, int newPoints);
+    void UpdateProductDetails(Guid productId, string name, string description);
+    void UpdateProductPoints(Guid productId, int newPoints);
+    void UpdateProductStock(Guid productId, int newQuantity);  // ← ADD THIS
+    void DeactivateProduct(Guid productId);
+    void ActivateProduct(Guid productId);
 }

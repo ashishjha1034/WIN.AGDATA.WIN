@@ -1,54 +1,55 @@
-﻿using WIN.AGDATA.WIN.Domain.Exceptions;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Products
+namespace WIN.AGDATA.WIN.Domain.Entities.Products;
+
+public class ProductInventory
 {
-    public class ProductInventory
+    [Required]
+    [Range(0, int.MaxValue)]
+    public int StockQuantity { get; private set; }
+
+    public DateTime? LastStockUpdate { get; private set; }
+
+    private ProductInventory() { }
+
+    public ProductInventory(int initialStock = 0)
     {
-        public int StockQuantity { get; private set; }
-        public DateTime? LastStockUpdate { get; private set; }
-
-        public ProductInventory(int initialStock = 0)
-        {
-            ValidateStockQuantity(initialStock);
-            StockQuantity = initialStock;
-        }
-
-        public void IncreaseStock(int quantity)
-        {
-            if (quantity <= 0)
-                throw new DomainException("Quantity to add must be positive");
-
-            StockQuantity += quantity;
-            UpdateTimestamp();
-        }
-
-        public void DecreaseStock(int quantity)
-        {
-            if (quantity <= 0)
-                throw new DomainException("Quantity to deduct must be positive");
-
-            if (StockQuantity < quantity)
-                throw new DomainException($"Insufficient stock. Available: {StockQuantity}, Requested: {quantity}");
-
-            StockQuantity -= quantity;
-            UpdateTimestamp();
-        }
-
-        public void SetStock(int newQuantity)
-        {
-            ValidateStockQuantity(newQuantity);
-            StockQuantity = newQuantity;
-            UpdateTimestamp();
-        }
-
-        public bool IsInStock() => StockQuantity > 0;
-
-        private void ValidateStockQuantity(int quantity)
-        {
-            if (quantity < 0)
-                throw new DomainException("Stock quantity cannot be negative");
-        }
-
-        private void UpdateTimestamp() => LastStockUpdate = DateTime.UtcNow;
+        ValidationGuards.ValidateStock(initialStock);
+        StockQuantity = initialStock;
+        LastStockUpdate = DateTime.UtcNow;
     }
+
+    public void IncreaseStock(int quantity)
+    {
+        ValidationGuards.ValidatePositiveNumber(quantity, "Quantity to add");
+        StockQuantity += quantity;
+        UpdateTimestamp();
+    }
+
+    public void DecreaseStock(int quantity)
+    {
+        ValidationGuards.ValidatePositiveNumber(quantity, "Quantity to deduct");
+
+        if (StockQuantity < quantity)
+            throw new DomainException($"Insufficient stock. Available: {StockQuantity}, Requested: {quantity}");
+
+        StockQuantity -= quantity;
+        UpdateTimestamp();
+    }
+
+    public void SetStock(int newQuantity)
+    {
+        ValidationGuards.ValidateStock(newQuantity);
+        StockQuantity = newQuantity;
+        UpdateTimestamp();
+    }
+
+    public bool IsInStock() => StockQuantity > 0;
+
+    public bool IsAvailable() => IsInStock();
+
+    private void UpdateTimestamp() => LastStockUpdate = DateTime.UtcNow;
+
+    public override string? ToString() => $"Stock: {StockQuantity} (Last updated: {LastStockUpdate:yyyy-MM-dd HH:mm:ss})";
 }

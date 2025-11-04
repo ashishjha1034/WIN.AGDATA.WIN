@@ -1,21 +1,14 @@
-﻿using Domain.Entities.Users;
-using WIN.AGDATA.WIN.Domain.Enums;
+﻿using System;
+using System.Collections.Generic;
 
 namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IUserRepository
 {
+    User? GetById(Guid userId);
+    User? GetByEmployeeId(string employeeId);
+    List<User> GetAll();
     void Add(User user);
     void Update(User user);
-    void Delete(string employeeId);
-
-    User? GetByEmployeeId(string employeeId);
-    User? GetByEmail(string email);
-    List<User> GetAll();
-    List<User> GetByRole(UserRole role);
-    List<User> GetActiveUsers();
-    List<User> GetInactiveUsers();
-
-    bool ExistsByEmployeeId(string employeeId);
-    bool ExistsByEmail(string email);
+    void Delete(Guid userId);
 }

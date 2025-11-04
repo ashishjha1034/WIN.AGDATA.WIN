@@ -1,40 +1,59 @@
-﻿using System.Security.Principal;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-namespace Domain.Entities.Users;
+namespace WIN.AGDATA.WIN.Domain.Entities.Users;
 
 public class User
 {
-    public UserIdentity Identity { get; }
-    public UserStatus Status { get; }
-    public UserPoints Points { get; }
+    [Key]
+    [Required]
+    public Guid Id { get; private set; }
+
+    [Required]
+    public UserIdentity Identity { get; private set; }
+
+    [Required]
+    public UserStatus Status { get; private set; }
+
+    [Required]
+    public UserPoints Points { get; private set; }
+
+    [Required]
+    [EnumDataType(typeof(UserRole))]
     public UserRole Role { get; private set; }
 
-    public DateTime CreatedAt { get; }
-    public string CreatedBy { get; }
+    [Required]
+    public DateTime CreatedAt { get; private set; }
+
+    [Required]
+    [StringLength(50)]
+    public string CreatedBy { get; private set; }
+
     public DateTime? LastModifiedAt { get; private set; }
+
+    [StringLength(50)]
     public string? LastModifiedBy { get; private set; }
 
-    public User(string employeeId, string email, string firstName, string lastName,
-               UserRole role = UserRole.Employee, string createdBy = "SYSTEM")
+    public bool IsAdmin => Role == UserRole.Admin || Role == UserRole.SuperAdmin;
+
+    private User() { }
+
+    public User(string employeeId, string email, string firstName, string lastName, string createdBy = "SYSTEM")
     {
+        Id = Guid.NewGuid();
         Identity = new UserIdentity(employeeId, email, firstName, lastName);
         Status = new UserStatus();
         Points = new UserPoints();
-        Role = role;
+        Role = UserRole.Employee;
         CreatedAt = DateTime.UtcNow;
-        CreatedBy = createdBy ?? "SYSTEM";
+        CreatedBy = createdBy;
     }
 
-    public void UpdateUserInfo(string firstName, string lastName, string modifiedBy)
+    public void UpdateUserInfo(string firstName, string lastName, string email, string modifiedBy)
     {
         Identity.UpdateName(firstName, lastName);
-        UpdateAuditInfo(modifiedBy);
-    }
-
-    public void UpdateEmail(EmailAddress newEmail, string modifiedBy)
-    {
-        Identity.UpdateEmail(newEmail);
-        UpdateAuditInfo(modifiedBy);
+        Identity.UpdateEmail(email);
+        UpdateModificationInfo(modifiedBy);
     }
 
     public void PromoteToAdmin(string modifiedBy)
@@ -43,47 +62,57 @@ public class User
             throw new DomainException("Super admin role cannot be changed");
 
         Role = UserRole.Admin;
-        UpdateAuditInfo(modifiedBy);
+        UpdateModificationInfo(modifiedBy);
     }
 
     public void DemoteToEmployee(string modifiedBy)
     {
         if (Role == UserRole.SuperAdmin)
-            throw new DomainException("Super admin role cannot be changed");
+            throw new DomainException("Super admin cannot be demoted");
 
         Role = UserRole.Employee;
-        UpdateAuditInfo(modifiedBy);
+        UpdateModificationInfo(modifiedBy);
     }
 
-    public void Deactivate(string modifiedBy)
+    public void EarnPoints(int points, string modifiedBy)
     {
-        Status.Deactivate();
-        UpdateAuditInfo(modifiedBy);
+        Points.AddPoints(points);
+        UpdateModificationInfo(modifiedBy);
     }
 
-    public void Reactivate(string modifiedBy)
+    public void SpendPoints(int points, string modifiedBy)
     {
-        Status.Reactivate();
-        UpdateAuditInfo(modifiedBy);
+        Points.SpendPoints(points);
+        UpdateModificationInfo(modifiedBy);
     }
 
-    public bool IsAdmin => Role == UserRole.Admin || Role == UserRole.SuperAdmin;
-    public bool IsSuperAdmin => Role == UserRole.SuperAdmin;
-    public bool IsActive => Status.IsActive;
+    public void RefundPoints(int points, string modifiedBy)
+    {
+        Points.RefundPoints(points);
+        UpdateModificationInfo(modifiedBy);
+    }
 
-    public bool CanManageEvents => IsAdmin;
-    public bool CanManageUsers => IsAdmin;
-    public bool CanManageProducts => IsAdmin;
-    public bool CanParticipateInEvents => Status.IsActive;
+    public bool CanParticipateInEvents() => Status.CanParticipateInEvents();
 
-    private void UpdateAuditInfo(string modifiedBy)
+    public bool CanRedeemProducts() => Status.CanParticipateInEvents();
+
+    public void Deactivate(string reason, string modifiedBy)
+    {
+        Status.Deactivate(reason);
+        UpdateModificationInfo(modifiedBy);
+    }
+
+    public void Activate(string modifiedBy)
+    {
+        Status.Activate();
+        UpdateModificationInfo(modifiedBy);
+    }
+
+    private void UpdateModificationInfo(string modifiedBy)
     {
         LastModifiedAt = DateTime.UtcNow;
-        LastModifiedBy = modifiedBy ?? "SYSTEM";
+        LastModifiedBy = modifiedBy;
     }
 
-    public override bool Equals(object? obj)
-        => obj is User other && Identity.EmployeeId == other.Identity.EmployeeId;
-
-    public override int GetHashCode() => Identity.EmployeeId.GetHashCode();
+    public override string? ToString() => $"{Identity.FullName} ({Identity.EmployeeId}) - Points: {Points.CurrentBalance}";
 }

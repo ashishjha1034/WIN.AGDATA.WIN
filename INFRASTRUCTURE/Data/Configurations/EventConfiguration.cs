@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using WIN_AGDATA_WIN.Domain.Entities.Events;
+using WIN.AGDATA.WIN.Domain.Entities.Events;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 

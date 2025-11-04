@@ -12,11 +12,9 @@
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\APPLICATION\APPLICATION.csproj" />
-		<ProjectReference Include="..\INFRASTRUCTURE\INFRASTRUCTURE.csproj" />
+		<ProjectReference Include="D:\AGDATA\WIN.AGDATA.WIN\INFRASTRUCTURE\INFRASTRUCTURE.csproj" />
+		
 	</ItemGroup>
 
 </Project>

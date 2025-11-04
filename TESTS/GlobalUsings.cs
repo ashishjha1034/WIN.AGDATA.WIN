@@ -1,33 +1,20 @@
+// Testing Framework
 global using Xunit;
 global using FluentAssertions;
 global using Moq;
+
+// Core Framework
 global using System;
 global using System.Collections.Generic;
 global using System.Linq;
-global using System.Threading.Tasks;
 
-// Domain entities - Users
-global using Domain.Entities.Users;
-
-// Domain entities - Products  
-global using WIN.AGDATA.WIN.Domain.Entities.Products;
-
-// Domain entities - Events
+// Domain & Application
+global using WIN.AGDATA.WIN.Domain.Common;
+global using WIN.AGDATA.WIN.Domain.Entities.Users;
 global using WIN.AGDATA.WIN.Domain.Entities.Events;
-global using WIN_AGDATA_WIN.Domain.Entities.Events;
-
-// Domain entities - Transactions
-global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
-
-// Domain entities - Redemptions
+global using WIN.AGDATA.WIN.Domain.Entities.Products;
 global using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
-
-// Domain exceptions
+global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 global using WIN.AGDATA.WIN.Domain.Exceptions;
-
-// Application interfaces
 global using WIN.AGDATA.WIN.Application.Interfaces;
-global using WIN_AGDATA_WIN.Application.Interfaces;
-
-// Application services
 global using WIN.AGDATA.WIN.Application.Services;

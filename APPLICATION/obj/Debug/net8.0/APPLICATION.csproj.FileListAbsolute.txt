@@ -1,8 +1,14 @@
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\DOMAIN.deps.json
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\DOMAIN.runtimeconfig.json
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\testhost.exe
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\testhost.dll
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\xunit.abstractions.dll
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\xunit.runner.visualstudio.testadapter.dll
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\APPLICATION.deps.json
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\APPLICATION.dll
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\APPLICATION.pdb
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\Domain.dll
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\Domain.pdb
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\DOMAIN.dll
+D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\DOMAIN.pdb
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\APPLICATION.csproj.AssemblyReference.cache
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\APPLICATION.GeneratedMSBuildEditorConfig.editorconfig
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\APPLICATION.AssemblyInfoInputs.cache
@@ -14,9 +20,3 @@ D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\APPLICATION.dll
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\refint\APPLICATION.dll
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\APPLICATION.pdb
 D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\obj\Debug\net8.0\ref\APPLICATION.dll
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\Domain.deps.json
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\Domain.runtimeconfig.json
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\testhost.exe
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\testhost.dll
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\xunit.abstractions.dll
-D:\AGDATA\WIN.AGDATA.WIN\APPLICATION\bin\Debug\net8.0\xunit.runner.visualstudio.testadapter.dll

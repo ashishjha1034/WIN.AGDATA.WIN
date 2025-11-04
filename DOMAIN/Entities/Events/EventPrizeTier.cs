@@ -1,42 +1,45 @@
-﻿using WIN.AGDATA.WIN.Domain.Exceptions;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Events
+namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+
+public class PrizeTier
 {
-    public class EventPrizeTier
+    [Key]
+    public int Id { get; private set; }
+
+    [Required]
+    [Range(1, 5)]
+    public int Rank { get; private set; }
+
+    [Required]
+    [Range(1, 10000)]
+    public int Points { get; private set; }
+
+    [StringLength(255)]
+    public string? Description { get; set; }
+
+    private PrizeTier() { }
+
+    public PrizeTier(int rank, int points, string? description = null)
     {
-        public int Rank { get; }  // 1 = 1st, 2 = 2nd, etc.
-        public int Points { get; }
-        public string Description { get; }
+        ValidationGuards.ValidateRank(rank);
+        ValidationGuards.ValidatePoints(points);
 
-        public EventPrizeTier(int rank, int points, string description = "")
-        {
-            ValidateRank(rank);
-            ValidatePoints(points);
-            Rank = rank;
-            Points = points;
-            Description = string.IsNullOrWhiteSpace(description) ? $"Rank {rank} Prize" : description.Trim();
-        }
-
-        private void ValidateRank(int rank)
-        {
-            if (rank < 1 || rank > 5)
-                throw new DomainException("Prize rank must be between 1 and 5");
-        }
-
-
-        private void ValidatePoints(int points)
-        {
-            if (points <= 0)
-                throw new DomainException("Prize points must be positive");
-            if (points > 10000)
-                throw new DomainException("Prize points cannot exceed 10,000");
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is EventPrizeTier tier && Rank == tier.Rank;
-        }
-
-        public override int GetHashCode() => Rank.GetHashCode();
+        Rank = rank;
+        Points = points;
+        Description = description;
     }
+
+    public override bool Equals(object? obj)
+    {
+        if (obj is not PrizeTier other)
+            return false;
+
+        return Rank == other.Rank;
+    }
+
+    public override int GetHashCode() => Rank.GetHashCode();
+
+    public override string? ToString() => $"Rank {Rank}: {Points} points";
 }
