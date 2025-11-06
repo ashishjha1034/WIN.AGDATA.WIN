@@ -20,7 +20,7 @@ global using WIN.AGDATA.WIN.Domain.Enums;
 global using EventInfo = WIN.AGDATA.WIN.Domain.Entities.Events.EventInfo;
 global using EventStatus = WIN.AGDATA.WIN.Domain.Entities.Events.EventStatus;
 global using PrizeTier = WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier;
-global using Winner = WIN.AGDATA.WIN.Domain.Entities.Events;
+global using Winner = WIN.AGDATA.WIN.Domain.Entities.Events.Winner;
 global using ProductIdentity = WIN.AGDATA.WIN.Domain.Entities.Products.ProductIdentity;
 global using ProductPoints =  WIN.AGDATA.WIN.Domain.Entities.Products.ProductPoints;
 global using ProductInventory = WIN.AGDATA.WIN.Domain.Entities.Products.ProductInventory;

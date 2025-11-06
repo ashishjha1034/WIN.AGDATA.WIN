@@ -99,4 +99,47 @@ public static class ValidationGuards
         if (date <= DateTime.UtcNow)
             throw new DomainException($"{fieldName} must be in the future");
     }
+    public static void ValidateStringNotEmpty(string value, string fieldName, int minLength = 1, int maxLength = 255)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new DomainException($"{fieldName} cannot be empty or whitespace.");
+        if (value.Length < minLength || value.Length > maxLength)
+            throw new DomainException($"{fieldName} must be between {minLength} and {maxLength} characters.");
+    }
+
+    public static void ValidateDescription(string description, int minLength = 10, int maxLength = 500)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+            throw new DomainException("Description cannot be empty.");
+        if (description.Length < minLength || description.Length > maxLength)
+            throw new DomainException($"Description must be between {minLength} and {maxLength} characters.");
+    }
+
+    public static void ValidatePointsPositive(int points, string fieldName = "Points")
+    {
+        if (points <= 0)
+            throw new DomainException($"{fieldName} must be greater than zero.");
+    }
+
+    public static void ValidateStock(int quantity)
+    {
+        if (quantity < 0)
+            throw new DomainException("Stock quantity cannot be negative.");
+    }
+
+    public static void ValidateEmailFormat(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            throw new DomainException("Email cannot be empty.");
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            throw new DomainException("Invalid email format.");
+    }
+
+    public static void ValidateEntityExists(object? entity, string entityName, string id)
+    {
+        if (entity == null)
+            throw new DomainException($"{entityName} not found: {id}");
+    }
+
 }

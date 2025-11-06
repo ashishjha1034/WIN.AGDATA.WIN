@@ -22,7 +22,11 @@ public class UserRepository : IUserRepository
 
     public User? GetByEmployeeId(string employeeId)
     {
-        return _context.Users.FirstOrDefault(u => u.Identity.EmployeeId == employeeId);
+        if (string.IsNullOrWhiteSpace(employeeId))
+            return null;
+
+        var normalized = NormalizeId(employeeId);
+        return _context.Users.FirstOrDefault(u => u.Identity.EmployeeId == normalized);
     }
 
     public List<User> GetAll()
@@ -50,5 +54,11 @@ public class UserRepository : IUserRepository
             _context.Users.Remove(user);
             _context.SaveChanges();
         }
+    }
+
+    private static string NormalizeId(string id)
+    {
+        // Keep normalization simple and consistent with domain guards
+        return id.Trim().ToUpperInvariant();
     }
 }

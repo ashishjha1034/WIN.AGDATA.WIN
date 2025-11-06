@@ -28,23 +28,19 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Products
             Description = description.Trim();
         }
 
+        
         private void ValidateName(string name)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                throw new DomainException("Product name is required");
-
-            if (name.Trim().Length < 2)
-                throw new DomainException("Product name must be at least 2 characters");
+            // Reuse ValidationGuards to validate and normalize the name
+            Name = ValidationGuards.ValidateAndNormalizeName(name, "Product name", 2, 200);
         }
 
         private void ValidateDescription(string description)
         {
-            if (string.IsNullOrWhiteSpace(description))
-                throw new DomainException("Product description is required");
-
-            if (description.Trim().Length < 10)
-                throw new DomainException("Product description must be at least 10 characters");
+            
+            Description = ValidationGuards.ValidateAndNormalizeDescription(description, 10, 2000);
         }
+
 
         public override bool Equals(object obj)
         {

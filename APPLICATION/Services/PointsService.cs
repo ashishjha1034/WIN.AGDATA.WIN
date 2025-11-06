@@ -4,10 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using WIN.AGDATA.WIN.Application.Interfaces;
 
-
 namespace WIN.AGDATA.WIN.Application.Services;
 
-public class PointsService : IPointsService,IPointsManagementService
+public class PointsService : IPointsService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITransactionRepository _transactionRepository;
@@ -111,7 +110,7 @@ public class PointsService : IPointsService,IPointsManagementService
             _userRepository.Update(user);
 
             var transaction = new PointsTransaction(employeeId, points, PointsTransactionType.Refund, reason);
-            _transactionRepository.Add(transaction);
+            _transactionRepository.Add(transaction); 
 
             _logger.LogInformation($"Points refunded to {employeeId}: {points}");
         }
@@ -121,20 +120,14 @@ public class PointsService : IPointsService,IPointsManagementService
             throw;
         }
     }
-    public void AddPointsToUser(string employeeId, int points, string reason, string eventId)
-    {
-        _logger.LogInformation($"Added {points} points to {employeeId}: {reason}");
-    }
+
+    // ---- Adapter methods for IPointsManagementService (for DI compatibility) ----
+    public void AddPointsToUser(string employeeId, int points, string reason, string? eventId = null)
+        => AddPoints(employeeId, points, reason, eventId);
 
     public void DeductPointsFromUser(string employeeId, int points, string reason)
-    {
-        _logger.LogInformation($"Deducted {points} points from {employeeId}: {reason}");
-    }
+        => SpendPoints(employeeId, points, reason);
 
     public void RefundPointsToUser(string employeeId, int points, string reason)
-    {
-        _logger.LogInformation($"Refunded {points} points to {employeeId}: {reason}");
-    }
-
-
+        => RefundPoints(employeeId, points, reason);
 }

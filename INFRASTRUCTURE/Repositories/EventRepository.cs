@@ -1,5 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
 
@@ -50,10 +53,10 @@ public class EventRepository : IEventRepository
     {
         try
         {
-            var eventObj = GetById(eventId);
-            if (eventObj != null)
+            var evt = GetById(eventId);
+            if (evt != null)
             {
-                _context.Events.Remove(eventObj);
+                _context.Events.Remove(evt);
                 _context.SaveChanges();
                 _logger.LogInformation("Event deleted successfully: {EventId}", eventId);
             }
@@ -67,8 +70,11 @@ public class EventRepository : IEventRepository
 
     public Event? GetById(string eventId)
     {
-        return _context.Events
-            .FirstOrDefault(e => e.EventId == eventId.Trim().ToUpper());
+        if (string.IsNullOrWhiteSpace(eventId))
+            return null;
+
+        var normalized = NormalizeId(eventId);
+        return _context.Events.FirstOrDefault(e => e.EventId == normalized);
     }
 
     public List<Event> GetAll()
@@ -106,7 +112,12 @@ public class EventRepository : IEventRepository
 
     public bool ExistsById(string eventId)
     {
-        return _context.Events
-            .Any(e => e.EventId == eventId.Trim().ToUpper());
+        if (string.IsNullOrWhiteSpace(eventId))
+            return false;
+
+        var normalized = NormalizeId(eventId);
+        return _context.Events.Any(e => e.EventId == normalized);
     }
+
+    private static string NormalizeId(string id) => id.Trim().ToUpperInvariant();
 }

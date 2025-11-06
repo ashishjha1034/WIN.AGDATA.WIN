@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
 using WIN.AGDATA.WIN.Infrastructure.Repositories;
 
@@ -12,13 +11,13 @@ public class EventService : IEventService
 {
     private readonly IEventRepository _eventRepository;
     private readonly IUserRepository _userRepository;
-    private readonly IPointsManagementService _pointsService;
+    private readonly IPointsService _pointsService;
     private readonly ILogger<EventService> _logger;
 
     public EventService(
         IEventRepository eventRepository,
         IUserRepository userRepository,
-        IPointsManagementService pointsService,
+        IPointsService pointsService,
         ILogger<EventService> logger)
     {
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
@@ -99,7 +98,8 @@ public class EventService : IEventService
         }
     }
 
-    public List<Event> GetDowncomingEvents()
+    // Renamed: returns events that are active but not upcoming (past or ongoing as per previous logic)
+    public List<Event> GetPastEvents()
     {
         try
         {
@@ -107,7 +107,7 @@ public class EventService : IEventService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving downcoming events");
+            _logger.LogError(ex, "Error retrieving past events");
             throw;
         }
     }
@@ -198,7 +198,7 @@ public class EventService : IEventService
     {
         try
         {
-            var @event = _eventRepository.GetById(eventId);
+            var @event = _eventRepository.GetById(eventId); ;
             if (@event == null)
                 throw new DomainException($"Event not found: {eventId}");
 
