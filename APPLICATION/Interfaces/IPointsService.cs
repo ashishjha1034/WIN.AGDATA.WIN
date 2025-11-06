@@ -1,13 +1,20 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Transactions;
+﻿using System;
+using System.Collections.Generic;
+using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
+namespace WIN.AGDATA.WIN.Application.Interfaces;
 
-namespace WIN_AGDATA_WIN.Application.Interfaces
+public interface IPointsService
 {
-    public interface IPointsService
-    {
-        void AllocatePoints(string employeeId, int points, string eventId, string description); // Changed Guid to string
-        void SpendPoints(string employeeId, int points, Guid redemptionId, string description);
-        List<PointsTransaction> GetUserTransactionHistory(string employeeId);
-        int GetUserPointsBalance(string employeeId);
-    }
+
+    int GetUserPointsBalance(string employeeId);
+    List<PointsTransaction> GetUserTransactionHistory(string employeeId);
+
+    void AddPoints(string employeeId, int points, string reason, string? eventId = null);
+    void SpendPoints(string employeeId, int points, string reason, Guid? redemptionId = null);
+    void RefundPoints(string employeeId, int points, string reason);
+
+    
+    void AddPointsToUser(string employeeId, int points, string reason, string? eventId = null);
+    //void DeductPointsFromUser(string employeeId, int points, string reason, Guid? redemptionId = null);
 }

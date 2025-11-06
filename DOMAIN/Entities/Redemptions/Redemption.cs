@@ -1,44 +1,45 @@
-﻿using WIN.AGDATA.WIN.Domain.Exceptions;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions
+namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+
+public class Redemption
 {
-    public class Redemption
+    [Key]
+    [Required]
+    public Guid Id { get; private set; }
+
+    [Required]
+    [StringLength(20, MinimumLength = 3)]
+    public string EmployeeId { get; private set; }
+
+    [Required]
+    public Guid ProductId { get; private set; }
+
+    [Required]
+    [Range(1, 10000)]
+    public int PointsCost { get; private set; }
+
+    [Required]
+    public RedemptionStatus Status { get; private set; }
+
+    [Required]
+    public DateTime RequestedAt { get; private set; }
+
+    [Required]
+    [StringLength(50)]
+    public string CreatedBy { get; private set; }
+
+    private Redemption() { }
+
+    public Redemption(string employeeId, Guid productId, int pointsCost)
     {
-        public Guid Id { get; }
-        public string EmployeeId { get; }
-        public Guid ProductId { get; }
-        public int PointsCost { get; }
-        public DateTime RequestedAt { get; }
-
-        public Redemption(string employeeId, Guid productId, int pointsCost)
-        {
-            ValidateEmployeeId(employeeId);
-            ValidateProductId(productId);
-            ValidatePointsCost(pointsCost);
-
-            Id = Guid.NewGuid();
-            EmployeeId = employeeId.Trim().ToUpper();
-            ProductId = productId;
-            PointsCost = pointsCost;
-            RequestedAt = DateTime.UtcNow;
-        }
-
-        private void ValidateEmployeeId(string employeeId)
-        {
-            if (string.IsNullOrWhiteSpace(employeeId))
-                throw new DomainException("Employee ID is required");
-        }
-
-        private void ValidateProductId(Guid productId)
-        {
-            if (productId == Guid.Empty)
-                throw new DomainException("Product ID is required");
-        }
-
-        private void ValidatePointsCost(int pointsCost)
-        {
-            if (pointsCost <= 0)
-                throw new DomainException("Points cost must be positive");
-        }
+        Id = Guid.NewGuid();
+        EmployeeId = ValidationGuards.ValidateAndNormalizeId(employeeId, "Employee ID");
+        ProductId = productId;
+        PointsCost = pointsCost;
+        Status = new RedemptionStatus(Id);  // ← PASS THE ID HERE
+        RequestedAt = DateTime.UtcNow;
+        CreatedBy = "SYSTEM";
     }
 }

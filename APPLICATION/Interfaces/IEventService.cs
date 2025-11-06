@@ -1,14 +1,21 @@
 ﻿using WIN.AGDATA.WIN.Domain.Entities.Events;
-using WIN_AGDATA_WIN.Domain.Entities.Events;
 
-namespace WIN_AGDATA_WIN.Application.Interfaces
+namespace WIN.AGDATA.WIN.Application.Interfaces;
+
+public interface IEventService
 {
-    public interface IEventService
-    {
-        Event CreateEvent(string name, string description, DateTime eventDate, List<PrizeTier> prizeTiers);
-        Event? GetEvent(string eventId);  // Changed from Guid to string
-        List<Event> GetAllEvents();
-        void AddPrizeTier(string eventId, PrizeTier prizeTier);  // Changed from Guid to string
-        void CompleteEvent(string eventId, List<Winner> winners);  // Changed from Guid to string
-    }
+    Event CreateEvent(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes);
+    Event? GetEventById(string eventId);
+    List<Event> GetAllEvents();
+    List<Event> GetActiveEvents();
+    List<Event> GetUpcomingEvents();
+
+    // Renamed: formerly GetDowncomingEvents
+    List<Event> GetPastEvents();
+
+    void CompleteEvent(string eventId, List<Winner> winners);
+    void ProcessExpiredEvents();
+    void DeactivateEvent(string eventId, string reason);
+    void ReactivateEvent(string eventId);
+    void AddPrizeTier(string eventId, PrizeTier prizeTier);
 }

@@ -1,20 +1,29 @@
-# Visual Studio
-.vs/
-*.user
-*.suo
-
-# Build outputs
+# Visual Studio build files
 bin/
 obj/
-Debug/
-Release/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
 
-# Temporary files
-*.cache
-*.db
-*.pdb
-*.dll
-*.exe
+# VS upgrade logs
+UpgradeLog*.htm
+UpgradeLog*.XML
 
-# Rider / JetBrains IDEs
-.idea/
+# Test settings
+testResults/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+.vs/
+
+# Local config
+*.local.json
+*.env
+testEnvironments.json
+
+# OS junk
+Thumbs.db
+.DS_Store
