@@ -27,3 +27,13 @@ testEnvironments.json
 # OS junk
 Thumbs.db
 .DS_Store
+
+# Rider / JetBrains
+.idea/
+
+# Others (optional)
+*.log
+*.db
+*.db-shm
+*.db-wal
+
