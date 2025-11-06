@@ -1,4 +1,6 @@
-﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿using WIN.AGDATA.WIN.Domain.Entities.Events;
+
+namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IEventService
 {
@@ -7,7 +9,10 @@ public interface IEventService
     List<Event> GetAllEvents();
     List<Event> GetActiveEvents();
     List<Event> GetUpcomingEvents();
-    List<Event> GetDowncomingEvents();
+
+    // Renamed: formerly GetDowncomingEvents
+    List<Event> GetPastEvents();
+
     void CompleteEvent(string eventId, List<Winner> winners);
     void ProcessExpiredEvents();
     void DeactivateEvent(string eventId, string reason);

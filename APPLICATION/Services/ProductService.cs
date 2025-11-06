@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Application.Services;
 
@@ -78,8 +79,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.UpdateDetails(name, description, "SYSTEM");
             _productRepository.Update(product);
@@ -98,8 +99,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.UpdatePoints(newPoints, "SYSTEM");
             _productRepository.Update(product);
@@ -118,8 +119,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.UpdatePoints(newPoints, "SYSTEM");
             _productRepository.Update(product);
@@ -137,8 +138,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.UpdateStock(newQuantity, "SYSTEM");
             _productRepository.Update(product);
@@ -159,8 +160,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.Deactivate("SYSTEM");
             _productRepository.Update(product);
@@ -179,8 +180,8 @@ public class ProductService : IProductService
         try
         {
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             product.Activate("SYSTEM");
             _productRepository.Update(product);

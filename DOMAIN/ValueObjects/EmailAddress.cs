@@ -14,15 +14,7 @@ public record EmailAddress
 
     public EmailAddress(string email)
     {
-        if (string.IsNullOrWhiteSpace(email))
-            throw new DomainException("Email address is required");
-
-        var normalizedEmail = email.Trim().ToLowerInvariant();
-
-        if (!EmailRegex.IsMatch(normalizedEmail))
-            throw new DomainException("Invalid email address format");
-
-        Value = normalizedEmail;
+        Value = ValidationGuards.ValidateAndNormalizeEmail(email);
     }
 
     public static implicit operator string(EmailAddress email) => email.Value;

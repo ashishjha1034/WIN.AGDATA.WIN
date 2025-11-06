@@ -11,7 +11,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IPointsService, PointsService>();
-        services.AddScoped<IPointsManagementService, PointsService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IRedemptionService, RedemptionService>();
         return services;

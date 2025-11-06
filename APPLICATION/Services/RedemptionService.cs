@@ -40,8 +40,8 @@ public class RedemptionService : IRedemptionService
                 throw new DomainException($"User {employeeId} cannot redeem products");
 
             var product = _productRepository.GetById(productId);
-            if (product == null)
-                throw new DomainException($"Product not found: {productId}");
+            ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
+
 
             if (!product.IsAvailable())
                 throw new DomainException($"Product is not available: {productId}");
