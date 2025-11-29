@@ -16,5 +16,4 @@ global using WIN.AGDATA.WIN.Domain.Entities.Products;
 global using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 global using WIN.AGDATA.WIN.Domain.Exceptions;
-global using WIN.AGDATA.WIN.Application.Interfaces;
-global using WIN.AGDATA.WIN.Application.Services;
+global using WIN.AGDATA.WIN.APPLICATION.Interfaces;

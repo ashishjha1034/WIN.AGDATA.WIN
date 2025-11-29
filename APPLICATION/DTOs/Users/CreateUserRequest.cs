@@ -1,12 +1,7 @@
-﻿using System;
+﻿namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Users;
 
-namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Users
-{
-    public class CreateUserRequest
-    {
-        public string EmployeeId { get; set; } = null!;
-        public string Email { get; set; } = null!;
-        public string FirstName { get; set; } = null!;
-        public string LastName { get; set; } = null!;
-    }
-}
+public record CreateUserRequest(
+    string EmployeeId,
+    string Email,
+    string FirstName,
+    string LastName);

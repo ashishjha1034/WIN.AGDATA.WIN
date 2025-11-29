@@ -1,8 +1,3 @@
-﻿// WIN.AGDATA.WIN.Application/DTOs/UpdateStockRequest.cs
-namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Products
-{
-    public class UpdateStockRequest
-    {
-        public int NewQuantity { get; set; }
-    }
-}
+﻿namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
+
+public record UpdateStockRequest(int AdjustBy); // +ve = add, -ve = remove

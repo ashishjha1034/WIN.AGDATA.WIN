@@ -22,59 +22,7 @@ namespace INFRASTRUCTURE.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.Event", b =>
-                {
-                    b.Property<string>("EventId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("LastModifiedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LastModifiedBy")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("EventId");
-
-                    b.ToTable("Events", (string)null);
-                });
-
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.EventParticipant", b =>
-                {
-                    b.Property<string>("EventId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("ParticipatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("PointsAwarded")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("Rank")
-                        .HasColumnType("int");
-
-                    b.HasKey("EventId", "UserId");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("IX_EventParticipants_UserId");
-
-                    b.ToTable("EventParticipants", (string)null);
-                });
-
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Products.Product", b =>
+            modelBuilder.Entity("InventoryItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -83,41 +31,49 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime?>("LastModifiedAt")
+                    b.Property<int>("QuantityAvailable")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityReserved")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("LastModifiedBy")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products", (string)null);
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("InventoryItems");
                 });
 
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Redemptions.Redemption", b =>
+            modelBuilder.Entity("ProductPricing", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("EmployeeId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("PointsCost")
                         .HasColumnType("int");
@@ -125,18 +81,318 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("RequestedAt")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Redemptions", (string)null);
+                    b.HasIndex("ProductId", "EffectiveFrom")
+                        .HasDatabaseName("IX_ProductPricing_ProductId_EffectiveFrom");
+
+                    b.ToTable("ProductPricings");
                 });
 
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Transactions.PointsTransaction", b =>
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.Event", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BannerImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("EventDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("MaxParticipants")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("RegistrationEndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TotalPointsPool")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.EventParticipant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttendanceStatus")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("AwardedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("AwardedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CheckedInAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("EventRank")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointsAwarded")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("EventId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("EventParticipants");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("PrizeTiers");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Products.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Products.ProductCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DisplayOrder");
+
+                    b.ToTable("ProductCategories");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Redemptions.Redemption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeliveredBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeliveryNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("PointsSpent")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("RejectedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RequestedAt");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Redemptions");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Transactions.UserPointsTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("BalanceAfter")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
@@ -144,30 +400,82 @@ namespace INFRASTRUCTURE.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("EmployeeId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("EventId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<int>("Points")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("RedemptionId")
+                    b.Property<Guid?>("ProcessedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("TransactionDate")
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("Type")
+                    b.Property<int>("TransactionType")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.ToTable("PointsTransactions", (string)null);
+                    b.HasIndex("Timestamp");
+
+                    b.HasIndex("UserId", "Timestamp");
+
+                    b.ToTable("UserPointsTransactions");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.Role", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Roles");
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.User", b =>
@@ -179,344 +487,226 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EmployeeId")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<DateTime?>("LastModifiedAt")
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("LastModifiedBy")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("int");
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users", (string)null);
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.Event", b =>
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.UserPointsAccount", b =>
                 {
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Events.EventInfo", "Info", b1 =>
-                        {
-                            b1.Property<string>("EventId")
-                                .HasColumnType("nvarchar(20)");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.Property<DateTime>("CreatedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Info_CreatedAt");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
-                            b1.Property<string>("Description")
-                                .IsRequired()
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("Info_Description");
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.Property<DateTime>("EventDate")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Info_EventDate");
+                    b.Property<int>("CurrentBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
-                                .HasColumnName("Info_Name");
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("datetime2");
 
-                            b1.HasKey("EventId");
+                    b.Property<int>("TotalEarned")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
-                            b1.ToTable("Events");
+                    b.Property<int>("TotalRedeemed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
-                            b1.WithOwner()
-                                .HasForeignKey("EventId");
-                        });
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Events.EventStatus", "Status", b1 =>
-                        {
-                            b1.Property<string>("EventId")
-                                .HasColumnType("nvarchar(20)");
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.Property<DateTime?>("CompletedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_CompletedAt");
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.Property<DateTime>("CreatedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_CreatedAt");
+                    b.HasKey("Id");
 
-                            b1.Property<DateTime?>("DeactivatedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_DeactivatedAt");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
-                            b1.Property<string>("DeactivationReason")
-                                .HasMaxLength(255)
-                                .HasColumnType("nvarchar(255)")
-                                .HasColumnName("Status_DeactivationReason");
+                    b.ToTable("UserPointsAccounts");
+                });
 
-                            b1.Property<bool>("IsActive")
-                                .HasColumnType("bit")
-                                .HasColumnName("Status_IsActive");
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.UserRoleAssignment", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.Property<bool>("IsCompleted")
-                                .HasColumnType("bit")
-                                .HasColumnName("Status_IsCompleted");
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.HasKey("EventId");
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
 
-                            b1.ToTable("Events");
+                    b.Property<Guid?>("AssignedBy")
+                        .HasColumnType("uniqueidentifier");
 
-                            b1.WithOwner()
-                                .HasForeignKey("EventId");
+                    b.HasKey("UserId", "RoleId");
 
-                            b1.OwnsMany("WIN.AGDATA.WIN.Domain.Entities.Events.Winner", "Winners", b2 =>
-                                {
-                                    b2.Property<string>("EventStatusEventId")
-                                        .HasColumnType("nvarchar(20)");
+                    b.HasIndex("RoleId");
 
-                                    b2.Property<int>("Id")
-                                        .ValueGeneratedOnAdd()
-                                        .HasColumnType("int");
+                    b.ToTable("UserRoleAssignments");
+                });
 
-                                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b2.Property<int>("Id"));
+            modelBuilder.Entity("InventoryItem", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Products.Product", "Product")
+                        .WithOne("Inventory")
+                        .HasForeignKey("InventoryItem", "ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_InventoryItem_Product");
 
-                                    b2.Property<string>("EmployeeId")
-                                        .IsRequired()
-                                        .HasMaxLength(20)
-                                        .HasColumnType("nvarchar(20)")
-                                        .HasColumnName("EmployeeId");
+                    b.Navigation("Product");
+                });
 
-                                    b2.Property<int>("Rank")
-                                        .HasColumnType("int")
-                                        .HasColumnName("Rank");
-
-                                    b2.Property<DateTime>("WonAt")
-                                        .HasColumnType("datetime2")
-                                        .HasColumnName("WonAt");
-
-                                    b2.HasKey("EventStatusEventId", "Id");
-
-                                    b2.ToTable("Winner", (string)null);
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("EventStatusEventId");
-                                });
-
-                            b1.Navigation("Winners");
-                        });
-
-                    b.OwnsMany("WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier", "Prizes", b1 =>
-                        {
-                            b1.Property<int>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("int");
-
-                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
-
-                            b1.Property<string>("EventId")
-                                .HasColumnType("nvarchar(20)");
-
-                            b1.Property<string>("Description")
-                                .HasMaxLength(255)
-                                .HasColumnType("nvarchar(255)")
-                                .HasColumnName("Description");
-
-                            b1.Property<int>("Points")
-                                .HasColumnType("int")
-                                .HasColumnName("Points");
-
-                            b1.Property<int>("Rank")
-                                .HasColumnType("int")
-                                .HasColumnName("Rank");
-
-                            b1.HasKey("Id", "EventId");
-
-                            b1.HasIndex("EventId");
-
-                            b1.ToTable("PrizeTier", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("EventId");
-                        });
-
-                    b.Navigation("Info")
-                        .IsRequired();
-
-                    b.Navigation("Prizes");
-
-                    b.Navigation("Status")
-                        .IsRequired();
+            modelBuilder.Entity("ProductPricing", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Products.Product", null)
+                        .WithMany("Pricings")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_ProductPricing_Product");
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.EventParticipant", b =>
                 {
-                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Events.Event", null)
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Events.Event", "Event")
+                        .WithMany("Participants")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Events.Event", "Event")
                         .WithMany()
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Products.Product", b =>
                 {
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Products.ProductIdentity", "Identity", b1 =>
-                        {
-                            b1.Property<Guid>("ProductId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<string>("Description")
-                                .IsRequired()
-                                .HasColumnType("nvarchar(max)")
-                                .HasColumnName("Identity_Description");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasColumnType("nvarchar(max)")
-                                .HasColumnName("Identity_Name");
-
-                            b1.HasKey("ProductId");
-
-                            b1.ToTable("Products");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ProductId");
-                        });
-
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Products.ProductInventory", "Inventory", b1 =>
-                        {
-                            b1.Property<Guid>("ProductId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<DateTime?>("LastStockUpdate")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Inventory_LastStockUpdate");
-
-                            b1.Property<int>("StockQuantity")
-                                .HasColumnType("int")
-                                .HasColumnName("Inventory_StockQuantity");
-
-                            b1.HasKey("ProductId");
-
-                            b1.ToTable("Products");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ProductId");
-                        });
-
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Products.ProductPoints", "Pricing", b1 =>
-                        {
-                            b1.Property<Guid>("ProductId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<DateTime>("LastUpdated")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Pricing_LastUpdated");
-
-                            b1.Property<int>("RequiredPoints")
-                                .HasColumnType("int")
-                                .HasColumnName("Pricing_RequiredPoints");
-
-                            b1.HasKey("ProductId");
-
-                            b1.ToTable("Products");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ProductId");
-                        });
-
-                    b.Navigation("Identity")
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Products.ProductCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Inventory")
-                        .IsRequired();
-
-                    b.Navigation("Pricing")
-                        .IsRequired();
+                    b.Navigation("Category");
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Redemptions.Redemption", b =>
                 {
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Redemptions.RedemptionStatus", "Status", b1 =>
-                        {
-                            b1.Property<Guid>("Id")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<DateTime?>("ApprovedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_ApprovedAt");
-
-                            b1.Property<DateTime?>("DeliveredAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_DeliveredAt");
-
-                            b1.Property<string>("RejectionReason")
-                                .HasColumnType("nvarchar(max)")
-                                .HasColumnName("Status_RejectionReason");
-
-                            b1.Property<int>("Value")
-                                .HasColumnType("int")
-                                .HasColumnName("Status_Value");
-
-                            b1.HasKey("Id");
-
-                            b1.ToTable("Redemptions");
-
-                            b1.WithOwner()
-                                .HasForeignKey("Id");
-                        });
-
-                    b.Navigation("Status")
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Products.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Transactions.UserPointsTransaction", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.User", b =>
                 {
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Users.UserIdentity", "Identity", b1 =>
+                    b.OwnsOne("WIN.AGDATA.WIN.Domain.ValueObjects.EmailAddress", "Email", b1 =>
                         {
                             b1.Property<Guid>("UserId")
                                 .HasColumnType("uniqueidentifier");
 
-                            b1.Property<string>("Email")
+                            b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(255)
                                 .HasColumnType("nvarchar(255)")
-                                .HasColumnName("Identity_Email");
-
-                            b1.Property<string>("EmployeeId")
-                                .IsRequired()
-                                .HasMaxLength(20)
-                                .HasColumnType("nvarchar(20)")
-                                .HasColumnName("Identity_EmployeeId");
-
-                            b1.Property<string>("FirstName")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("Identity_FirstName");
-
-                            b1.Property<string>("LastName")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("Identity_LastName");
+                                .HasColumnName("Email");
 
                             b1.HasKey("UserId");
 
-                            b1.HasIndex("Email")
-                                .IsUnique()
-                                .HasDatabaseName("IX_Users_Email");
-
-                            b1.HasIndex("EmployeeId")
-                                .IsUnique()
-                                .HasDatabaseName("IX_Users_EmployeeId");
+                            b1.HasIndex("Value")
+                                .IsUnique();
 
                             b1.ToTable("Users");
 
@@ -524,65 +714,59 @@ namespace INFRASTRUCTURE.Migrations
                                 .HasForeignKey("UserId");
                         });
 
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Users.UserPoints", "Points", b1 =>
-                        {
-                            b1.Property<Guid>("UserId")
-                                .HasColumnType("uniqueidentifier");
+                    b.Navigation("Email")
+                        .IsRequired();
+                });
 
-                            b1.Property<int>("CurrentBalance")
-                                .HasColumnType("int")
-                                .HasColumnName("Points_CurrentBalance");
-
-                            b1.Property<int>("EarnedPoints")
-                                .HasColumnType("int")
-                                .HasColumnName("Points_EarnedPoints");
-
-                            b1.Property<int>("SpentPoints")
-                                .HasColumnType("int")
-                                .HasColumnName("Points_SpentPoints");
-
-                            b1.HasKey("UserId");
-
-                            b1.ToTable("Users");
-
-                            b1.WithOwner()
-                                .HasForeignKey("UserId");
-                        });
-
-                    b.OwnsOne("WIN.AGDATA.WIN.Domain.Entities.Users.UserStatus", "Status", b1 =>
-                        {
-                            b1.Property<Guid>("UserId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<DateTime?>("DeactivatedAt")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("Status_DeactivatedAt");
-
-                            b1.Property<string>("DeactivationReason")
-                                .HasMaxLength(255)
-                                .HasColumnType("nvarchar(255)")
-                                .HasColumnName("Status_DeactivationReason");
-
-                            b1.Property<bool>("IsActive")
-                                .HasColumnType("bit")
-                                .HasColumnName("Status_IsActive");
-
-                            b1.HasKey("UserId");
-
-                            b1.ToTable("Users");
-
-                            b1.WithOwner()
-                                .HasForeignKey("UserId");
-                        });
-
-                    b.Navigation("Identity")
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.UserPointsAccount", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", "User")
+                        .WithOne("PointsAccount")
+                        .HasForeignKey("WIN.AGDATA.WIN.Domain.Entities.Users.UserPointsAccount", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Points")
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.UserRoleAssignment", b =>
+                {
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.Role", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Status")
+                    b.HasOne("WIN.AGDATA.WIN.Domain.Entities.Users.User", "User")
+                        .WithMany("Roles")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Events.Event", b =>
+                {
+                    b.Navigation("Participants");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Products.Product", b =>
+                {
+                    b.Navigation("Inventory")
+                        .IsRequired();
+
+                    b.Navigation("Pricings");
+                });
+
+            modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Users.User", b =>
+                {
+                    b.Navigation("PointsAccount")
+                        .IsRequired();
+
+                    b.Navigation("Roles");
                 });
 #pragma warning restore 612, 618
         }

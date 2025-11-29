@@ -1,12 +1,11 @@
 ﻿using MediatR;
-
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
 
-namespace WIN.AGDATA.WIN.Application.Commands;
+namespace WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 
-public class CreateProductCommand : IRequest<ProductDto>
-{
-    public CreateProductRequest Request { get; }
-    public string CreatedBy { get; }
-    public CreateProductCommand(CreateProductRequest request, string createdBy) { Request = request; CreatedBy = createdBy; }
-}
+public record CreateProductCommand(
+    string Name,
+    string Description,
+    Guid CategoryId,
+    int PointsCost,
+    string? ImageUrl = null) : IRequest<ProductDto>;

@@ -1,24 +1,24 @@
-﻿using System.Text.RegularExpressions;
+﻿namespace WIN.AGDATA.WIN.Domain.ValueObjects;
 
-namespace WIN.AGDATA.WIN.Domain.ValueObjects;
-
-public record EmailAddress
+public sealed record EmailAddress
 {
-    private static readonly Regex EmailRegex = new Regex(
-        @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    public string Value { get; private set; }
 
-    [Required]
-    [EmailAddress]
-    public string Value { get; }
-
-    public EmailAddress(string email)
+    private EmailAddress(string value)
     {
-        Value = ValidationGuards.ValidateAndNormalizeEmail(email);
+        Value = value;
     }
 
-    public static implicit operator string(EmailAddress email) => email.Value;
-    public static explicit operator EmailAddress(string email) => new(email);
+    public static EmailAddress Create(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ArgumentException("Email cannot be empty", nameof(email));
+
+        if (!email.Contains("@") || !email.Contains("."))
+            throw new ArgumentException("Invalid email format", nameof(email));
+
+        return new EmailAddress(email.Trim().ToLowerInvariant());
+    }
 
     public override string ToString() => Value;
 }

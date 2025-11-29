@@ -1,40 +1,40 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using AutoMapper;
 using MediatR;
-using Microsoft.Extensions.Logging;
-using WIN.AGDATA.WIN.Application.Commands;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Mappers;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Commands.Users;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Users;
-using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
-namespace WIN.AGDATA.WIN.Application.Handlers;
+namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Users;
 
 public class CreateUserHandler : IRequestHandler<CreateUserCommand, UserDto>
 {
-    private readonly IUserRepository _userRepo;
-    private readonly IUnitOfWork _uow;
-    private readonly ILogger<CreateUserHandler> _logger;
+    private readonly IMapper _mapper;
+    private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public CreateUserHandler(IUserRepository userRepo, IUnitOfWork uow, ILogger<CreateUserHandler> logger)
+    public CreateUserHandler(IMapper mapper, IUserRepository userRepository, IUnitOfWork unitOfWork)
     {
-        _userRepo = userRepo;
-        _uow = uow;
-        _logger = logger;
+        _mapper = mapper;
+        _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
     }
 
-    public async Task<UserDto> Handle(CreateUserCommand request, CancellationToken cancellationToken)
+    public async Task<UserDto> Handle(CreateUserCommand request, CancellationToken ct)
     {
-        var r = request.Request;
-        var existing = await _userRepo.GetByEmployeeIdAsync(r.EmployeeId);
-        if (existing != null) throw new DomainException($"User with employee ID '{r.EmployeeId}' already exists");
+        var email = EmailAddress.Create(request.Email);
+        var user = new User(request.EmployeeId, email, request.FirstName, request.LastName);
 
-        var user = new Domain.Entities.Users.User(r.EmployeeId, r.Email, r.FirstName, r.LastName, request.CreatedBy);
-        await _userRepo.AddAsync(user);
-        await _uow.SaveChangesAsync();
+        // Default role: Employee
+        var employeeRole = await _userRepository.GetRoleByNameAsync("Employee")
+                          ?? throw new InvalidOperationException("Role 'Employee' not found");
 
-        var dto = UserMapper.ToDto(user);
-        _logger.LogInformation("User created {EmployeeId}", r.EmployeeId);
-        return dto;
+        user.AssignRole(employeeRole, Guid.Empty); // system created
+
+        _userRepository.Add(user);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return _mapper.Map<UserDto>(user);
     }
 }

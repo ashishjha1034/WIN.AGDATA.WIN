@@ -1,10 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿namespace WIN.AGDATA.WIN.APPLICATION.Interfaces;
 
-namespace WIN.AGDATA.WIN.Application.Interfaces
+public interface IUnitOfWork
 {
-    public interface IUnitOfWork
-    {
-        void SaveChanges();
-        Task SaveChangesAsync();
-    }
+    Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

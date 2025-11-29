@@ -1,51 +1,37 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Products;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories
+namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
+
+public class ProductRepository : Repository<Product>, IProductRepository
 {
-    public class ProductRepository : IProductRepository
+    public ProductRepository(ApplicationDbContext context) : base(context) { }
+
+    public async Task<Product?> GetActiveWithDetailsAsync(Guid id)
+        => await _context.Products
+            .Include(p => p.Category)
+            .Include(p => p.CurrentPricing)
+            .Include(p => p.Inventory)
+            .Where(p => p.IsActive && p.Id == id)
+            .FirstOrDefaultAsync();
+
+    public async Task<IReadOnlyList<Product>> GetActiveWithDetailsAsync()
+        => await _context.Products
+            .Include(p => p.Category)
+            .Include(p => p.CurrentPricing)
+            .Include(p => p.Inventory)
+            .Where(p => p.IsActive)
+            .ToListAsync();
+
+    public async Task<Product?> GetByIdWithInventoryAsync(Guid id)
+        => await _context.Products
+            .Include(p => p.Inventory)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+    public async Task UpdateAsync(Product product)
     {
-        private readonly ApplicationDbContext _context;
-        public ProductRepository(ApplicationDbContext context) { _context = context; }
-
-        public async Task<Product?> GetByIdAsync(Guid id)
-        {
-            return await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
-        }
-
-        public async Task<IEnumerable<Product>> GetAllAsync()
-        {
-            return await _context.Products.AsNoTracking().ToListAsync();
-        }
-
-        public Task AddAsync(Product product)
-        {
-            _context.Products.Add(product);
-            return Task.CompletedTask;
-        }
-
-        public Task UpdateAsync(Product product)
-        {
-            _context.Products.Update(product);
-            return Task.CompletedTask;
-        }
-
-        public Task DeleteAsync(Guid id)
-        {
-            var p = _context.Products.FirstOrDefault(x => x.Id == id);
-            if (p != null) _context.Products.Remove(p);
-            return Task.CompletedTask;
-        }
-
-        public async Task<bool> ExistsByIdAsync(Guid id)
-        {
-            return await _context.Products.AnyAsync(p => p.Id == id);
-        }
+        _dbSet.Update(product);
     }
 }

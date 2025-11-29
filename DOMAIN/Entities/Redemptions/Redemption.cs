@@ -1,79 +1,69 @@
-﻿// DOMAIN/Entities/Redemptions/Redemption.cs
-using System;
-using System.ComponentModel.DataAnnotations;
-using WIN.AGDATA.WIN.Domain.Common;
+﻿using WIN.AGDATA.WIN.Domain.Common;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
-public class Redemption
+public class Redemption : AuditableEntity<Guid>
 {
-    [Key]
-    [Required]
     public Guid Id { get; private set; }
-
-    [Required]
-    [StringLength(20, MinimumLength = 3)]
-    public string EmployeeId { get; private set; }
-
-    [Required]
+    public Guid UserId { get; private set; }
     public Guid ProductId { get; private set; }
-
-    [Required]
-    [Range(1, 10000)]
-    public int PointsCost { get; private set; }
-
-    [Required]
+    public int PointsSpent { get; private set; }
+    public int Quantity { get; private set; }
     public RedemptionStatus Status { get; private set; }
-
-    [Required]
     public DateTime RequestedAt { get; private set; }
 
-    [Required]
-    [StringLength(50)]
-    public string CreatedBy { get; private set; }
+    // Audit fields
+    public DateTime? ApprovedAt { get; private set; }
+    public Guid? ApprovedBy { get; private set; }
+    public DateTime? RejectedAt { get; private set; }
+    public Guid? RejectedBy { get; private set; }
+    public string? RejectionReason { get; private set; }
+    public DateTime? DeliveredAt { get; private set; }
+    public Guid? DeliveredBy { get; private set; }
+    public string? DeliveryNotes { get; private set; }
+
+    // Navigation
+    public User User { get; private set; } = null!;
+    public Product Product { get; private set; } = null!;
 
     private Redemption() { }
 
-    public Redemption(string employeeId, Guid productId, int pointsCost, string createdBy = "SYSTEM")
+    public Redemption(Guid userId, Guid productId, int pointsSpent, int quantity)
     {
         Id = Guid.NewGuid();
-        EmployeeId = ValidationGuards.ValidateAndNormalizeId(employeeId, "Employee ID");
+        UserId = userId;
         ProductId = productId;
-
-        
-        if (pointsCost < 1 || pointsCost > 10000)
-            throw new DomainException("Points cost must be between 1 and 10000");
-
-        PointsCost = pointsCost;
-
-        
-        Status = new RedemptionStatus(Id);
+        PointsSpent = pointsSpent;
+        Quantity = quantity;
+        Status = RedemptionStatus.Pending;
         RequestedAt = DateTime.UtcNow;
-        CreatedBy = createdBy;
     }
 
-    public void Approve(string modifiedBy = "SYSTEM")
+    public void Approve(Guid approvedBy)
     {
-        Status.Approve();
-        UpdateModificationInfo(modifiedBy);
+        if (Status != RedemptionStatus.Pending) throw new DomainException("Only pending redemptions can be approved");
+        Status = RedemptionStatus.Approved;
+        ApprovedAt = DateTime.UtcNow;
+        ApprovedBy = approvedBy;
     }
 
-    public void Reject(string reason, string modifiedBy = "SYSTEM")
+    public void Reject(string reason, Guid rejectedBy)
     {
-        Status.Reject(reason);
-        UpdateModificationInfo(modifiedBy);
+        if (Status != RedemptionStatus.Pending) throw new DomainException("Only pending redemptions can be rejected");
+        Status = RedemptionStatus.Rejected;
+        RejectionReason = reason;
+        RejectedAt = DateTime.UtcNow;
+        RejectedBy = rejectedBy;
     }
 
-    public void MarkDelivered(string modifiedBy = "SYSTEM")
+    public void MarkDelivered(string? notes, Guid deliveredBy)
     {
-        Status.MarkDelivered();
-        UpdateModificationInfo(modifiedBy);
+        if (Status != RedemptionStatus.Approved) throw new DomainException("Only approved redemptions can be delivered");
+        Status = RedemptionStatus.Delivered;
+        DeliveredAt = DateTime.UtcNow;
+        DeliveredBy = deliveredBy;
+        DeliveryNotes = notes;
     }
-
-    private void UpdateModificationInfo(string modifiedBy)
-    {
-        
-    }
-
-    public override string? ToString() => $"Redemption: {Id} - {EmployeeId} - {PointsCost} pts - Status: {Status}";
 }

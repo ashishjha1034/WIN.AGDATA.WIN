@@ -1,18 +1,16 @@
-﻿// APPLICATION/Mapping/RedemptionProfile.cs
+﻿using AutoMapper;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
-using AutoMapper;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+using WIN.AGDATA.WIN.Domain.Enums;
 
-namespace WIN.AGDATA.WIN.Application.Mapping
+namespace WIN.AGDATA.WIN.APPLICATION.Mappers;
+
+public class RedemptionProfile : Profile
 {
-    public class RedemptionProfile : Profile
+    public RedemptionProfile()
     {
-        public RedemptionProfile()
-        {
-            CreateMap<Redemption, RedemptionDto>()
-                .ForMember(d => d.EmployeeId, o => o.MapFrom(s => s.EmployeeId))
-                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.Value.ToString()))
-                .ForMember(d => d.RequestedAt, o => o.MapFrom(s => s.RequestedAt));
-        }
+        CreateMap<Redemption, RedemptionDto>()
+            .ForMember(d => d.ProductName, o => o.MapFrom(s => s.Product.Name))
+            .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
     }
 }

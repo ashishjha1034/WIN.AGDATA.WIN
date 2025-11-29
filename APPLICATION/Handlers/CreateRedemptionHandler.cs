@@ -1,63 +1,53 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using AutoMapper;
 using MediatR;
-using Microsoft.Extensions.Logging;
-using WIN.AGDATA.WIN.Application.Commands;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Mappers;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
-using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
-namespace WIN.AGDATA.WIN.Application.Handlers;
+namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Redemptions;
 
 public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, RedemptionDto>
 {
-    private readonly IRedemptionRepository _redRepo;
+    private readonly IMapper _mapper;
+    private readonly IRedemptionRepository _redemptionRepo;
     private readonly IProductRepository _productRepo;
     private readonly IUserRepository _userRepo;
-    private readonly IUnitOfWork _uow;
-    private readonly ILogger<CreateRedemptionHandler> _logger;
+    private readonly IUnitOfWork _unitOfWork;
 
     public CreateRedemptionHandler(
-        IRedemptionRepository redRepo,
+        IMapper mapper,
+        IRedemptionRepository redemptionRepo,
         IProductRepository productRepo,
         IUserRepository userRepo,
-        IUnitOfWork uow,
-        ILogger<CreateRedemptionHandler> logger)
+        IUnitOfWork unitOfWork)
     {
-        _redRepo = redRepo;
+        _mapper = mapper;
+        _redemptionRepo = redemptionRepo;
         _productRepo = productRepo;
         _userRepo = userRepo;
-        _uow = uow;
-        _logger = logger;
+        _unitOfWork = unitOfWork;
     }
 
-    public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken cancellationToken)
+    public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken ct)
     {
-        var user = await _userRepo.GetByIdAsync(request.UserId);
-        if (user == null) throw new DomainException($"User with id {request.UserId} not found.");
+        var product = await _productRepo.GetActiveWithDetailsAsync(request.ProductId)
+                     ?? throw new InvalidOperationException("Product not found or inactive");
 
-        var product = await _productRepo.GetByIdAsync(request.ProductId);
-        if (product == null) throw new DomainException($"Product with id {request.ProductId} not found.");
+        var pointsCost = product.CurrentPricing.PointsCost * request.Quantity;
+        var user = await _userRepo.GetByIdWithPointsAsync(request.UserId)
+                  ?? throw new InvalidOperationException("User not found");
 
-        if (!product.IsAvailable()) throw new DomainException("Product not available.");
-        if (!product.CanBeRedeemedBy(user.Points.CurrentBalance)) throw new DomainException("Insufficient points.");
+        user.PointsAccount.SpendPoints(pointsCost, request.UserId);
 
-        var redemption = new Domain.Entities.Redemptions.Redemption(
-            user.Identity.EmployeeId,
-            product.Id,
-            product.Pricing.RequiredPoints,
-            request.CreatedBy);
+        product.Inventory.Reserve(request.Quantity);
 
-        await _redRepo.AddAsync(redemption);
-        user.SpendPoints(redemption.PointsCost, request.CreatedBy);
-        await _userRepo.UpdateAsync(user);
-        product.DecreaseStock(1, request.CreatedBy);
-        await _productRepo.UpdateAsync(product);
+        var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
 
-        await _uow.SaveChangesAsync();
+        _redemptionRepo.Add(redemption);
+        await _unitOfWork.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Created redemption {Id}", redemption.Id);
-        return RedemptionMapper.ToDto(redemption);
+        return _mapper.Map<RedemptionDto>(redemption);
     }
 }

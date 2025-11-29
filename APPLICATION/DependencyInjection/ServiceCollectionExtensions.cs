@@ -1,18 +1,16 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Services;
+﻿using AutoMapper;
+using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace WIN.AGDATA.WIN.Application.DependencyInjection;
+namespace WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddScoped<IEventService, EventService>();
-        services.AddScoped<IUserService, UserService>();
-        services.AddScoped<IPointsService, PointsService>();
-        services.AddScoped<IProductService, ProductService>();
-        services.AddScoped<IRedemptionService, RedemptionService>();
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
+        services.AddAutoMapper(typeof(Mappers.UserProfile));
+
         return services;
     }
 }

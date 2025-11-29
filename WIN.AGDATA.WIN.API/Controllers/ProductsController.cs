@@ -1,84 +1,59 @@
-﻿using MediatR;
+﻿using AutoMapper;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using WIN.AGDATA.WIN.Application.Commands;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Mappers;
-using WIN.AGDATA.WIN.APPLICATION.DTOs.Points;
+using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
 
-namespace WIN.AGDATA.WIN.Api.Controllers;
+namespace WIN.AGDATA.WIN.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly IProductRepository _productRepo;
     private readonly IMediator _mediator;
-    private readonly ILogger<ProductsController> _logger;
+    private readonly IMapper _mapper;
+    private readonly IProductRepository _productRepository;
 
-    public ProductsController(IProductRepository productRepo, IMediator mediator, ILogger<ProductsController> logger)
+    public ProductsController(IMediator mediator, IMapper mapper, IProductRepository productRepository)
     {
-        _productRepo = productRepo;
         _mediator = mediator;
-        _logger = logger;
-    }
-
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
-    {
-        var products = await _productRepo.GetAllAsync() ?? new List<Product>();
-        var dtos = products.Select(ProductMapper.ToDto);
-        return Ok(dtos);
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ProductDto>> GetById(Guid id)
-    {
-        var product = await _productRepo.GetByIdAsync(id);
-        if (product == null) return NotFound();
-        return Ok(ProductMapper.ToDto(product));
+        _mapper = mapper;
+        _productRepository = productRepository;
     }
 
     [HttpPost]
-    public async Task<ActionResult<ProductDto>> Create([FromBody] CreateProductRequest dto)
+    public async Task<ActionResult<ProductDto>> CreateProduct([FromBody] CreateProductRequest request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-        var createdBy = User?.Identity?.Name ?? "SYSTEM";
-        var result = await _mediator.Send(new CreateProductCommand(dto, createdBy));
-        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        var result = await _mediator.Send(new CreateProductCommand(
+            request.Name, request.Description, request.CategoryId, request.PointsCost, request.ImageUrl));
+        return CreatedAtAction(nameof(GetProduct), new { id = result.Id }, result);
     }
 
-    [HttpPut("{id:guid}/points")]
-    public async Task<ActionResult> UpdatePoints(Guid id, [FromBody] UpdatePointsRequest dto)
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<ProductDto>>> GetAllProducts()
     {
-        var product = await _productRepo.GetByIdAsync(id);
+        var products = await _productRepository.GetActiveWithDetailsAsync();
+        return Ok(_mapper.Map<IReadOnlyList<ProductDto>>(products));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ProductDto>> GetProduct(Guid id)
+    {
+        var product = await _productRepository.GetActiveWithDetailsAsync(id);
         if (product == null) return NotFound();
-        product.UpdatePoints(dto.NewPoints, User?.Identity?.Name ?? "SYSTEM");
-        await _productRepo.UpdateAsync(product);
-        return NoContent();
+        return Ok(_mapper.Map<ProductDto>(product));
     }
 
     [HttpPut("{id:guid}/stock")]
-    public async Task<ActionResult> UpdateStock(Guid id, [FromBody] UpdateStockRequest dto)
+    public async Task<IActionResult> UpdateStock(Guid id, [FromBody] UpdateStockRequest request)
     {
-        var product = await _productRepo.GetByIdAsync(id);
+        var product = await _productRepository.GetByIdWithInventoryAsync(id);
         if (product == null) return NotFound();
-        product.UpdateStock(dto.NewQuantity, User?.Identity?.Name ?? "SYSTEM");
-        await _productRepo.UpdateAsync(product);
-        return NoContent();
-    }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<ActionResult> Delete(Guid id)
-    {
-        var product = await _productRepo.GetByIdAsync(id);
-        if (product == null) return NotFound();
-        await _productRepo.DeleteAsync(id);
+        product.Inventory.AdjustStock(request.AdjustBy, Guid.Empty); // admin
+        await _productRepository.UpdateAsync(product);
         return NoContent();
     }
 }

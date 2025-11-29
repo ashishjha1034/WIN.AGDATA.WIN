@@ -1,35 +1,42 @@
-﻿using MediatR;
-using Microsoft.Extensions.Logging;
-using System.Threading;
-using System.Threading.Tasks;
-using WIN.AGDATA.WIN.Application.Commands;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Mappers;
+﻿using AutoMapper;
+using MediatR;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
 
-namespace WIN.AGDATA.WIN.Application.Handlers;
+namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Products;
 
 public class CreateProductHandler : IRequestHandler<CreateProductCommand, ProductDto>
 {
-    private readonly IProductRepository _productRepo;
-    private readonly IUnitOfWork _uow;
-    private readonly ILogger<CreateProductHandler> _logger;
+    private readonly IMapper _mapper;
+    private readonly IProductRepository _productRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public CreateProductHandler(IProductRepository productRepo, IUnitOfWork uow, ILogger<CreateProductHandler> logger)
+    public CreateProductHandler(IMapper mapper, IProductRepository productRepository, IUnitOfWork unitOfWork)
     {
-        _productRepo = productRepo;
-        _uow = uow;
-        _logger = logger;
+        _mapper = mapper;
+        _productRepository = productRepository;
+        _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProductDto> Handle(CreateProductCommand request, CancellationToken cancellationToken)
+    public async Task<ProductDto> Handle(CreateProductCommand request, CancellationToken ct)
     {
-        var r = request.Request;
-        var product = new Domain.Entities.Products.Product(r.Name, r.Description, r.RequiredPoints, r.StockQuantity, request.CreatedBy);
-        await _productRepo.AddAsync(product);
-        await _uow.SaveChangesAsync();
-        var dto = ProductMapper.ToDto(product);
-        _logger.LogInformation("Product created {ProductId}", product.Id);
-        return dto;
+        var product = new Product(request.Name, request.Description, request.CategoryId, request.ImageUrl);
+
+        // Create pricing (current)
+        var pricing = new ProductPricing(product.Id, request.PointsCost, DateTime.UtcNow);
+        product.GetType().GetProperty("CurrentPricing")!
+            .SetValue(product, pricing);
+
+        // Create inventory
+        var inventory = new InventoryItem(product.Id);
+        product.GetType().GetProperty("Inventory")!
+            .SetValue(product, inventory);
+
+        _productRepository.Add(product);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return _mapper.Map<ProductDto>(product);
     }
 }

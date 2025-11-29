@@ -1,104 +1,56 @@
-﻿
-using System;
-using System.ComponentModel.DataAnnotations;
-using WIN.AGDATA.WIN.Domain.Common;
+﻿using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Products;
 
-public class Product : IActivatable
+public class Product : AuditableEntity<Guid>
 {
-    [Key]
     public Guid Id { get; private set; }
-
-    [Required]
-    public ProductIdentity Identity { get; private set; }
-
-    [Required]
-    public ProductPoints Pricing { get; private set; }
-
-    [Required]
-    public ProductInventory Inventory { get; private set; }
-
-    [Required]
+    public string Name { get; private set; } = null!;
+    public string Description { get; private set; } = null!;
+    public Guid CategoryId { get; private set; }
+    public string? ImageUrl { get; private set; }
     public bool IsActive { get; private set; }
 
-    [Required]
-    public DateTime CreatedAt { get; private set; }
+    // Navigation
+    public ProductCategory Category { get; private set; } = null!;
 
-    [Required]
-    [StringLength(50)]
-    public string CreatedBy { get; private set; }
+    // ONE-TO-ONE: Product → one InventoryItem
+    public InventoryItem Inventory { get; private set; } = null!;
 
-    public DateTime? LastModifiedAt { get; private set; }
+    // ONE-TO-MANY: Product → many ProductPricing
+    private readonly List<ProductPricing> _pricings = new();
+    public IReadOnlyList<ProductPricing> Pricings => _pricings.AsReadOnly();
 
-    [StringLength(50)]
-    public string? LastModifiedBy { get; private set; }
+    // Current active pricing (calculated)
+    public ProductPricing CurrentPricing =>
+        _pricings.OrderByDescending(p => p.EffectiveFrom)
+                 .FirstOrDefault(p => p.IsActive);
 
     private Product() { }
 
-    public Product(string name, string description, int requiredPoints, int stockQuantity, string createdBy = "SYSTEM")
+    public Product(string name, string description, Guid categoryId, string? imageUrl = null)
     {
         Id = Guid.NewGuid();
-        Identity = new ProductIdentity(name, description);
-        Pricing = new ProductPoints(requiredPoints);
-        Inventory = new ProductInventory(stockQuantity);
+        Name = name;
+        Description = description;
+        CategoryId = categoryId;
+        ImageUrl = imageUrl;
         IsActive = true;
-        CreatedAt = DateTime.UtcNow;
-        CreatedBy = createdBy;
     }
-
-    public void UpdateDetails(string name, string description, string modifiedBy = "SYSTEM")
+    public static Product Create(string name, string description, Guid categoryId, string? imageUrl = null)
     {
-        Identity = new ProductIdentity(name, description);
-        UpdateModificationInfo(modifiedBy);
+        return new Product
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = description,
+            CategoryId = categoryId,
+            ImageUrl = imageUrl,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
     }
 
-    public void UpdatePoints(int newPoints, string modifiedBy = "SYSTEM")
-    {
-        Pricing.UpdatePoints(newPoints);
-        UpdateModificationInfo(modifiedBy);
-    }
-
-    public void UpdateStock(int newQuantity, string modifiedBy = "SYSTEM")
-    {
-        Inventory.SetStock(newQuantity);
-        UpdateModificationInfo(modifiedBy);
-    }
-
-    public void DecreaseStock(int quantity, string modifiedBy = "SYSTEM")
-    {
-        Inventory.DecreaseStock(quantity);
-        UpdateModificationInfo(modifiedBy);
-    }
-
-    public void IncreaseStock(int quantity, string modifiedBy = "SYSTEM")
-    {
-        Inventory.IncreaseStock(quantity);
-        UpdateModificationInfo(modifiedBy);
-    }
-
-    public bool IsAvailable() => IsActive && Inventory.IsAvailable();
-
-    public bool CanBeRedeemedBy(int userPointsBalance) => IsAvailable() && Pricing.HasSufficientPoints(userPointsBalance);
-
-    public void Deactivate(string reason, string modifiedBy = "SYSTEM")
-    {
-        IsActive = false;
-        UpdateModificationInfo(modifiedBy);
-        // optionally log/store reason somewhere if you add field; repo didn't have a DeactivationReason for Product
-    }
-
-    public void Activate(string modifiedBy = "SYSTEM")
-    {
-        IsActive = true;
-        UpdateModificationInfo(modifiedBy);
-    }
-
-    private void UpdateModificationInfo(string modifiedBy)
-    {
-        LastModifiedAt = DateTime.UtcNow;
-        LastModifiedBy = modifiedBy;
-    }
-
-    public override string? ToString() => $"Product: {Identity.Name} ({Pricing.RequiredPoints} points, Stock: {Inventory.StockQuantity})";
+    public void Deactivate() => IsActive = false;
+    public void Activate() => IsActive = true;
 }

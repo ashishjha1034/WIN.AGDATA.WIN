@@ -1,30 +1,33 @@
-﻿
-using System;
-using System.Collections.Generic;
+﻿using System;
 
-namespace WIN.AGDATA.WIN.Domain.Common
+namespace WIN.AGDATA.WIN.Domain.Common;
+
+public abstract class Entity<TId> where TId : notnull
 {
-    public abstract class Entity<TId>
+    public TId Id { get; protected set; } = default!;
+
+    public DateTime CreatedAt { get; protected set; }
+    public Guid? CreatedBy { get; protected set; }
+    public DateTime? UpdatedAt { get; protected set; }
+    public Guid? UpdatedBy { get; protected set; }
+
+    protected Entity() { } // EF needs parameterless ctor
+
+    protected Entity(TId id)
     {
-        public TId Id { get; protected set; } = default!;
+        Id = id;
+        CreatedAt = DateTime.UtcNow;
+    }
 
-        protected Entity() { }
+    public void SetCreator(Guid userId)
+    {
+        CreatedBy = userId;
+        CreatedAt = DateTime.UtcNow;
+    }
 
-        protected Entity(TId id)
-        {
-            if (Equals(id, default(TId)))
-                throw new DomainException("Id is required.");
-            Id = id;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            if (obj is not Entity<TId> other) return false;
-            if (ReferenceEquals(this, other)) return true;
-            if (GetType() != other.GetType()) return false;
-            return EqualityComparer<TId>.Default.Equals(Id, other.Id);
-        }
-
-        public override int GetHashCode() => EqualityComparer<TId>.Default.GetHashCode(Id);
+    public void SetUpdater(Guid userId)
+    {
+        UpdatedBy = userId;
+        UpdatedAt = DateTime.UtcNow;
     }
 }

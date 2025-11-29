@@ -1,17 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using WIN.AGDATA.WIN.Domain.Entities.Products;
+﻿using WIN.AGDATA.WIN.Domain.Entities.Products;
 
-namespace WIN.AGDATA.WIN.Application.Interfaces
+namespace WIN.AGDATA.WIN.APPLICATION.Interfaces;
+
+public interface IProductRepository
 {
-    public interface IProductRepository
-    {
-        Task<IEnumerable<Product>> GetAllAsync();
-        Task<Product?> GetByIdAsync(Guid id);
-        Task AddAsync(Product product);
-        Task UpdateAsync(Product product);
-        Task DeleteAsync(Guid id);
-        Task<bool> ExistsByIdAsync(Guid id);
-    }
+    Task<Product?> GetByIdAsync(Guid id);
+    Task<Product?> GetActiveWithDetailsAsync(Guid id);
+    Task<IReadOnlyList<Product>> GetActiveWithDetailsAsync();
+    Task<Product?> GetByIdWithInventoryAsync(Guid id);
+    void Add(Product product);
+    Task UpdateAsync(Product product);
 }

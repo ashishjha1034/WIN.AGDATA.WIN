@@ -1,45 +1,21 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
-
-namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+﻿namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
 public class PrizeTier
 {
-    [Key]
-    public int Id { get; private set; }
-
-    [Required]
-    [Range(1, 5)]
+    public Guid Id { get; private set; }
+    public Guid EventId { get; private set; }
     public int Rank { get; private set; }
-
-    [Required]
-    [Range(1, 10000)]
     public int Points { get; private set; }
 
-    [StringLength(255)]
-    public string? Description { get; set; }
+    public Event Event { get; private set; } = null!;
 
     private PrizeTier() { }
 
-    public PrizeTier(int rank, int points, string? description = null)
+    public PrizeTier(Guid eventId, int rank, int points)
     {
-        ValidationGuards.ValidateRank(rank);
-        ValidationGuards.ValidatePoints(points);
-
+        Id = Guid.NewGuid();
+        EventId = eventId;
         Rank = rank;
         Points = points;
-        Description = description;
     }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is not PrizeTier other)
-            return false;
-
-        return Rank == other.Rank;
-    }
-
-    public override int GetHashCode() => Rank.GetHashCode();
-
-    public override string? ToString() => $"Rank {Rank}: {Points} points";
 }

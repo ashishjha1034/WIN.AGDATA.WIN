@@ -1,18 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using WIN.AGDATA.WIN.Domain.Entities.Users;
+﻿using WIN.AGDATA.WIN.Domain.Entities.Users;
 
-namespace WIN.AGDATA.WIN.Application.Interfaces
+namespace WIN.AGDATA.WIN.APPLICATION.Interfaces;
+
+public interface IUserRepository
 {
-    public interface IUserRepository
-    {
-        Task<IEnumerable<User>> GetAllAsync();
-        Task<User?> GetByIdAsync(Guid id);
-        Task<User?> GetByEmployeeIdAsync(string employeeId);
-        Task AddAsync(User user);
-        Task UpdateAsync(User user);
-        Task DeleteAsync(Guid id);
-        Task<bool> ExistsByEmployeeIdAsync(string employeeId);
-    }
+    Task<User?> GetByIdAsync(Guid id);
+    Task<User?> GetByIdWithDetailsAsync(Guid id);
+    Task<User?> GetByIdWithPointsAsync(Guid id);
+    Task<User?> GetByEmployeeIdAsync(string employeeId);
+    Task<Role?> GetRoleByNameAsync(string name);
+    Task<IReadOnlyList<User>> GetAllAsync();
+    Task<IReadOnlyList<User>> GetActiveUsersAsync();
+    void Add(User user);
+    Task UpdateAsync(User user);
 }

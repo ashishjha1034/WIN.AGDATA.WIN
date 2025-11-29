@@ -17,12 +17,9 @@ global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 global using WIN.AGDATA.WIN.Domain.Enums;
 
 // Namespace Aliases for Long Declarations
-global using EventInfo = WIN.AGDATA.WIN.Domain.Entities.Events.EventInfo;
-global using EventStatus = WIN.AGDATA.WIN.Domain.Entities.Events.EventStatus;
+global using EventStatus = WIN.AGDATA.WIN.Domain.Enums.EventStatus;
 global using PrizeTier = WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier;
-global using Winner = WIN.AGDATA.WIN.Domain.Entities.Events.Winner;
-global using ProductIdentity = WIN.AGDATA.WIN.Domain.Entities.Products.ProductIdentity;
-global using ProductPoints =  WIN.AGDATA.WIN.Domain.Entities.Products.ProductPoints;
+global using ProductPoints =  WIN.AGDATA.WIN.Domain.Entities.Products;
 //global using ProductInventory = WIN.AGDATA.WIN.Domain.Entities.Products.;
-global using RedemptionStatus = WIN.AGDATA.WIN.Domain.Entities.Redemptions.RedemptionStatus;
-global using PointsTransaction = WIN.AGDATA.WIN.Domain.Entities.Transactions.PointsTransaction;
+global using RedemptionStatus = WIN.AGDATA.WIN.Domain.Enums.RedemptionStatus;
+global using PointsTransaction = WIN.AGDATA.WIN.Domain.Entities.Transactions.UserPointsTransaction;
