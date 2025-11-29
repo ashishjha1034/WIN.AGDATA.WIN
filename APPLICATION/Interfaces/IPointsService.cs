@@ -1,20 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
 namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IPointsService
 {
+    Task<int> GetUserPointsBalanceAsync(string employeeId);
+    Task<List<PointsTransaction>> GetUserTransactionHistoryAsync(string employeeId);
 
-    int GetUserPointsBalance(string employeeId);
-    List<PointsTransaction> GetUserTransactionHistory(string employeeId);
+    Task AddPointsAsync(string employeeId, int points, string reason, string? eventId = null);
+    Task SpendPointsAsync(string employeeId, int points, string reason, Guid? redemptionId = null);
+    Task RefundPointsAsync(string employeeId, int points, string reason);
 
-    void AddPoints(string employeeId, int points, string reason, string? eventId = null);
-    void SpendPoints(string employeeId, int points, string reason, Guid? redemptionId = null);
-    void RefundPoints(string employeeId, int points, string reason);
-
-    
-    void AddPointsToUser(string employeeId, int points, string reason, string? eventId = null);
-    //void DeductPointsFromUser(string employeeId, int points, string reason, Guid? redemptionId = null);
+    Task AddPointsToUserAsync(string employeeId, int points, string reason, string? eventId = null);
+    Task DeductPointsFromUserAsync(string employeeId, int points, string reason, Guid? redemptionId = null);
+    Task RefundPointsToUserAsync(string employeeId, int points, string reason);
 }

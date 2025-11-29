@@ -1,236 +1,126 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Infrastructure.Repositories;
+using WIN.AGDATA.WIN.Domain.Entities.Events;
+using WIN.AGDATA.WIN.Domain.Exceptions;
+using Microsoft.Extensions.Logging;
 
-namespace WIN.AGDATA.WIN.Application.Services;
-
-public class EventService : IEventService
+namespace WIN.AGDATA.WIN.Application.Services
 {
-    private readonly IEventRepository _eventRepository;
-    private readonly IUserRepository _userRepository;
-    private readonly IPointsService _pointsService;
-    private readonly ILogger<EventService> _logger;
-
-    public EventService(
-        IEventRepository eventRepository,
-        IUserRepository userRepository,
-        IPointsService pointsService,
-        ILogger<EventService> logger)
+    public class EventService : IEventService
     {
-        _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
-        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
-        _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+        private readonly IEventRepository _eventRepository;
+        private readonly IUnitOfWork _uow;
+        private readonly ILogger<EventService> _logger;
 
-    public Event CreateEvent(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes)
-    {
-        try
+        public EventService(IEventRepository eventRepository, IUnitOfWork uow, ILogger<EventService> logger)
         {
-            if (_eventRepository.ExistsById(eventId))
-                throw new DomainException($"Event with ID '{eventId}' already exists");
+            _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
+            _uow = uow ?? throw new ArgumentNullException(nameof(uow));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
 
-            var @event = new Event(eventId, name, description, eventDate, prizes, "SYSTEM");
-            _eventRepository.Add(@event);
+        public async Task<Event> CreateEventAsync(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes, string createdBy = "SYSTEM")
+        {
+            var ev = new Event(eventId, name, description, eventDate, prizes, createdBy);
+            await _eventRepository.AddAsync(ev);
+            await _uow.SaveChangesAsync();
+            _logger.LogInformation("Event created {EventId}", eventId);
+            return ev;
+        }
 
-            _logger.LogInformation($"Event created: {eventId}");
-            return @event;
-        }
-        catch (Exception ex)
+        public async Task<Event?> GetEventByIdAsync(string eventId)
         {
-            _logger.LogError(ex, $"Error creating event: {eventId}");
-            throw;
+            return await _eventRepository.GetByIdAsync(eventId);
         }
-    }
 
-    public Event? GetEventById(string eventId)
-    {
-        try
+        public async Task<List<Event>> GetAllEventsAsync()
         {
-            return _eventRepository.GetById(eventId);
+            var list = await _eventRepository.GetAllAsync();
+            return list.ToList();
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error retrieving event: {eventId}");
-            throw;
-        }
-    }
 
-    public List<Event> GetAllEvents()
-    {
-        try
+        public async Task<List<Event>> GetActiveEventsAsync()
         {
-            return _eventRepository.GetAll();
+            var list = await _eventRepository.GetActiveAsync();
+            return list.ToList();
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving all events");
-            throw;
-        }
-    }
 
-    public List<Event> GetActiveEvents()
-    {
-        try
+        public async Task<List<Event>> GetUpcomingEventsAsync()
         {
-            return _eventRepository.GetAll().Where(e => e.Status.IsActive && !e.Status.IsCompleted).ToList();
+            var now = DateTime.UtcNow;
+            var list = await _eventRepository.GetUpcomingAsync(now);
+            return list.ToList();
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving active events");
-            throw;
-        }
-    }
 
-    public List<Event> GetUpcomingEvents()
-    {
-        try
+        public async Task<List<Event>> GetPastEventsAsync()
         {
-            return _eventRepository.GetAll().Where(e => e.Info.IsUpcoming && e.Status.IsActive).ToList();
+            var now = DateTime.UtcNow;
+            var list = await _eventRepository.GetPastAsync(now);
+            return list.ToList();
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving upcoming events");
-            throw;
-        }
-    }
 
-    // Renamed: returns events that are active but not upcoming (past or ongoing as per previous logic)
-    public List<Event> GetPastEvents()
-    {
-        try
+        public async Task CompleteEventAsync(string eventId, List<Winner> winners, string completedBy = "SYSTEM")
         {
-            return _eventRepository.GetAll().Where(e => !e.Info.IsUpcoming && e.Status.IsActive).ToList();
+            var ev = await _eventRepository.GetByIdAsync(eventId);
+            if (ev == null) throw new DomainException("Event not found");
+            ev.CompleteEvent(winners, completedBy);
+            await _eventRepository.UpdateAsync(ev);
+            await _uow.SaveChangesAsync();
+            _logger.LogInformation("Event completed {EventId}", eventId);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving past events");
-            throw;
-        }
-    }
 
-    public void CompleteEvent(string eventId, List<Winner> winners)
-    {
-        try
+        public async Task ProcessExpiredEventsAsync()
         {
-            var @event = _eventRepository.GetById(eventId);
-            if (@event == null)
-                throw new DomainException($"Event not found: {eventId}");
-
-            foreach (var winner in winners)
+            var now = DateTime.UtcNow;
+            var expired = await _eventRepository.GetExpiredButNotProcessedAsync(now);
+            foreach (var ev in expired)
             {
-                var user = _userRepository.GetByEmployeeId(winner.EmployeeId);
-                if (user == null)
-                    throw new DomainException($"User not found: {winner.EmployeeId}");
-
-                if (!user.CanParticipateInEvents())
-                    throw new DomainException($"User {winner.EmployeeId} cannot participate in events");
-            }
-
-            @event.CompleteEvent(winners);
-
-            foreach (var winner in winners)
-            {
-                var pointsForRank = @event.GetPointsForRank(winner.Rank);
-                if (pointsForRank.HasValue)
+                try
                 {
-                    _pointsService.AddPointsToUser(winner.EmployeeId, pointsForRank.Value, $"Won event {eventId}", eventId);
+                    
+                    ev.Deactivate("Event expired", "SYSTEM");
+                    await _eventRepository.UpdateAsync(ev);
+                    _logger.LogInformation("Expired event processed {EventId}", ev.EventId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing expired event {EventId}", ev.EventId);
                 }
             }
-
-            _eventRepository.Update(@event);
-            _logger.LogInformation($"Event completed: {eventId}");
+            await _uow.SaveChangesAsync();
         }
-        catch (Exception ex)
+
+        public async Task DeactivateEventAsync(string eventId, string reason, string performedBy = "SYSTEM")
         {
-            _logger.LogError(ex, $"Error completing event: {eventId}");
-            throw;
+            var ev = await _eventRepository.GetByIdAsync(eventId);
+            if (ev == null) throw new DomainException("Event not found");
+            ev.Deactivate(reason, performedBy);
+            await _eventRepository.UpdateAsync(ev);
+            await _uow.SaveChangesAsync();
+            _logger.LogInformation("Event deactivated {EventId}", eventId);
         }
-    }
 
-    public void ProcessExpiredEvents()
-    {
-        try
+        public async Task ReactivateEventAsync(string eventId, string performedBy = "SYSTEM")
         {
-            var expiredEvents = _eventRepository.GetAll()
-                .Where(e => e.Info.EventDate < DateTime.UtcNow && e.Status.IsActive && !e.Status.IsCompleted)
-                .ToList();
-
-            foreach (var @event in expiredEvents)
-            {
-                @event.Deactivate("SYSTEM - Auto-deactivated expired event", "SYSTEM");
-                _eventRepository.Update(@event);
-            }
-
-            _logger.LogInformation($"Processed {expiredEvents.Count} expired events");
+            var ev = await _eventRepository.GetByIdAsync(eventId);
+            if (ev == null) throw new DomainException("Event not found");
+            ev.Activate(performedBy);
+            await _eventRepository.UpdateAsync(ev);
+            await _uow.SaveChangesAsync();
+            _logger.LogInformation("Event reactivated {EventId}", eventId);
         }
-        catch (Exception ex)
+
+        public async Task AddPrizeTierAsync(string eventId, PrizeTier prizeTier, string createdBy = "SYSTEM")
         {
-            _logger.LogError(ex, "Error processing expired events");
-            throw;
-        }
-    }
-
-    public void DeactivateEvent(string eventId, string reason)
-    {
-        try
-        {
-            var @event = _eventRepository.GetById(eventId);
-            if (@event == null)
-                throw new DomainException($"Event not found: {eventId}");
-
-            @event.Deactivate(reason, "SYSTEM");
-            _eventRepository.Update(@event);
-
-            _logger.LogInformation($"Event deactivated: {eventId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error deactivating event: {eventId}");
-            throw;
-        }
-    }
-
-    public void ReactivateEvent(string eventId)
-    {
-        try
-        {
-            var @event = _eventRepository.GetById(eventId); ;
-            if (@event == null)
-                throw new DomainException($"Event not found: {eventId}");
-
-            @event.Activate("SYSTEM");
-            _eventRepository.Update(@event);
-
-            _logger.LogInformation($"Event reactivated: {eventId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error reactivating event: {eventId}");
-            throw;
-        }
-    }
-
-    public void AddPrizeTier(string eventId, PrizeTier prizeTier)
-    {
-        try
-        {
-            var @event = _eventRepository.GetById(eventId);
-            if (@event == null)
-                throw new DomainException($"Event not found: {eventId}");
-
-            @event.AddPrizeTier(prizeTier);
-            _eventRepository.Update(@event);
-
-            _logger.LogInformation($"Prize tier added to event: {eventId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error adding prize tier to event: {eventId}");
-            throw;
+            var ev = await _eventRepository.GetByIdAsync(eventId);
+            if (ev == null) throw new DomainException("Event not found");
+            ev.AddPrizeTier(prizeTier, createdBy);
+            await _eventRepository.UpdateAsync(ev);
+            await _uow.SaveChangesAsync();
+            _logger.LogInformation("Prize tier added to event {EventId}", eventId);
         }
     }
 }

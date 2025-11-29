@@ -1,12 +1,17 @@
-﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+
+namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IRedemptionService
 {
-    Redemption RequestRedemption(string employeeId, Guid productId);
-    Redemption? GetRedemptionById(Guid redemptionId);
-    List<Redemption> GetUserRedemptions(string employeeId);
-    List<Redemption> GetPendingRedemptions();
-    void ApproveRedemption(Guid redemptionId);
-    void RejectRedemption(Guid redemptionId, string reason);
-    void MarkAsDelivered(Guid redemptionId);
+    Task<Redemption> RequestRedemptionAsync(string employeeId, Guid productId, string createdBy = "SYSTEM");
+    Task<Redemption?> GetRedemptionByIdAsync(Guid redemptionId);
+    Task<List<Redemption>> GetUserRedemptionsAsync(string employeeId);
+    Task<List<Redemption>> GetPendingRedemptionsAsync();
+    Task ApproveRedemptionAsync(Guid redemptionId, string approvedBy = "SYSTEM");
+    Task RejectRedemptionAsync(Guid redemptionId, string reason, string rejectedBy = "SYSTEM");
+    Task MarkAsDeliveredAsync(Guid redemptionId, string deliveredBy = "SYSTEM");
 }

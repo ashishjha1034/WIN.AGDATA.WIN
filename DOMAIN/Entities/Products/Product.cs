@@ -1,9 +1,11 @@
-﻿using System;
+﻿
+using System;
 using System.ComponentModel.DataAnnotations;
+using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Products;
 
-public class Product
+public class Product : IActivatable
 {
     [Key]
     public Guid Id { get; private set; }
@@ -45,45 +47,48 @@ public class Product
         CreatedBy = createdBy;
     }
 
-    public void UpdateDetails(string name, string description, string modifiedBy)
+    public void UpdateDetails(string name, string description, string modifiedBy = "SYSTEM")
     {
         Identity = new ProductIdentity(name, description);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void UpdatePoints(int newPoints, string modifiedBy)
+    public void UpdatePoints(int newPoints, string modifiedBy = "SYSTEM")
     {
-        Pricing = new ProductPoints(newPoints);
+        Pricing.UpdatePoints(newPoints);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void UpdateStock(int newQuantity, string modifiedBy)
+    public void UpdateStock(int newQuantity, string modifiedBy = "SYSTEM")
     {
         Inventory.SetStock(newQuantity);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void DecreaseStock(int quantity)
+    public void DecreaseStock(int quantity, string modifiedBy = "SYSTEM")
     {
         Inventory.DecreaseStock(quantity);
+        UpdateModificationInfo(modifiedBy);
     }
 
-    public void IncreaseStock(int quantity)
+    public void IncreaseStock(int quantity, string modifiedBy = "SYSTEM")
     {
         Inventory.IncreaseStock(quantity);
+        UpdateModificationInfo(modifiedBy);
     }
 
     public bool IsAvailable() => IsActive && Inventory.IsAvailable();
 
     public bool CanBeRedeemedBy(int userPointsBalance) => IsAvailable() && Pricing.HasSufficientPoints(userPointsBalance);
 
-    public void Deactivate(string modifiedBy)
+    public void Deactivate(string reason, string modifiedBy = "SYSTEM")
     {
         IsActive = false;
         UpdateModificationInfo(modifiedBy);
+        // optionally log/store reason somewhere if you add field; repo didn't have a DeactivationReason for Product
     }
 
-    public void Activate(string modifiedBy)
+    public void Activate(string modifiedBy = "SYSTEM")
     {
         IsActive = true;
         UpdateModificationInfo(modifiedBy);

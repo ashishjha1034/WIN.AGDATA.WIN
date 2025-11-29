@@ -19,7 +19,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
-        services.AddScoped<ITransactionRepository, TransactionRepository>();
+        services.AddScoped<ITransactionRepository, PointsTransactionRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IRedemptionRepository, RedemptionRepository>();
 

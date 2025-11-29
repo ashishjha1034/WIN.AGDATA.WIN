@@ -1,205 +1,70 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System.Reflection;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Application.Mappers;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
 
-namespace WIN.AGDATA.WIN.API.Controllers;
-
-public class EventsController : ApiControllerBase
+namespace WIN.AGDATA.WIN.Api.Controllers
 {
-    private readonly IEventService _eventService;
-
-    public EventsController(IEventService eventService)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class EventsController : ControllerBase
     {
-        _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
-    }
+        private readonly IEventRepository _eventRepo;
+        private readonly ILogger<EventsController> _logger;
 
-    [HttpPost]
-    public IActionResult CreateEvent([FromBody] CreateEventRequest request)
-    {
-        try
+        public EventsController(IEventRepository eventRepo, ILogger<EventsController> logger)
         {
-            var prizes = request.Prizes.Select(p => new PrizeTier(p.Rank, p.Points, p.Description)).ToList();
-            var eventObj = _eventService.CreateEvent(request.EventId, request.Name, request.Description, request.EventDate, prizes);
+            _eventRepo = eventRepo ?? throw new ArgumentNullException(nameof(eventRepo));
+            _logger = logger;
+        }
 
-            return CreatedAtAction(nameof(GetEventById),
-                new { eventId = eventObj.EventId },
-                new EventResponse(eventObj));
-        }
-        catch (Exception ex)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetAll()
         {
-            return HandleException(ex);
+            var events = await _eventRepo.GetAllAsync() ?? Enumerable.Empty<Event>();
+            var dtos = events.Select(EventMapper.ToDto);
+            return Ok(dtos);
         }
-    }
 
-    [HttpGet("{eventId}")]
-    public IActionResult GetEventById(string eventId)
-    {
-        try
+        [HttpGet("{eventId}")]
+        public async Task<ActionResult<EventDto>> GetById(string eventId)
         {
-            var eventObj = _eventService.GetEventById(eventId);
-            return OkOrNotFound(eventObj == null ? null : new EventResponse(eventObj));
+            var ev = await _eventRepo.GetByIdAsync(eventId);
+            if (ev == null) return NotFound();
+            return Ok(EventMapper.ToDto(ev));
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpGet]
-    public IActionResult GetAllEvents()
-    {
-        try
+        [HttpPost]
+        public ActionResult<EventDto> Create([FromBody] CreateProductRequest createDto)
         {
-            var events = _eventService.GetAllEvents();
-            var response = events.Select(e => new EventResponse(e));
-            return Ok(response);
+            return BadRequest("Create Event endpoint not implemented. Add a CreateEventRequest DTO and handler if needed.");
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpGet("active")]
-    public IActionResult GetActiveEvents()
-    {
-        try
+        [HttpPost("{eventId}/complete")]
+        public async Task<IActionResult> Complete(string eventId, [FromBody] object payload)
         {
-            var events = _eventService.GetActiveEvents();
-            var response = events.Select(e => new EventResponse(e));
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
+            var ev = await _eventRepo.GetByIdAsync(eventId);
+            if (ev == null) return NotFound();
 
-    [HttpGet("upcoming")]
-    public IActionResult GetUpcomingEvents()
-    {
-        try
-        {
-            var events = _eventService.GetUpcomingEvents();
-            var response = events.Select(e => new EventResponse(e));
-            return Ok(response);
+            return NoContent();
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpPost("{eventId}/complete")]
-    public IActionResult CompleteEvent(string eventId, [FromBody] CompleteEventRequest request)
-    {
-        try
+        [HttpPost("{eventId}/prizes")]
+        public async Task<IActionResult> AddPrize(string eventId, [FromBody] PrizeTier prize)
         {
-            var winners = request.Winners.Select(w => new Winner(w.EmployeeId, w.Rank)).ToList();
-            _eventService.CompleteEvent(eventId, winners);
+            var ev = await _eventRepo.GetByIdAsync(eventId);
+            if (ev == null) return NotFound();
 
-            return Ok(new { message = "Event completed successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-
-    [HttpPost("{eventId}/deactivate")]
-    public IActionResult DeactivateEvent(string eventId, [FromBody] DeactivateEventRequest? request = null)
-    {
-        try
-        {
-            _eventService.DeactivateEvent(eventId, request?.Reason ?? "Manual deactivation");
-            return Ok(new { message = "Event deactivated successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-
-    [HttpPost("{eventId}/reactivate")]
-    public IActionResult ReactivateEvent(string eventId)
-    {
-        try
-        {
-            _eventService.ReactivateEvent(eventId);
-            return Ok(new { message = "Event reactivated successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-
-    [HttpPost("{eventId}/prizes")]
-    public IActionResult AddPrizeTier(string eventId, [FromBody] AddPrizeTierRequest request)
-    {
-        try
-        {
-            var prizeTier = new PrizeTier(request.Rank, request.Points, request.Description);
-            _eventService.AddPrizeTier(eventId, prizeTier);
-
-            return Ok(new { message = "Prize tier added successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-
-    [HttpPost("process-expired")]
-    public IActionResult ProcessExpiredEvents()
-    {
-        try
-        {
-            _eventService.ProcessExpiredEvents();
-            return Ok(new { message = "Expired events processed successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
+            ev.AddPrizeTier(prize, User?.Identity?.Name ?? "SYSTEM");
+            await _eventRepo.UpdateAsync(ev);
+            return NoContent();
         }
     }
 }
-
-public record CreateEventRequest(string EventId, string Name, string Description, DateTime EventDate, List<PrizeTierRequest> Prizes);
-public record PrizeTierRequest(int Rank, int Points, string Description);
-public record CompleteEventRequest(List<WinnerRequest> Winners);
-public record WinnerRequest(string EmployeeId, int Rank);
-public record DeactivateEventRequest(string Reason);
-public record AddPrizeTierRequest(int Rank, int Points, string Description);
-
-public record EventResponse(
-    string EventId,
-    string Name,
-    string Description,
-    DateTime EventDate,
-    bool IsActive,
-    bool IsCompleted,
-    bool IsUpcoming,
-    bool IsRecent,
-    List<PrizeTierResponse> Prizes,
-    List<WinnerResponse> Winners,
-    DateTime CreatedAt)
-{
-    public EventResponse(Event eventObj) : this(
-        eventObj.EventId,
-        eventObj.Info.Name,
-        eventObj.Info.Description,
-        eventObj.Info.EventDate,
-        eventObj.Status.IsActive,
-        eventObj.Status.IsCompleted,
-        eventObj.Info.IsUpcoming,
-        eventObj.Info.IsRecent,
-        eventObj.Prizes.Select(p => new PrizeTierResponse(p.Rank, p.Points, p.Description)).ToList(),
-        eventObj.Status.Winners.Select(w => new WinnerResponse(w.EmployeeId, w.Rank, w.WonAt)).ToList(),
-        eventObj.Status.CreatedAt)
-    { }
-}
-
-public record PrizeTierResponse(int Rank, int Points, string Description);
-public record WinnerResponse(string EmployeeId, int Rank, DateTime WonAt);

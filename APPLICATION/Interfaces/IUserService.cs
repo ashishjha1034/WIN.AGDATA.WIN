@@ -1,14 +1,21 @@
-﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿// WIN.AGDATA.WIN.Application/Interfaces/IUserService.cs
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
 
-public interface IUserService
+namespace WIN.AGDATA.WIN.Application.Interfaces
 {
-    User CreateUser(string employeeId, string email, string firstName, string lastName);
-    User? GetUserById(Guid userId);
-    User? GetUserByEmployeeId(string employeeId);
-    List<User> GetAllUsers();
-    void UpdateUserInfo(string employeeId, string firstName, string lastName, string email);
-    void PromoteToAdmin(string employeeId);
-    void DemoteToEmployee(string employeeId);
-    void DeactivateUser(string employeeId, string reason);
-    void ActivateUser(string employeeId);
+    public interface IUserService
+    {
+        Task<User> CreateUserAsync(string employeeId, string email, string firstName, string lastName);
+        Task<User?> GetUserByIdAsync(Guid userId);
+        Task<User?> GetUserByEmployeeIdAsync(string employeeId);
+        Task<List<User>> GetAllUsersAsync();
+        Task UpdateUserInfoAsync(string employeeId, string firstName, string lastName, string email);
+        Task PromoteToAdminAsync(string employeeId);
+        Task DemoteToEmployeeAsync(string employeeId);
+        Task DeactivateUserAsync(string employeeId, string reason);
+        Task ActivateUserAsync(string employeeId);
+    }
 }

@@ -1,182 +1,174 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.Exceptions;
+using Microsoft.Extensions.Logging;
 
-namespace WIN.AGDATA.WIN.Application.Services;
-
-public class UserService : IUserService
+namespace WIN.AGDATA.WIN.Application.Services
 {
-    private readonly IUserRepository _userRepository;
-    private readonly ILogger<UserService> _logger;
-
-    public UserService(IUserRepository userRepository, ILogger<UserService> logger)
+    public class UserService : IUserService
     {
-        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+        private readonly IUserRepository _userRepository;
+        private readonly IUnitOfWork _uow;
+        private readonly ILogger<UserService> _logger;
 
-    public User CreateUser(string employeeId, string email, string firstName, string lastName)
-    {
-        try
+        public UserService(IUserRepository userRepository, IUnitOfWork uow, ILogger<UserService> logger)
         {
-            // Check if employee already exists
-            var existingUser = _userRepository.GetByEmployeeId(employeeId);
-            if (existingUser != null)
-                throw new DomainException($"User with employee ID '{employeeId}' already exists");
-
-            var user = new User(employeeId, email, firstName, lastName, "SYSTEM");
-            _userRepository.Add(user);
-
-            _logger.LogInformation($"User created: {employeeId}");
-            return user;
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+            _uow = uow ?? throw new ArgumentNullException(nameof(uow));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        catch (Exception ex)
+
+        public async Task<User> CreateUserAsync(string employeeId, string email, string firstName, string lastName)
         {
-            _logger.LogError(ex, $"Error creating user: {employeeId}");
-            throw;
+            try
+            {
+                var existingUser = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (existingUser != null) throw new DomainException($"User with employee ID '{employeeId}' already exists");
+                var user = new User(employeeId, email, firstName, lastName, "SYSTEM");
+                await _userRepository.AddAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User created: {employeeId}");
+                return user;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error creating user: {employeeId}");
+                throw;
+            }
         }
-    }
 
-    public User? GetUserById(Guid userId)
-    {
-        try
+        public async Task<User?> GetUserByIdAsync(Guid userId)
         {
-            return _userRepository.GetById(userId);
+            try
+            {
+                return await _userRepository.GetByIdAsync(userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving user: {userId}");
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        public async Task<User?> GetUserByEmployeeIdAsync(string employeeId)
         {
-            _logger.LogError(ex, $"Error retrieving user: {userId}");
-            throw;
+            try
+            {
+                return await _userRepository.GetByEmployeeIdAsync(employeeId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error retrieving user by employee ID: {employeeId}");
+                throw;
+            }
         }
-    }
 
-    public User? GetUserByEmployeeId(string employeeId)
-    {
-        try
+        public async Task<List<User>> GetAllUsersAsync()
         {
-            return _userRepository.GetByEmployeeId(employeeId);
+            try
+            {
+                var users = await _userRepository.GetAllAsync();
+                return users.ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving all users");
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        public async Task UpdateUserInfoAsync(string employeeId, string firstName, string lastName, string email)
         {
-            _logger.LogError(ex, $"Error retrieving user by employee ID: {employeeId}");
-            throw;
+            try
+            {
+                var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (user == null) throw new DomainException($"User not found: {employeeId}");
+                user.UpdateUserInfo(firstName, lastName, email, "SYSTEM");
+                await _userRepository.UpdateAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User info updated: {employeeId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating user info: {employeeId}");
+                throw;
+            }
         }
-    }
 
-    public List<User> GetAllUsers()
-    {
-        try
+        public async Task PromoteToAdminAsync(string employeeId)
         {
-            return _userRepository.GetAll();
+            try
+            {
+                var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (user == null) throw new DomainException($"User not found: {employeeId}");
+                user.PromoteToAdmin("SYSTEM");
+                await _userRepository.UpdateAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User promoted to admin: {employeeId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error promoting user: {employeeId}");
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        public async Task DemoteToEmployeeAsync(string employeeId)
         {
-            _logger.LogError(ex, "Error retrieving all users");
-            throw;
+            try
+            {
+                var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (user == null) throw new DomainException($"User not found: {employeeId}");
+                user.DemoteToEmployee("SYSTEM");
+                await _userRepository.UpdateAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User demoted to employee: {employeeId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error demoting user: {employeeId}");
+                throw;
+            }
         }
-    }
 
-    public void UpdateUserInfo(string employeeId, string firstName, string lastName, string email)
-    {
-        try
+        public async Task DeactivateUserAsync(string employeeId, string reason)
         {
-            var user = _userRepository.GetByEmployeeId(employeeId);
-            if (user == null)
-                throw new DomainException($"User not found: {employeeId}");
-
-            // Use the new atomic update method
-            user.UpdateUserInfo(firstName, lastName, email, "SYSTEM");
-            _userRepository.Update(user);
-
-            _logger.LogInformation($"User info updated: {employeeId}");
+            try
+            {
+                var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (user == null) throw new DomainException($"User not found: {employeeId}");
+                user.Deactivate(reason, "SYSTEM");
+                await _userRepository.UpdateAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User deactivated: {employeeId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deactivating user: {employeeId}");
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        public async Task ActivateUserAsync(string employeeId)
         {
-            _logger.LogError(ex, $"Error updating user info: {employeeId}");
-            throw;
-        }
-    }
-
-    public void PromoteToAdmin(string employeeId)
-    {
-        try
-        {
-            var user = _userRepository.GetByEmployeeId(employeeId);
-            if (user == null)
-                throw new DomainException($"User not found: {employeeId}");
-
-            user.PromoteToAdmin("SYSTEM");
-            _userRepository.Update(user);
-
-            _logger.LogInformation($"User promoted to admin: {employeeId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error promoting user: {employeeId}");
-            throw;
-        }
-    }
-
-    public void DemoteToEmployee(string employeeId)
-    {
-        try
-        {
-            var user = _userRepository.GetByEmployeeId(employeeId);
-            if (user == null)
-                throw new DomainException($"User not found: {employeeId}");
-
-            user.DemoteToEmployee("SYSTEM");
-            _userRepository.Update(user);
-
-            _logger.LogInformation($"User demoted to employee: {employeeId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error demoting user: {employeeId}");
-            throw;
-        }
-    }
-
-    public void DeactivateUser(string employeeId, string reason)
-    {
-        try
-        {
-            var user = _userRepository.GetByEmployeeId(employeeId);
-            if (user == null)
-                throw new DomainException($"User not found: {employeeId}");
-
-            user.Deactivate(reason, "SYSTEM");
-            _userRepository.Update(user);
-
-            _logger.LogInformation($"User deactivated: {employeeId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error deactivating user: {employeeId}");
-            throw;
-        }
-    }
-
-    public void ActivateUser(string employeeId)
-    {
-        try
-        {
-            var user = _userRepository.GetByEmployeeId(employeeId);
-            if (user == null)
-                throw new DomainException($"User not found: {employeeId}");
-
-            user.Activate("SYSTEM");
-            _userRepository.Update(user);
-
-            _logger.LogInformation($"User activated: {employeeId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error activating user: {employeeId}");
-            throw;
+            try
+            {
+                var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
+                if (user == null) throw new DomainException($"User not found: {employeeId}");
+                user.Activate("SYSTEM");
+                await _userRepository.UpdateAsync(user);
+                await _uow.SaveChangesAsync();
+                _logger.LogInformation($"User activated: {employeeId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error activating user: {employeeId}");
+                throw;
+            }
         }
     }
 }
-    

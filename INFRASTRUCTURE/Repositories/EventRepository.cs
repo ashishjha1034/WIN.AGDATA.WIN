@@ -1,123 +1,85 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using WIN.AGDATA.WIN.Infrastructure.Data;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Application.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
+using WIN.AGDATA.WIN.Infrastructure.Data;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
-
-public class EventRepository : IEventRepository
+namespace WIN.AGDATA.WIN.Infrastructure.Repositories
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ILogger<EventRepository> _logger;
-
-    public EventRepository(ApplicationDbContext context, ILogger<EventRepository> logger)
+    public class EventRepository : IEventRepository
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+        private readonly ApplicationDbContext _context;
+        public EventRepository(ApplicationDbContext context) { _context = context; }
 
-    public void Add(Event eventObj)
-    {
-        try
+        public async Task AddAsync(Event ev)
         {
-            _context.Events.Add(eventObj);
-            _context.SaveChanges();
-            _logger.LogInformation("Event added successfully: {EventId}", eventObj.EventId);
+            await _context.Events.AddAsync(ev);
         }
-        catch (Exception ex)
+
+        public async Task DeleteAsync(string eventId)
         {
-            _logger.LogError(ex, "Failed to add event: {EventId}", eventObj.EventId);
-            throw;
+            var ev = await _context.Events.FirstOrDefaultAsync(e => e.EventId == eventId);
+            if (ev != null)
+                _context.Events.Remove(ev);
         }
-    }
 
-    public void Update(Event eventObj)
-    {
-        try
+        public async Task<IEnumerable<Event>> GetAllAsync()
         {
-            _context.Events.Update(eventObj);
-            _context.SaveChanges();
-            _logger.LogInformation("Event updated successfully: {EventId}", eventObj.EventId);
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .AsNoTracking()
+                .ToListAsync();
         }
-        catch (Exception ex)
+
+        public async Task<Event?> GetByIdAsync(string eventId)
         {
-            _logger.LogError(ex, "Failed to update event: {EventId}", eventObj.EventId);
-            throw;
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .FirstOrDefaultAsync(e => e.EventId == eventId);
         }
-    }
 
-    public void Delete(string eventId)
-    {
-        try
+        public async Task<IEnumerable<Event>> GetActiveAsync()
         {
-            var evt = GetById(eventId);
-            if (evt != null)
-            {
-                _context.Events.Remove(evt);
-                _context.SaveChanges();
-                _logger.LogInformation("Event deleted successfully: {EventId}", eventId);
-            }
+            var now = DateTime.UtcNow;
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .Where(e => e.IsActive && e.Info.EventDate >= now)
+                .AsNoTracking()
+                .ToListAsync();
         }
-        catch (Exception ex)
+
+        public async Task<IEnumerable<Event>> GetUpcomingAsync(DateTime from)
         {
-            _logger.LogError(ex, "Failed to delete event: {EventId}", eventId);
-            throw;
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .Where(e => e.Info.EventDate >= from && e.IsActive)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Event>> GetPastAsync(DateTime to)
+        {
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .Where(e => e.Info.EventDate < to)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Event>> GetExpiredButNotProcessedAsync(DateTime now)
+        {
+            return await _context.Events
+                .Include(e => e.Prizes)
+                .Where(e => e.Info.EventDate < now && e.IsActive && !e.Status.IsCompleted)
+                .ToListAsync();
+        }
+
+        public async Task UpdateAsync(Event ev)
+        {
+            _context.Events.Update(ev);
         }
     }
-
-    public Event? GetById(string eventId)
-    {
-        if (string.IsNullOrWhiteSpace(eventId))
-            return null;
-
-        var normalized = NormalizeId(eventId);
-        return _context.Events.FirstOrDefault(e => e.EventId == normalized);
-    }
-
-    public List<Event> GetAll()
-    {
-        return _context.Events.ToList();
-    }
-
-    public List<Event> GetActiveEvents()
-    {
-        return _context.Events
-            .Where(e => e.Status.IsActive)
-            .ToList();
-    }
-
-    public List<Event> GetCompletedEvents()
-    {
-        return _context.Events
-            .Where(e => e.Status.IsCompleted)
-            .ToList();
-    }
-
-    public List<Event> GetUpcomingEvents()
-    {
-        return _context.Events
-            .Where(e => e.Info.IsUpcoming && e.Status.IsActive)
-            .ToList();
-    }
-
-    public List<Event> GetRecentEvents()
-    {
-        return _context.Events
-            .Where(e => e.Info.IsRecent)
-            .ToList();
-    }
-
-    public bool ExistsById(string eventId)
-    {
-        if (string.IsNullOrWhiteSpace(eventId))
-            return false;
-
-        var normalized = NormalizeId(eventId);
-        return _context.Events.Any(e => e.EventId == normalized);
-    }
-
-    private static string NormalizeId(string id) => id.Trim().ToUpperInvariant();
 }

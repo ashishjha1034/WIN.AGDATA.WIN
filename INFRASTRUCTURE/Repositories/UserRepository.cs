@@ -2,63 +2,61 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
-
-public class UserRepository : IUserRepository
+namespace WIN.AGDATA.WIN.Infrastructure.Repositories
 {
-    private readonly ApplicationDbContext _context;
-
-    public UserRepository(ApplicationDbContext context)
+    public class UserRepository : IUserRepository
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-    }
+        private readonly ApplicationDbContext _context;
+        public UserRepository(ApplicationDbContext context) { _context = context; }
 
-    public User? GetById(Guid userId)
-    {
-        return _context.Users.FirstOrDefault(u => u.Id == userId);
-    }
-
-    public User? GetByEmployeeId(string employeeId)
-    {
-        if (string.IsNullOrWhiteSpace(employeeId))
-            return null;
-
-        var normalized = NormalizeId(employeeId);
-        return _context.Users.FirstOrDefault(u => u.Identity.EmployeeId == normalized);
-    }
-
-    public List<User> GetAll()
-    {
-        return _context.Users.ToList();
-    }
-
-    public void Add(User user)
-    {
-        _context.Users.Add(user);
-        _context.SaveChanges();
-    }
-
-    public void Update(User user)
-    {
-        _context.Users.Update(user);
-        _context.SaveChanges();
-    }
-
-    public void Delete(Guid userId)
-    {
-        var user = GetById(userId);
-        if (user != null)
+        public async Task<User?> GetByIdAsync(Guid userId)
         {
-            _context.Users.Remove(user);
-            _context.SaveChanges();
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
         }
-    }
 
-    private static string NormalizeId(string id)
-    {
-        // Keep normalization simple and consistent with domain guards
-        return id.Trim().ToUpperInvariant();
+        public async Task<User?> GetByEmployeeIdAsync(string employeeId)
+        {
+            if (string.IsNullOrWhiteSpace(employeeId)) return null;
+            var normalized = NormalizeId(employeeId);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Identity.EmployeeId == normalized);
+        }
+
+        public async Task<IEnumerable<User>> GetAllAsync()
+        {
+            return await _context.Users.AsNoTracking().ToListAsync();
+        }
+
+        public Task AddAsync(User user)
+        {
+            _context.Users.Add(user);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(User user)
+        {
+            _context.Users.Update(user);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(Guid userId)
+        {
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId);
+            if (user != null) _context.Users.Remove(user);
+            return Task.CompletedTask;
+        }
+
+        public async Task<bool> ExistsByEmployeeIdAsync(string employeeId)
+        {
+            if (string.IsNullOrWhiteSpace(employeeId)) return false;
+            var normalized = NormalizeId(employeeId);
+            return await _context.Users.AnyAsync(u => u.Identity.EmployeeId == normalized);
+        }
+
+        private static string NormalizeId(string id) => id.Trim().ToUpperInvariant();
     }
 }

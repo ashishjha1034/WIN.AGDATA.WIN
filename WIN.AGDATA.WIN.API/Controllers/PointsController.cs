@@ -1,116 +1,56 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Points;
 
-namespace WIN.AGDATA.WIN.API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class PointsController : ControllerBase
+namespace WIN.AGDATA.WIN.Api.Controllers
 {
-    private readonly IPointsService _pointsService;
-    private readonly ILogger<PointsController> _logger;
-
-    public PointsController(IPointsService pointsService, ILogger<PointsController> logger)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class PointsController : ControllerBase
     {
-        _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+        private readonly IUserRepository _userRepo;
+        private readonly ILogger<PointsController> _logger;
 
-    [HttpGet("{employeeId}/balance")]
-    public IActionResult GetUserPointsBalance(string employeeId)
-    {
-        try
+        public PointsController(IUserRepository userRepo, ILogger<PointsController> logger)
         {
-            var balance = _pointsService.GetUserPointsBalance(employeeId);
-            return Ok(new { balance });
+            _userRepo = userRepo ?? throw new ArgumentNullException(nameof(userRepo));
+            _logger = logger;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting points balance");
-            return BadRequest(ex.Message);
-        }
-    }
 
-    [HttpGet("{employeeId}/history")]
-    public IActionResult GetUserTransactionHistory(string employeeId)
-    {
-        try
+        [HttpPost("add")]
+        public async Task<IActionResult> AddPoints([FromBody] AddPointsRequest dto)
         {
-            var history = _pointsService.GetUserTransactionHistory(employeeId);
-            return Ok(history);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting transaction history");
-            return BadRequest(ex.Message);
-        }
-    }
+            var user = await _userRepo.GetByEmployeeIdAsync(dto.EmployeeId);
+            if (user == null) return NotFound();
 
-    [HttpPost("add")]
-    public IActionResult AddPoints([FromBody] AddPointsRequest request)
-    {
-        try
-        {
-            _pointsService.AddPoints(request.EmployeeId, request.Points, request.Reason, request.EventId);
-            return Ok("Points added successfully");
+            user.EarnPoints(dto.Points, User?.Identity?.Name ?? "SYSTEM");
+            await _userRepo.UpdateAsync(user);
+            return NoContent();
         }
-        catch (Exception ex)
+
+        [HttpPost("spend")]
+        public async Task<IActionResult> SpendPoints([FromBody] SpendPointsRequest dto)
         {
-            _logger.LogError(ex, "Error adding points");
-            return BadRequest(ex.Message);
+            var user = await _userRepo.GetByEmployeeIdAsync(dto.EmployeeId);
+            if (user == null) return NotFound();
+
+            user.SpendPoints(dto.Points, User?.Identity?.Name ?? "SYSTEM");
+            await _userRepo.UpdateAsync(user);
+            return NoContent();
+        }
+
+        [HttpPost("refund")]
+        public async Task<IActionResult> RefundPoints([FromBody] RefundPointsRequest dto)
+        {
+            var user = await _userRepo.GetByEmployeeIdAsync(dto.EmployeeId);
+            if (user == null) return NotFound();
+
+            user.RefundPoints(dto.Points, User?.Identity?.Name ?? "SYSTEM");
+            await _userRepo.UpdateAsync(user);
+            return NoContent();
         }
     }
-
-    [HttpPost("spend")]
-    public IActionResult SpendPoints([FromBody] SpendPointsRequest request)
-    {
-        try
-        {
-            _pointsService.SpendPoints(request.EmployeeId, request.Points, request.Reason, request.RedemptionId);
-            return Ok("Points spent successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error spending points");
-            return BadRequest(ex.Message);
-        }
-    }
-
-    [HttpPost("refund")]
-    public IActionResult RefundPoints([FromBody] RefundPointsRequest request)
-    {
-        try
-        {
-            _pointsService.RefundPoints(request.EmployeeId, request.Points, request.Reason);
-            return Ok("Points refunded successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error refunding points");
-            return BadRequest(ex.Message);
-        }
-    }
-}
-
-public class AddPointsRequest
-{
-    public string EmployeeId { get; set; }
-    public int Points { get; set; }
-    public string Reason { get; set; }
-    public string? EventId { get; set; }
-}
-
-public class SpendPointsRequest
-{
-    public string EmployeeId { get; set; }
-    public int Points { get; set; }
-    public string Reason { get; set; }
-    public Guid? RedemptionId { get; set; }
-}
-
-public class RefundPointsRequest
-{
-    public string EmployeeId { get; set; }
-    public int Points { get; set; }
-    public string Reason { get; set; }
 }

@@ -1,18 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
-namespace WIN.AGDATA.WIN.Application.Interfaces;
-
-public interface IRedemptionRepository
+namespace WIN.AGDATA.WIN.Application.Interfaces
 {
-    Redemption? GetById(Guid redemptionId);
-    List<Redemption> GetByEmployeeId(string employeeId);
-    List<Redemption> GetAll();
-    void Add(Redemption redemption);
-    void Update(Redemption redemption);
-    void Delete(Guid redemptionId);
-    void ApproveRedemption(Guid redemptionId);
-    void RejectRedemption(Guid redemptionId, string reason);
-    void MarkRedemptionDelivered(Guid redemptionId);
+    public interface IRedemptionRepository
+    {
+        Task<IEnumerable<Redemption>> GetAllAsync();
+        Task<Redemption?> GetByIdAsync(Guid id);
+        Task<IEnumerable<Redemption>> GetByEmployeeIdAsync(string employeeId);
+        Task AddAsync(Redemption redemption);
+        Task UpdateAsync(Redemption redemption);
+        Task DeleteAsync(Guid id);
+        Task ApproveRedemptionAsync(Guid redemptionId);
+        Task RejectRedemptionAsync(Guid redemptionId, string reason);
+        Task MarkRedemptionDeliveredAsync(Guid redemptionId);
+    }
 }

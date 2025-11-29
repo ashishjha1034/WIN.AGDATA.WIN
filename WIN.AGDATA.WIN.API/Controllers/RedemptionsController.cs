@@ -1,136 +1,90 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using MediatR;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Application.Commands;
 using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Application.Mappers;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
-namespace WIN.AGDATA.WIN.API.Controllers;
-
-public class RedemptionsController : ApiControllerBase
+namespace WIN.AGDATA.WIN.Api.Controllers
 {
-    private readonly IRedemptionService _redemptionService;
-
-    public RedemptionsController(IRedemptionService redemptionService)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class RedemptionsController : ControllerBase
     {
-        _redemptionService = redemptionService ?? throw new ArgumentNullException(nameof(redemptionService));
-    }
+        private readonly IRedemptionRepository _redemptionRepo;
+        private readonly IProductRepository _productRepo;
+        private readonly IUserRepository _userRepo;
+        private readonly IMediator _mediator;
+        private readonly ILogger<RedemptionsController> _logger;
 
-    [HttpPost]
-    public IActionResult RequestRedemption([FromBody] RedemptionRequest request)
-    {
-        try
+        public RedemptionsController(
+            IRedemptionRepository redemptionRepo,
+            IProductRepository productRepo,
+            IUserRepository userRepo,
+            IMediator mediator,
+            ILogger<RedemptionsController> logger)
         {
-            var redemption = _redemptionService.RequestRedemption(request.EmployeeId, request.ProductId);
-            return CreatedAtAction(nameof(GetRedemptionById),
-                new { redemptionId = redemption.Id },
-                new RedemptionResponse(redemption));
+            _redemptionRepo = redemptionRepo ?? throw new ArgumentNullException(nameof(redemptionRepo));
+            _productRepo = productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+            _userRepo = userRepo ?? throw new ArgumentNullException(nameof(userRepo));
+            _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+            _logger = logger;
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpGet("{redemptionId:guid}")]
-    public IActionResult GetRedemptionById(Guid redemptionId)
-    {
-        try
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<RedemptionDto>>> GetAll()
         {
-            var redemption = _redemptionService.GetRedemptionById(redemptionId);
-            return OkOrNotFound(redemption == null ? null : new RedemptionResponse(redemption));
+            var list = await _redemptionRepo.GetAllAsync() ?? new List<Redemption>();
+            var dtos = list.Select(RedemptionMapper.ToDto);
+            return Ok(dtos);
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpGet("user/{employeeId}")]
-    public IActionResult GetUserRedemptions(string employeeId)
-    {
-        try
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<RedemptionDto>> GetById(Guid id)
         {
-            var redemptions = _redemptionService.GetUserRedemptions(employeeId);
-            var response = redemptions.Select(r => new RedemptionResponse(r));
-            return Ok(response);
+            var r = await _redemptionRepo.GetByIdAsync(id);
+            if (r == null) return NotFound();
+            return Ok(RedemptionMapper.ToDto(r));
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpGet("pending")]
-    public IActionResult GetPendingRedemptions()
-    {
-        try
+        [HttpPost]
+        public async Task<ActionResult<RedemptionDto>> Create([FromBody] CreateRedemptionRequest dto)
         {
-            var redemptions = _redemptionService.GetPendingRedemptions();
-            var response = redemptions.Select(r => new RedemptionResponse(r));
-            return Ok(response);
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var createdBy = User?.Identity?.Name ?? "SYSTEM";
+            var command = new CreateRedemptionCommand(dto.UserId, dto.ProductId, createdBy);
+            var result = await _mediator.Send(command);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
 
-    [HttpPost("{redemptionId:guid}/approve")]
-    public IActionResult ApproveRedemption(Guid redemptionId)
-    {
-        try
+        [HttpPost("{id:guid}/approve")]
+        public async Task<IActionResult> Approve(Guid id)
         {
-            _redemptionService.ApproveRedemption(redemptionId);
-            return Ok(new { message = "Redemption approved successfully" });
+            var user = User?.Identity?.Name ?? "SYSTEM";
+            var result = await _mediator.Send(new ApproveRedemptionCommand(id, user));
+            return Ok(result);
         }
-        catch (Exception ex)
+
+        [HttpPost("{id:guid}/reject")]
+        public async Task<IActionResult> Reject(Guid id, [FromBody] RejectRedemptionRequest dto)
         {
-            return HandleException(ex);
+            var user = User?.Identity?.Name ?? "SYSTEM";
+            var result = await _mediator.Send(new RejectRedemptionCommand(id, dto.Reason, user));
+            return Ok(result);
+        }
+
+        [HttpPost("{id:guid}/delivered")]
+        public async Task<IActionResult> Delivered(Guid id)
+        {
+            var user = User?.Identity?.Name ?? "SYSTEM";
+            var result = await _mediator.Send(new MarkRedemptionDeliveredCommand(id, user));
+            return Ok(result);
         }
     }
-
-    [HttpPost("{redemptionId:guid}/reject")]
-    public IActionResult RejectRedemption(Guid redemptionId, [FromBody] RejectRedemptionRequest request)
-    {
-        try
-        {
-            _redemptionService.RejectRedemption(redemptionId, request.Reason);
-            return Ok(new { message = "Redemption rejected successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-
-    [HttpPost("{redemptionId:guid}/deliver")]
-    public IActionResult MarkAsDelivered(Guid redemptionId)
-    {
-        try
-        {
-            _redemptionService.MarkAsDelivered(redemptionId);
-            return Ok(new { message = "Redemption marked as delivered successfully" });
-        }
-        catch (Exception ex)
-        {
-            return HandleException(ex);
-        }
-    }
-}
-
-public record RedemptionRequest(string EmployeeId, Guid ProductId);
-public record RejectRedemptionRequest(string Reason);
-
-public record RedemptionResponse(
-    Guid Id,
-    string EmployeeId,
-    Guid ProductId,
-    int PointsCost,
-    DateTime RequestedAt)
-{
-    public RedemptionResponse(Redemption redemption) : this(
-        redemption.Id,
-        redemption.EmployeeId,
-        redemption.ProductId,
-        redemption.PointsCost,
-        redemption.RequestedAt)
-    { }
 }

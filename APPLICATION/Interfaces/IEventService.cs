@@ -1,21 +1,21 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Events;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Domain.Entities.Events;
 
 namespace WIN.AGDATA.WIN.Application.Interfaces;
 
 public interface IEventService
 {
-    Event CreateEvent(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes);
-    Event? GetEventById(string eventId);
-    List<Event> GetAllEvents();
-    List<Event> GetActiveEvents();
-    List<Event> GetUpcomingEvents();
-
-    // Renamed: formerly GetDowncomingEvents
-    List<Event> GetPastEvents();
-
-    void CompleteEvent(string eventId, List<Winner> winners);
-    void ProcessExpiredEvents();
-    void DeactivateEvent(string eventId, string reason);
-    void ReactivateEvent(string eventId);
-    void AddPrizeTier(string eventId, PrizeTier prizeTier);
+    Task<Event> CreateEventAsync(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizes, string createdBy = "SYSTEM");
+    Task<Event?> GetEventByIdAsync(string eventId);
+    Task<List<Event>> GetAllEventsAsync();
+    Task<List<Event>> GetActiveEventsAsync();
+    Task<List<Event>> GetUpcomingEventsAsync();
+    Task<List<Event>> GetPastEventsAsync();
+    Task CompleteEventAsync(string eventId, List<Winner> winners, string completedBy = "SYSTEM");
+    Task ProcessExpiredEventsAsync();
+    Task DeactivateEventAsync(string eventId, string reason, string performedBy = "SYSTEM");
+    Task ReactivateEventAsync(string eventId, string performedBy = "SYSTEM");
+    Task AddPrizeTierAsync(string eventId, PrizeTier prizeTier, string createdBy = "SYSTEM");
 }

@@ -27,8 +27,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.OwnsOne(p => p.Inventory, inventory =>
         {
-            inventory.Property(pi => pi.StockQuantity).HasColumnName("Inventory_StockQuantity").IsRequired();
-            inventory.Property(pi => pi.LastStockUpdate).HasColumnName("Inventory_LastStockUpdate");
+            //inventory.Property(pi => pi.StockQuantity).HasColumnName("Inventory_StockQuantity").IsRequired();
+            //inventory.Property(pi => pi.LastStockUpdate).HasColumnName("Inventory_LastStockUpdate");
         });
 
         builder.Property(p => p.IsActive).IsRequired();

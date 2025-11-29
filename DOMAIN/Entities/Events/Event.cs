@@ -1,11 +1,13 @@
-﻿using System;
+﻿// DOMAIN/Entities/Events/Event.cs
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
-public class Event
+public class Event : IActivatable
 {
     [Key]
     [StringLength(20)]
@@ -50,7 +52,7 @@ public class Event
         ValidatePrizesUnique();
     }
 
-    public void CompleteEvent(List<Winner> winners)
+    public void CompleteEvent(List<Winner> winners, string modifiedBy = "SYSTEM")
     {
         if (!Status.IsActive)
             throw new DomainException("Cannot complete inactive event");
@@ -59,10 +61,10 @@ public class Event
             throw new DomainException("At least one winner is required");
 
         Status.Complete(winners);
-        UpdateModificationInfo("SYSTEM");
+        UpdateModificationInfo(modifiedBy);
     }
 
-    public void AddPrizeTier(PrizeTier prizeTier)
+    public void AddPrizeTier(PrizeTier prizeTier, string modifiedBy = "SYSTEM")
     {
         if (!Status.CanBeModified)
             throw new DomainException("Cannot modify inactive or completed event");
@@ -71,11 +73,12 @@ public class Event
             throw new DomainException($"Prize tier for rank {prizeTier.Rank} already exists");
 
         Prizes.Add(prizeTier);
-        UpdateModificationInfo("SYSTEM");
+        UpdateModificationInfo(modifiedBy);
     }
 
     public int? GetPointsForRank(int rank) => Prizes.FirstOrDefault(p => p.Rank == rank)?.Points;
 
+    // Implement IActivatable: Deactivate with reason + modifiedBy
     public void Deactivate(string reason, string modifiedBy = "SYSTEM")
     {
         Status.Deactivate(reason);
@@ -87,6 +90,9 @@ public class Event
         Status.Reactivate();
         UpdateModificationInfo(modifiedBy);
     }
+
+    // Expose IsActive required by IActivatable
+    public bool IsActive => Status?.IsActive ?? false;
 
     private void ValidatePrizesUnique()
     {

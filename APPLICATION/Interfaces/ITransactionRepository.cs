@@ -1,11 +1,17 @@
-﻿namespace WIN.AGDATA.WIN.Application.Interfaces;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
-public interface ITransactionRepository
+namespace WIN.AGDATA.WIN.Application.Interfaces
 {
-    PointsTransaction? GetById(Guid transactionId);
-    List<PointsTransaction> GetByEmployeeId(string employeeId);
-    List<PointsTransaction> GetAll();
-    void Add(PointsTransaction transaction);
-    void Update(PointsTransaction transaction);  // ← ADD THIS
-    void Delete(Guid transactionId);             // ← ADD THIS
+    public interface ITransactionRepository
+    {
+        Task<IEnumerable<PointsTransaction>> GetAllAsync();
+        Task<PointsTransaction?> GetByIdAsync(Guid id);
+        Task<IEnumerable<PointsTransaction>> GetByEmployeeIdAsync(string employeeId);
+        Task AddAsync(PointsTransaction transaction);
+        Task UpdateAsync(PointsTransaction transaction);
+        Task DeleteAsync(Guid id);
+    }
 }

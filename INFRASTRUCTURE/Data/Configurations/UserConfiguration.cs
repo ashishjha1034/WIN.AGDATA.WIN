@@ -76,20 +76,20 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         });
 
         // UserPoints (Value Object - Owned)
-        builder.OwnsOne(u => u.Points, points =>
-        {
-            points.Property(up => up.EarnedPoints)
-                .HasColumnName("EarnedPoints")
-                .IsRequired();
+        //builder.OwnsOne(u => u.Points, points =>
+        //{
+        //    points.Property(up => up.EarnedPoints)
+        //        .HasColumnName("EarnedPoints")
+        //        .IsRequired();
 
-            points.Property(up => up.SpentPoints)
-                .HasColumnName("SpentPoints")
-                .IsRequired();
+        //    points.Property(up => up.SpentPoints)
+        //        .HasColumnName("SpentPoints")
+        //        .IsRequired();
 
-            points.Property(up => up.CurrentBalance)
-                .HasColumnName("CurrentBalance")
-                .IsRequired();
-        });
+        //    points.Property(up => up.CurrentBalance)
+        //        .HasColumnName("CurrentBalance")
+        //        .IsRequired();
+        //});
 
         builder.ToTable("Users");
     }

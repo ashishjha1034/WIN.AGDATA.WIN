@@ -1,19 +1,22 @@
-﻿using WIN.AGDATA.WIN.Domain.Entities.Events;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Domain.Entities.Events;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
-
-public interface IEventRepository
+namespace WIN.AGDATA.WIN.Application.Interfaces
 {
-    void Add(Event eventObj);
-    void Update(Event eventObj);
-    void Delete(string eventId);
+    public interface IEventRepository
+    {
+        Task<IEnumerable<Event>> GetAllAsync();
+        Task<Event?> GetByIdAsync(string eventId);
+        Task AddAsync(Event ev);
+        Task UpdateAsync(Event ev);
+        Task DeleteAsync(string eventId);
 
-    Event? GetById(string eventId);
-    List<Event> GetAll();
-    List<Event> GetActiveEvents();
-    List<Event> GetCompletedEvents();
-    List<Event> GetUpcomingEvents();
-    List<Event> GetRecentEvents();
+        Task<IEnumerable<Event>> GetActiveAsync();
+        Task<IEnumerable<Event>> GetUpcomingAsync(DateTime from);
+        Task<IEnumerable<Event>> GetPastAsync(DateTime to);
 
-    bool ExistsById(string eventId);
+        Task<IEnumerable<Event>> GetExpiredButNotProcessedAsync(DateTime now);
+    }
 }

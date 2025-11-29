@@ -1,5 +1,7 @@
-﻿using System;
+﻿
+using System;
 using System.ComponentModel.DataAnnotations;
+using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Users;
 
@@ -49,14 +51,14 @@ public class User
         CreatedBy = createdBy;
     }
 
-    public void UpdateUserInfo(string firstName, string lastName, string email, string modifiedBy)
+    public void UpdateUserInfo(string firstName, string lastName, string email, string modifiedBy = "SYSTEM")
     {
         Identity.UpdateName(firstName, lastName);
         Identity.UpdateEmail(email);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void PromoteToAdmin(string modifiedBy)
+    public void PromoteToAdmin(string modifiedBy = "SYSTEM")
     {
         if (Role == UserRole.SuperAdmin)
             throw new DomainException("Super admin role cannot be changed");
@@ -65,7 +67,7 @@ public class User
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void DemoteToEmployee(string modifiedBy)
+    public void DemoteToEmployee(string modifiedBy = "SYSTEM")
     {
         if (Role == UserRole.SuperAdmin)
             throw new DomainException("Super admin cannot be demoted");
@@ -74,19 +76,19 @@ public class User
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void EarnPoints(int points, string modifiedBy)
+    public void EarnPoints(int points, string modifiedBy = "SYSTEM")
     {
         Points.AddPoints(points);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void SpendPoints(int points, string modifiedBy)
+    public void SpendPoints(int points, string modifiedBy = "SYSTEM")
     {
         Points.SpendPoints(points);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void RefundPoints(int points, string modifiedBy)
+    public void RefundPoints(int points, string modifiedBy = "SYSTEM")
     {
         Points.RefundPoints(points);
         UpdateModificationInfo(modifiedBy);
@@ -96,13 +98,13 @@ public class User
 
     public bool CanRedeemProducts() => Status.CanParticipateInEvents();
 
-    public void Deactivate(string reason, string modifiedBy)
+    public void Deactivate(string reason, string modifiedBy = "SYSTEM")
     {
         Status.Deactivate(reason);
         UpdateModificationInfo(modifiedBy);
     }
 
-    public void Activate(string modifiedBy)
+    public void Activate(string modifiedBy = "SYSTEM")
     {
         Status.Activate();
         UpdateModificationInfo(modifiedBy);

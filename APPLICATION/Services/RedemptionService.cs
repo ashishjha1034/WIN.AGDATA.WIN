@@ -1,8 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using WIN.AGDATA.WIN.Application.Interfaces;
-
+using WIN.AGDATA.WIN.Domain.Common;
+using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.Application.Services;
 
@@ -12,6 +16,7 @@ public class RedemptionService : IRedemptionService
     private readonly IProductRepository _productRepository;
     private readonly IRedemptionRepository _redemptionRepository;
     private readonly IPointsService _pointsService;
+    private readonly IUnitOfWork _uow;
     private readonly ILogger<RedemptionService> _logger;
 
     public RedemptionService(
@@ -19,29 +24,30 @@ public class RedemptionService : IRedemptionService
         IProductRepository productRepository,
         IRedemptionRepository redemptionRepository,
         IPointsService pointsService,
+        IUnitOfWork uow,
         ILogger<RedemptionService> logger)
     {
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
         _redemptionRepository = redemptionRepository ?? throw new ArgumentNullException(nameof(redemptionRepository));
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
+        _uow = uow ?? throw new ArgumentNullException(nameof(uow));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public Redemption RequestRedemption(string employeeId, Guid productId)
+    public async Task<Redemption> RequestRedemptionAsync(string employeeId, Guid productId, string createdBy = "SYSTEM")
     {
         try
         {
-            var user = _userRepository.GetByEmployeeId(employeeId);
+            var user = await _userRepository.GetByEmployeeIdAsync(employeeId);
             if (user == null)
                 throw new DomainException($"User not found: {employeeId}");
 
             if (!user.CanRedeemProducts())
                 throw new DomainException($"User {employeeId} cannot redeem products");
 
-            var product = _productRepository.GetById(productId);
+            var product = await _productRepository.GetByIdAsync(productId);
             ValidationGuards.ValidateEntityExists(product, "Product", productId.ToString());
-
 
             if (!product.IsAvailable())
                 throw new DomainException($"Product is not available: {productId}");
@@ -49,118 +55,53 @@ public class RedemptionService : IRedemptionService
             if (!product.CanBeRedeemedBy(user.Points.CurrentBalance))
                 throw new DomainException($"Insufficient points. Required: {product.Pricing.RequiredPoints}, Available: {user.Points.CurrentBalance}");
 
-            var redemption = new Redemption(employeeId, productId, product.Pricing.RequiredPoints);
-            _redemptionRepository.Add(redemption);
+            var redemption = new Redemption(employeeId, productId, product.Pricing.RequiredPoints, createdBy);
+            await _redemptionRepository.AddAsync(redemption);
+            await _uow.SaveChangesAsync();
 
-            _logger.LogInformation($"Redemption requested: {employeeId} for product {productId}");
+            _logger.LogInformation("Redemption requested: {EmployeeId} for product {ProductId}", employeeId, productId);
             return redemption;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error requesting redemption for: {employeeId}");
+            _logger.LogError(ex, "Error requesting redemption for: {EmployeeId}", employeeId);
             throw;
         }
     }
 
-    public Redemption? GetRedemptionById(Guid redemptionId)
+    public async Task<Redemption?> GetRedemptionByIdAsync(Guid redemptionId)
     {
         try
         {
-            return _redemptionRepository.GetById(redemptionId);
+            return await _redemptionRepository.GetByIdAsync(redemptionId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error retrieving redemption: {redemptionId}");
+            _logger.LogError(ex, "Error retrieving redemption: {RedemptionId}", redemptionId);
             throw;
         }
     }
 
-    public List<Redemption> GetUserRedemptions(string employeeId)
+    public async Task<List<Redemption>> GetUserRedemptionsAsync(string employeeId)
     {
         try
         {
-            return _redemptionRepository.GetByEmployeeId(employeeId);
+            var redemptions = await _redemptionRepository.GetByEmployeeIdAsync(employeeId);
+            return redemptions.ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error retrieving redemptions for: {employeeId}");
+            _logger.LogError(ex, "Error retrieving redemptions for: {EmployeeId}", employeeId);
             throw;
         }
     }
 
-    public void ApproveRedemption(Guid redemptionId)
+    public async Task<List<Redemption>> GetPendingRedemptionsAsync()
     {
         try
         {
-            var redemption = _redemptionRepository.GetById(redemptionId);
-            if (redemption == null)
-                throw new DomainException($"Redemption not found: {redemptionId}");
-
-            _pointsService.SpendPoints(redemption.EmployeeId, redemption.PointsCost, $"Product redemption", redemptionId);
-
-            var product = _productRepository.GetById(redemption.ProductId);
-            if (product != null)
-            {
-                product.DecreaseStock(1);
-                _productRepository.Update(product);
-            }
-
-            redemption.Status.Approve();
-            _redemptionRepository.Update(redemption);
-
-            _logger.LogInformation($"Redemption approved: {redemptionId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error approving redemption: {redemptionId}");
-            throw;
-        }
-    }
-
-    public void RejectRedemption(Guid redemptionId, string reason)
-    {
-        try
-        {
-            var redemption = _redemptionRepository.GetById(redemptionId);
-            if (redemption == null)
-                throw new DomainException($"Redemption not found: {redemptionId}");
-
-            redemption.Status.Reject(reason);
-            _redemptionRepository.Update(redemption);
-
-            _logger.LogInformation($"Redemption rejected: {redemptionId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error rejecting redemption: {redemptionId}");
-            throw;
-        }
-    }
-
-    public void MarkAsDelivered(Guid redemptionId)
-    {
-        try
-        {
-            var redemption = _redemptionRepository.GetById(redemptionId);
-            if (redemption == null)
-                throw new DomainException($"Redemption not found: {redemptionId}");
-
-            redemption.Status.MarkDelivered();
-            _redemptionRepository.Update(redemption);
-
-            _logger.LogInformation($"Redemption marked as delivered: {redemptionId}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error marking redemption as delivered: {redemptionId}");
-            throw;
-        }
-    }
-    public List<Redemption> GetPendingRedemptions()
-    {
-        try
-        {
-            return _redemptionRepository.GetAll()
+            var redemptions = await _redemptionRepository.GetAllAsync();
+            return redemptions
                 .Where(r => r.Status.Value == StatusValue.Pending)
                 .ToList();
         }
@@ -171,4 +112,79 @@ public class RedemptionService : IRedemptionService
         }
     }
 
+    public async Task ApproveRedemptionAsync(Guid redemptionId, string approvedBy = "SYSTEM")
+    {
+        try
+        {
+            var redemption = await _redemptionRepository.GetByIdAsync(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
+
+            await _pointsService.SpendPointsAsync(
+                redemption.EmployeeId,
+                redemption.PointsCost,
+                $"Product redemption approved",
+                redemptionId);
+
+            var product = await _productRepository.GetByIdAsync(redemption.ProductId);
+            if (product != null)
+            {
+                product.DecreaseStock(1, approvedBy);
+                await _productRepository.UpdateAsync(product);
+            }
+
+            redemption.Approve(approvedBy);
+            await _redemptionRepository.UpdateAsync(redemption);
+            await _uow.SaveChangesAsync();
+
+            _logger.LogInformation("Redemption approved: {RedemptionId}", redemptionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error approving redemption: {RedemptionId}", redemptionId);
+            throw;
+        }
+    }
+
+    public async Task RejectRedemptionAsync(Guid redemptionId, string reason, string rejectedBy = "SYSTEM")
+    {
+        try
+        {
+            var redemption = await _redemptionRepository.GetByIdAsync(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
+
+            redemption.Reject(reason, rejectedBy);
+            await _redemptionRepository.UpdateAsync(redemption);
+            await _uow.SaveChangesAsync();
+
+            _logger.LogInformation("Redemption rejected: {RedemptionId}", redemptionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rejecting redemption: {RedemptionId}", redemptionId);
+            throw;
+        }
+    }
+
+    public async Task MarkAsDeliveredAsync(Guid redemptionId, string deliveredBy = "SYSTEM")
+    {
+        try
+        {
+            var redemption = await _redemptionRepository.GetByIdAsync(redemptionId);
+            if (redemption == null)
+                throw new DomainException($"Redemption not found: {redemptionId}");
+
+            redemption.MarkDelivered(deliveredBy);
+            await _redemptionRepository.UpdateAsync(redemption);
+            await _uow.SaveChangesAsync();
+
+            _logger.LogInformation("Redemption marked as delivered: {RedemptionId}", redemptionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking redemption as delivered: {RedemptionId}", redemptionId);
+            throw;
+        }
+    }
 }

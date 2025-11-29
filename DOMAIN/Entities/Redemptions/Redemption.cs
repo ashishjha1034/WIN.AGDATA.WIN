@@ -1,5 +1,7 @@
-﻿using System;
+﻿// DOMAIN/Entities/Redemptions/Redemption.cs
+using System;
 using System.ComponentModel.DataAnnotations;
+using WIN.AGDATA.WIN.Domain.Common;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
@@ -32,14 +34,46 @@ public class Redemption
 
     private Redemption() { }
 
-    public Redemption(string employeeId, Guid productId, int pointsCost)
+    public Redemption(string employeeId, Guid productId, int pointsCost, string createdBy = "SYSTEM")
     {
         Id = Guid.NewGuid();
         EmployeeId = ValidationGuards.ValidateAndNormalizeId(employeeId, "Employee ID");
         ProductId = productId;
+
+        
+        if (pointsCost < 1 || pointsCost > 10000)
+            throw new DomainException("Points cost must be between 1 and 10000");
+
         PointsCost = pointsCost;
-        Status = new RedemptionStatus(Id);  // ← PASS THE ID HERE
+
+        
+        Status = new RedemptionStatus(Id);
         RequestedAt = DateTime.UtcNow;
-        CreatedBy = "SYSTEM";
+        CreatedBy = createdBy;
     }
+
+    public void Approve(string modifiedBy = "SYSTEM")
+    {
+        Status.Approve();
+        UpdateModificationInfo(modifiedBy);
+    }
+
+    public void Reject(string reason, string modifiedBy = "SYSTEM")
+    {
+        Status.Reject(reason);
+        UpdateModificationInfo(modifiedBy);
+    }
+
+    public void MarkDelivered(string modifiedBy = "SYSTEM")
+    {
+        Status.MarkDelivered();
+        UpdateModificationInfo(modifiedBy);
+    }
+
+    private void UpdateModificationInfo(string modifiedBy)
+    {
+        
+    }
+
+    public override string? ToString() => $"Redemption: {Id} - {EmployeeId} - {PointsCost} pts - Status: {Status}";
 }

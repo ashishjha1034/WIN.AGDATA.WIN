@@ -53,8 +53,8 @@ public class ApplicationDbContext : DbContext
 
             entity.OwnsOne(u => u.Points, points =>
             {
-                points.Property(p => p.EarnedPoints).HasColumnName("Points_EarnedPoints").IsRequired();
-                points.Property(p => p.SpentPoints).HasColumnName("Points_SpentPoints").IsRequired();
+                //points.Property(p => p.EarnedPoints).HasColumnName("Points_EarnedPoints").IsRequired();
+                //points.Property(p => p.SpentPoints).HasColumnName("Points_SpentPoints").IsRequired();
                 points.Property(p => p.CurrentBalance).HasColumnName("Points_CurrentBalance").IsRequired();
             });
         });
@@ -165,9 +165,9 @@ public class ApplicationDbContext : DbContext
 
             entity.OwnsOne(p => p.Inventory, inventory =>
             {
-                inventory.Property(pi => pi.StockQuantity).HasColumnName("Inventory_StockQuantity").IsRequired();
-                inventory.Property(pi => pi.LastStockUpdate).HasColumnName("Inventory_LastStockUpdate").IsRequired(false);
-                inventory.WithOwner().HasForeignKey("ProductId");
+                //inventory.Property(pi => pi.StockQuantity).HasColumnName("Inventory_StockQuantity").IsRequired();
+                //inventory.Property(pi => pi.LastStockUpdate).HasColumnName("Inventory_LastStockUpdate").IsRequired(false);
+                //inventory.WithOwner().HasForeignKey("ProductId");
             });
         });
 

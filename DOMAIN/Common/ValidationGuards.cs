@@ -142,4 +142,12 @@ public static class ValidationGuards
             throw new DomainException($"{entityName} not found: {id}");
     }
 
+    public static int ValidateRange(int value, int min, int max, string name)
+    {
+        if (value < min || value > max)
+            throw new DomainException($"{name} must be between {min} and {max}");
+        return value;
+    }
+
+
 }

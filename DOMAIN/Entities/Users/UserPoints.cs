@@ -1,60 +1,41 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿// DOMAIN/ValueObjects/UserPoints.cs
+using System;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Users;
-
-public class UserPoints
+namespace WIN.AGDATA.WIN.Domain.ValueObjects
 {
-    [Required]
-    [Range(0, int.MaxValue)]
-    public int EarnedPoints { get; private set; }
-
-    [Required]
-    [Range(0, int.MaxValue)]
-    public int SpentPoints { get; private set; }
-
-    [Required]
-    [Range(0, int.MaxValue)]
-    public int CurrentBalance { get; private set; }
-
-    public UserPoints()
+    public class UserPoints
     {
-        EarnedPoints = 0;
-        SpentPoints = 0;
-        CurrentBalance = 0;
+        // Total earned minus spent (you may keep two separate fields if you prefer)
+        public int CurrentBalance { get; private set; }
+
+        // Parameterless ctor for EF
+        private UserPoints() { }
+
+        public UserPoints(int initialBalance = 0)
+        {
+            if (initialBalance < 0) throw new DomainException("Initial points cannot be negative");
+            CurrentBalance = initialBalance;
+        }
+
+        public void AddPoints(int amount)
+        {
+            if (amount <= 0) throw new DomainException("Points to add must be positive");
+            CurrentBalance += amount;
+        }
+
+        public void SpendPoints(int amount)
+        {
+            if (amount <= 0) throw new DomainException("Points to spend must be positive");
+            if (CurrentBalance < amount) throw new DomainException("Insufficient points");
+            CurrentBalance -= amount;
+        }
+
+        public void RefundPoints(int amount)
+        {
+            if (amount <= 0) throw new DomainException("Refund must be positive");
+            CurrentBalance += amount;
+        }
+
+        public override string ToString() => $"Points: {CurrentBalance}";
     }
-
-    public void AddPoints(int points)
-    {
-        // Use ValidationGuards for validation
-        ValidationGuards.ValidatePositiveNumber(points, "Points to add");
-
-        EarnedPoints += points;
-        CurrentBalance += points;
-    }
-
-    public void SpendPoints(int points)
-    {
-        // Use ValidationGuards for validation
-        ValidationGuards.ValidatePositiveNumber(points, "Points to spend");
-
-        if (CurrentBalance < points)
-            throw new DomainException($"Insufficient points. Balance: {CurrentBalance}, Requested: {points}");
-
-        SpentPoints += points;
-        CurrentBalance -= points;
-    }
-
-    public bool HasSufficientPoints(int requiredPoints) => CurrentBalance >= requiredPoints;
-
-    public void RefundPoints(int points)
-    {
-        ValidationGuards.ValidatePositiveNumber(points, "Points to refund");
-
-        // Reduce spent points but keep earned points
-        SpentPoints -= points;
-        CurrentBalance += points;
-    }
-
-    public override string? ToString() => $"Balance: {CurrentBalance} (Earned: {EarnedPoints}, Spent: {SpentPoints})";
 }

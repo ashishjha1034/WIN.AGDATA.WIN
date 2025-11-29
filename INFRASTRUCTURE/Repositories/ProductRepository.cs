@@ -1,48 +1,51 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Application.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
-
-public class ProductRepository : IProductRepository
+namespace WIN.AGDATA.WIN.Infrastructure.Repositories
 {
-    private readonly ApplicationDbContext _context;
-
-    public ProductRepository(ApplicationDbContext context)
+    public class ProductRepository : IProductRepository
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-    }
+        private readonly ApplicationDbContext _context;
+        public ProductRepository(ApplicationDbContext context) { _context = context; }
 
-    public Product? GetById(Guid productId)
-    {
-        return _context.Products.FirstOrDefault(p => p.Id == productId);
-    }
-
-    public List<Product> GetAll()
-    {
-        return _context.Products.ToList();
-    }
-
-    public void Add(Product product)
-    {
-        _context.Products.Add(product);
-        _context.SaveChanges();
-    }
-
-    public void Update(Product product)
-    {
-        _context.Products.Update(product);
-        _context.SaveChanges();
-    }
-
-    public void Delete(Guid productId)
-    {
-        var product = GetById(productId);
-        if (product != null)
+        public async Task<Product?> GetByIdAsync(Guid id)
         {
-            _context.Products.Remove(product);
-            _context.SaveChanges();
+            return await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task<IEnumerable<Product>> GetAllAsync()
+        {
+            return await _context.Products.AsNoTracking().ToListAsync();
+        }
+
+        public Task AddAsync(Product product)
+        {
+            _context.Products.Add(product);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(Product product)
+        {
+            _context.Products.Update(product);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(Guid id)
+        {
+            var p = _context.Products.FirstOrDefault(x => x.Id == id);
+            if (p != null) _context.Products.Remove(p);
+            return Task.CompletedTask;
+        }
+
+        public async Task<bool> ExistsByIdAsync(Guid id)
+        {
+            return await _context.Products.AnyAsync(p => p.Id == id);
         }
     }
 }

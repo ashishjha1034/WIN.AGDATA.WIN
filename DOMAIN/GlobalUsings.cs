@@ -23,6 +23,6 @@ global using PrizeTier = WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier;
 global using Winner = WIN.AGDATA.WIN.Domain.Entities.Events.Winner;
 global using ProductIdentity = WIN.AGDATA.WIN.Domain.Entities.Products.ProductIdentity;
 global using ProductPoints =  WIN.AGDATA.WIN.Domain.Entities.Products.ProductPoints;
-global using ProductInventory = WIN.AGDATA.WIN.Domain.Entities.Products.ProductInventory;
+//global using ProductInventory = WIN.AGDATA.WIN.Domain.Entities.Products.;
 global using RedemptionStatus = WIN.AGDATA.WIN.Domain.Entities.Redemptions.RedemptionStatus;
 global using PointsTransaction = WIN.AGDATA.WIN.Domain.Entities.Transactions.PointsTransaction;

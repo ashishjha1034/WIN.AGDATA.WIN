@@ -1,63 +1,51 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using WIN.AGDATA.WIN.Infrastructure.Data;
+using System.Threading.Tasks;
+using WIN.AGDATA.WIN.Application.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
+using WIN.AGDATA.WIN.Infrastructure.Data;
 
-namespace WIN.AGDATA.WIN.Infrastructure.Repositories;
-
-public class TransactionRepository : ITransactionRepository
+namespace WIN.AGDATA.WIN.Infrastructure.Repositories
 {
-    private readonly ApplicationDbContext _context;
-
-    public TransactionRepository(ApplicationDbContext context)
+    public class PointsTransactionRepository : ITransactionRepository
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-    }
+        private readonly ApplicationDbContext _context;
+        public PointsTransactionRepository(ApplicationDbContext context) { _context = context; }
 
-    public PointsTransaction? GetById(Guid transactionId)
-    {
-        return _context.PointsTransactions.FirstOrDefault(t => t.Id == transactionId);
-    }
-
-    public List<PointsTransaction> GetByEmployeeId(string employeeId)
-    {
-        if (string.IsNullOrWhiteSpace(employeeId))
-            return new List<PointsTransaction>();
-
-        var normalized = NormalizeId(employeeId);
-        return _context.PointsTransactions
-            .Where(t => t.EmployeeId == normalized)
-            .OrderByDescending(t => t.TransactionDate)
-            .ToList();
-    }
-
-    public List<PointsTransaction> GetAll()
-    {
-        return _context.PointsTransactions.ToList();
-    }
-
-    public void Add(PointsTransaction transaction)
-    {
-        _context.PointsTransactions.Add(transaction);
-        _context.SaveChanges();
-    }
-
-    public void Update(PointsTransaction transaction)
-    {
-        _context.PointsTransactions.Update(transaction);
-        _context.SaveChanges();
-    }
-
-    public void Delete(Guid transactionId)
-    {
-        var transaction = GetById(transactionId);
-        if (transaction != null)
+        public async Task<IEnumerable<PointsTransaction>> GetAllAsync()
         {
-            _context.PointsTransactions.Remove(transaction);
-            _context.SaveChanges();
+            return await _context.PointsTransactions.AsNoTracking().ToListAsync();
+        }
+
+        public async Task<PointsTransaction?> GetByIdAsync(Guid id)
+        {
+            return await _context.PointsTransactions.FirstOrDefaultAsync(t => t.Id == id);
+        }
+
+        public async Task<IEnumerable<PointsTransaction>> GetByEmployeeIdAsync(string employeeId)
+        {
+            return await _context.PointsTransactions.Where(t => t.EmployeeId == employeeId).AsNoTracking().ToListAsync();
+        }
+
+        public Task AddAsync(PointsTransaction transaction)
+        {
+            _context.PointsTransactions.Add(transaction);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(PointsTransaction transaction)
+        {
+            _context.PointsTransactions.Update(transaction);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(Guid id)
+        {
+            var t = _context.PointsTransactions.FirstOrDefault(x => x.Id == id);
+            if (t != null) _context.PointsTransactions.Remove(t);
+            return Task.CompletedTask;
         }
     }
-
-    private static string NormalizeId(string id) => id.Trim().ToUpperInvariant();
 }
