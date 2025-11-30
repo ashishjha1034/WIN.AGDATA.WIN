@@ -17,4 +17,5 @@ global using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 global using WIN.AGDATA.WIN.Domain.Exceptions;
 global using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 global using WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
+global using System.Security.Claims;
 

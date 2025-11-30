@@ -149,5 +149,17 @@ public static class ValidationGuards
         return value;
     }
 
+    public static void NotNull(object? value, string paramName)
+    {
+        if (value is null)
+            throw new ArgumentNullException(paramName);
+    }
+
+    public static void NotNullOrWhiteSpace(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException($"'{paramName}' cannot be null or whitespace.", paramName);
+    }
+
 
 }

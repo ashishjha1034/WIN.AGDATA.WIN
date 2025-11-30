@@ -14,6 +14,7 @@ public class Event : AuditableEntity<Guid>
     public int? MaxParticipants { get; private set; }
     public DateTime? RegistrationEndDate { get; private set; }
     public string? BannerImageUrl { get; private set; }
+    public int PointsPerParticipant { get; private set; } = 0;
 
     // Navigation
     public IReadOnlyCollection<EventParticipant> Participants => _participants.AsReadOnly();
@@ -46,4 +47,11 @@ public class Event : AuditableEntity<Guid>
     public void Start() => Status = EventStatus.Active;
     public void Complete() => Status = EventStatus.Completed;
     public void Cancel() => Status = EventStatus.Cancelled;
+
+    public void SetPointsReward(int points)
+    {
+        if (Status != EventStatus.Draft)
+            throw new DomainException("Cannot change points reward after event started");
+        PointsPerParticipant = points;
+    }
 }

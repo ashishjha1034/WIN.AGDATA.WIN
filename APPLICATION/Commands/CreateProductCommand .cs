@@ -5,7 +5,8 @@ namespace WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 
 public record CreateProductCommand(
     string Name,
-    string Description,
+    string? Description,
     Guid CategoryId,
     int PointsCost,
-    string? ImageUrl = null) : IRequest<ProductDto>;
+    string? ImageUrl,
+    int InitialStock) : IRequest<ProductDto>;

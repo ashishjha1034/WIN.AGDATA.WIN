@@ -17,3 +17,4 @@ global using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 global using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 global using WIN.AGDATA.WIN.Domain.Enums;
 global using WIN.AGDATA.WIN.Domain.Exceptions;
+global using System.Security.Claims;

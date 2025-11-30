@@ -23,6 +23,9 @@ public class UserRepository : Repository<User>, IUserRepository
     public async Task<User?> GetByEmployeeIdAsync(string employeeId)
         => await _context.Users.FirstOrDefaultAsync(u => u.EmployeeId == employeeId);
 
+    public async Task<User?> GetByEmailAsync(string email)
+        => await _context.Users.FirstOrDefaultAsync(u => u.Email.Value == email);
+
     public async Task<Role?> GetRoleByNameAsync(string name)
         => await _context.Roles.FirstOrDefaultAsync(r => r.Name == name);
 

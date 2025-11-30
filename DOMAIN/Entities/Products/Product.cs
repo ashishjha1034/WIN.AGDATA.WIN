@@ -2,55 +2,50 @@
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Products;
 
-public class Product : AuditableEntity<Guid>
+public class Product : AuditableEntity<Guid>, IActivatable
 {
-    public Guid Id { get; private set; }
+    public Guid Id { get; private set; } = Guid.NewGuid();
     public string Name { get; private set; } = null!;
-    public string Description { get; private set; } = null!;
+    public string? Description { get; private set; }
     public Guid CategoryId { get; private set; }
     public string? ImageUrl { get; private set; }
-    public bool IsActive { get; private set; }
+    public bool IsActive { get; private set; } = true;
 
-    // Navigation
     public ProductCategory Category { get; private set; } = null!;
-
-    // ONE-TO-ONE: Product → one InventoryItem
     public InventoryItem Inventory { get; private set; } = null!;
-
-    // ONE-TO-MANY: Product → many ProductPricing
-    private readonly List<ProductPricing> _pricings = new();
-    public IReadOnlyList<ProductPricing> Pricings => _pricings.AsReadOnly();
-
-    // Current active pricing (calculated)
-    public ProductPricing CurrentPricing =>
-        _pricings.OrderByDescending(p => p.EffectiveFrom)
-                 .FirstOrDefault(p => p.IsActive);
+    public ProductPricing Pricing { get; private set; } = null!;
 
     private Product() { }
 
-    public Product(string name, string description, Guid categoryId, string? imageUrl = null)
+    public Product(string name, string? description, Guid categoryId, int pointsCost, string? imageUrl)
     {
-        Id = Guid.NewGuid();
+        ValidationGuards.NotNullOrWhiteSpace(name, nameof(name));
+        if (pointsCost <= 0) throw new DomainException("PointsCost must be positive");
+
         Name = name;
         Description = description;
         CategoryId = categoryId;
         ImageUrl = imageUrl;
-        IsActive = true;
-    }
-    public static Product Create(string name, string description, Guid categoryId, string? imageUrl = null)
-    {
-        return new Product
-        {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Description = description,
-            CategoryId = categoryId,
-            ImageUrl = imageUrl,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
+
+        Inventory = new InventoryItem(this);
+        Pricing = new ProductPricing(Id, pointsCost);
     }
 
-    public void Deactivate() => IsActive = false;
+    public void UpdateDetails(string name, string? description, Guid categoryId, int pointsCost, string? imageUrl)
+    {
+        ValidationGuards.NotNullOrWhiteSpace(name, nameof(name));
+        if (pointsCost <= 0) throw new DomainException("PointsCost must be positive");
+
+        Name = name;
+        Description = description;
+        CategoryId = categoryId;
+        ImageUrl = imageUrl;
+
+        Pricing = new ProductPricing(Id, pointsCost);
+    }
+
     public void Activate() => IsActive = true;
+    public void Deactivate(string reason) => IsActive = false;
+
+    public int CurrentPricing => Pricing.CurrentPricing;
 }

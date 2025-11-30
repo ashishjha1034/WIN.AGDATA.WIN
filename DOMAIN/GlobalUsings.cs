@@ -23,3 +23,4 @@ global using ProductPoints =  WIN.AGDATA.WIN.Domain.Entities.Products;
 //global using ProductInventory = WIN.AGDATA.WIN.Domain.Entities.Products.;
 global using RedemptionStatus = WIN.AGDATA.WIN.Domain.Enums.RedemptionStatus;
 global using PointsTransaction = WIN.AGDATA.WIN.Domain.Entities.Transactions.UserPointsTransaction;
+

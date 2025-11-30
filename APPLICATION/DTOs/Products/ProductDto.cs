@@ -3,9 +3,10 @@
 public record ProductDto(
     Guid Id,
     string Name,
-    string Description,
-    string Category,
-    string? ImageUrl,
+    string? Description,
+    Guid CategoryId,
+    string CategoryName,
     int PointsCost,
-    int QuantityAvailable,
+    string? ImageUrl,
+    int StockLevel,
     bool IsActive);

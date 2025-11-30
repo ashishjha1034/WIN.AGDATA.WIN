@@ -1,11 +1,11 @@
-﻿
-using AutoMapper;
+﻿using AutoMapper;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
-using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+using WIN.AGDATA.WIN.Domain.Enums;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -14,57 +14,101 @@ namespace WIN.AGDATA.WIN.API.Controllers;
 public class RedemptionsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IRedemptionRepository _repo;
     private readonly IMapper _mapper;
-    private readonly IRedemptionRepository _redemptionRepository;
 
-    public RedemptionsController(IMediator mediator, IMapper mapper, IRedemptionRepository redemptionRepository)
+    public RedemptionsController(IMediator mediator, IRedemptionRepository repo, IMapper mapper)
     {
         _mediator = mediator;
+        _repo = repo;
         _mapper = mapper;
-        _redemptionRepository = redemptionRepository;
     }
 
     [HttpPost]
-    public async Task<ActionResult<RedemptionDto>> CreateRedemption([FromBody] CreateRedemptionRequest request, [FromQuery] Guid userId)
+    [Authorize]
+    public async Task<ActionResult<RedemptionDto>> Create([FromBody] CreateRedemptionRequest request)
     {
+        var userId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         var result = await _mediator.Send(new CreateRedemptionCommand(userId, request.ProductId, request.Quantity));
-        return CreatedAtAction(nameof(GetRedemption), new { id = result.Id }, result);
+        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<RedemptionDto>> GetRedemption(Guid id)
+    [Authorize]
+    public async Task<ActionResult<RedemptionDto>> GetById(Guid id)
     {
-        var redemption = await _redemptionRepository.GetByIdWithDetailsAsync(id);
+        var redemption = await _repo.GetByIdWithDetailsAsync(id);
         if (redemption == null) return NotFound();
         return Ok(_mapper.Map<RedemptionDto>(redemption));
     }
 
     [HttpGet("user/{userId:guid}")]
+    [Authorize]
     public async Task<ActionResult<IReadOnlyList<RedemptionDto>>> GetUserRedemptions(Guid userId)
     {
-        var redemptions = await _redemptionRepository.GetByUserIdAsync(userId);
-        return Ok(_mapper.Map<IReadOnlyList<RedemptionDto>>(redemptions));
+        var redemptions = await _repo.GetByUserIdAsync(userId);
+        return Ok(_mapper.Map<List<RedemptionDto>>(redemptions));
+    }
+
+    [HttpGet("pending")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<IReadOnlyList<RedemptionDto>>> GetPending()
+    {
+        var pending = await _repo.GetPendingAsync();
+        return Ok(_mapper.Map<List<RedemptionDto>>(pending));
     }
 
     [HttpPost("{id:guid}/approve")]
-    public async Task<IActionResult> ApproveRedemption(Guid id, [FromBody] ApproveRedemptionRequest request)
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Approve(Guid id, [FromBody] ApproveRedemptionRequest request)
     {
-        var redemption = await _redemptionRepository.GetByIdAsync(id);
+        var redemption = await _repo.GetByIdAsync(id);
         if (redemption == null) return NotFound();
 
-        redemption.Approve(request.ApprovedBy);
-        await _redemptionRepository.UpdateAsync(redemption);
+        redemption.Approve(request.ApprovedBy, request.Notes);
+        await _repo.UpdateAsync(redemption);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reject")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Reject(Guid id, [FromBody] RejectRedemptionRequest request)
+    {
+        var redemption = await _repo.GetByIdAsync(id);
+        if (redemption == null) return NotFound();
+
+        redemption.Reject(request.RejectedBy, request.Reason);
+        await _repo.UpdateAsync(redemption);
         return NoContent();
     }
 
     [HttpPost("{id:guid}/deliver")]
-    public async Task<IActionResult> DeliverRedemption(Guid id, [FromBody] DeliverRedemptionRequest request)
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Deliver(Guid id, [FromBody] DeliverRedemptionRequest request)
     {
-        var redemption = await _redemptionRepository.GetByIdAsync(id);
+        var redemption = await _repo.GetByIdAsync(id);
         if (redemption == null) return NotFound();
 
-        redemption.MarkDelivered(request.Notes, request.DeliveredBy);
-        await _redemptionRepository.UpdateAsync(redemption);
+        redemption.MarkDelivered(request.DeliveredBy, request.Notes);
+        await _repo.UpdateAsync(redemption);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        var userId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        var redemption = await _repo.GetByIdAsync(id);
+        if (redemption == null || (redemption.UserId != userId && !User.IsInRole("Admin")))
+            return Forbid();
+
+        redemption.Cancel(userId, "User cancelled");
+        await _repo.UpdateAsync(redemption);
         return NoContent();
     }
 }
+
+public record ApproveRedemptionRequest(Guid ApprovedBy, string? Notes);
+public record RejectRedemptionRequest(Guid RejectedBy, string Reason);
+public record DeliverRedemptionRequest(Guid DeliveredBy, string? Notes);

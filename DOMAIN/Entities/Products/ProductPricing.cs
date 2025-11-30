@@ -1,21 +1,25 @@
-﻿// DOMAIN/Entities/Products/ProductPricing.cs
+﻿using WIN.AGDATA.WIN.Domain.Common;
+
+namespace WIN.AGDATA.WIN.Domain.Entities.Products;
+
 public class ProductPricing : Entity<Guid>
 {
-    public Guid ProductId { get; private set; }           // ← FK
+    public Guid ProductId { get; private set; }
     public int PointsCost { get; private set; }
     public DateTime EffectiveFrom { get; private set; }
     public DateTime? EffectiveTo { get; private set; }
 
-    public bool IsActive => EffectiveTo == null;
-
+    // EF needs parameterless ctor
     private ProductPricing() { }
 
-    public ProductPricing(Guid productId, int pointsCost, DateTime effectiveFrom)
+    public ProductPricing(Guid productId, int pointsCost)
     {
+        Id = Guid.NewGuid();
         ProductId = productId;
         PointsCost = pointsCost;
-        EffectiveFrom = effectiveFrom;
+        EffectiveFrom = DateTime.UtcNow;
     }
 
-    public void Deactivate(DateTime effectiveTo) => EffectiveTo = effectiveTo;
+    // This is the property used in mapping
+    public int CurrentPricing => PointsCost;
 }

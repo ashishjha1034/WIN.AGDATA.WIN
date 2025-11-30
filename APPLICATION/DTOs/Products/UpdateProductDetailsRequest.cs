@@ -2,6 +2,7 @@
 
 public record UpdateProductDetailsRequest(
     string Name,
-    string Description,
+    string? Description,
     Guid CategoryId,
-    string? ImageUrl = null);
+    int PointsCost,
+    string? ImageUrl);

@@ -34,4 +34,13 @@ public class ProductRepository : Repository<Product>, IProductRepository
     {
         _dbSet.Update(product);
     }
+    public async Task<IReadOnlyList<Product>> GetByCategoryAsync(Guid categoryId)
+    => await _context.Products
+        .Include(p => p.Category)
+        .Include(p => p.Inventory)
+        .Where(p => p.CategoryId == categoryId && p.IsActive)
+        .ToListAsync();
+
+    public async Task<IReadOnlyList<ProductCategory>> GetCategoriesAsync()
+        => await _context.ProductCategories.ToListAsync();
 }

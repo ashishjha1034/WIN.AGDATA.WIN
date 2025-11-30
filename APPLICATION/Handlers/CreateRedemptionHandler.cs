@@ -1,10 +1,10 @@
 ﻿using AutoMapper;
 using MediatR;
-using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
-using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Redemptions;
 
@@ -33,21 +33,29 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
     public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken ct)
     {
         var product = await _productRepo.GetActiveWithDetailsAsync(request.ProductId)
-                     ?? throw new InvalidOperationException("Product not found or inactive");
+                     ?? throw new DomainException("Product not found or inactive");
 
-        var pointsCost = product.CurrentPricing.PointsCost * request.Quantity;
+        var pointsCost = product.CurrentPricing * request.Quantity;
+        if (pointsCost <= 0) throw new DomainException("Invalid points cost");
+
         var user = await _userRepo.GetByIdWithPointsAsync(request.UserId)
-                  ?? throw new InvalidOperationException("User not found");
+                  ?? throw new DomainException("User not found");
 
-        user.PointsAccount.SpendPoints(pointsCost, request.UserId);
+        if (user.PointsAccount.CurrentBalance < pointsCost)
+            throw new DomainException("Insufficient points balance");
 
-        product.Inventory.Reserve(request.Quantity);
+        // Reserve stock
+        product.Inventory.AdjustStock(-request.Quantity, request.UserId);
+
+        // Deduct points
+        user.PointsAccount.SpendPoints(pointsCost, Guid.NewGuid());
 
         var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
-
         _redemptionRepo.Add(redemption);
+
         await _unitOfWork.SaveChangesAsync(ct);
 
-        return _mapper.Map<RedemptionDto>(redemption);
+        var loaded = await _redemptionRepo.GetByIdWithDetailsAsync(redemption.Id);
+        return _mapper.Map<RedemptionDto>(loaded!);
     }
 }

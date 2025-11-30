@@ -2,7 +2,8 @@
 
 public record CreateProductRequest(
     string Name,
-    string Description,
+    string? Description,
     Guid CategoryId,
     int PointsCost,
-    string? ImageUrl = null);
+    string? ImageUrl,
+    int? InitialStock);

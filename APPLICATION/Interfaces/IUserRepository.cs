@@ -8,6 +8,7 @@ public interface IUserRepository
     Task<User?> GetByIdWithDetailsAsync(Guid id);
     Task<User?> GetByIdWithPointsAsync(Guid id);
     Task<User?> GetByEmployeeIdAsync(string employeeId);
+    Task<User?> GetByEmailAsync(string email);
     Task<Role?> GetRoleByNameAsync(string name);
     Task<IReadOnlyList<User>> GetAllAsync();
     Task<IReadOnlyList<User>> GetActiveUsersAsync();

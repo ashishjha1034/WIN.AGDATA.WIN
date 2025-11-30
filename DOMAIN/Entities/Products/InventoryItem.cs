@@ -4,13 +4,15 @@ public class InventoryItem : Entity<Guid>
     public Guid ProductId { get; private set; }   // ← keep this name
     public int QuantityAvailable { get; private set; }
     public int QuantityReserved { get; private set; }
+    public int CurrentStock { get; private set; } = 0;
 
     public Product Product { get; private set; } = null!;
 
     private InventoryItem() { }
-    public InventoryItem(Guid productId)
+    public InventoryItem(Product product)
     {
-        ProductId = productId;
+        Id = Guid.NewGuid();
+        ProductId = product.Id;
         QuantityAvailable = 0;
         QuantityReserved = 0;
     }

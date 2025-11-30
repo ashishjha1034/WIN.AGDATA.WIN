@@ -7,4 +7,5 @@ public record CreateUserCommand(
     string EmployeeId,
     string Email,
     string FirstName,
-    string LastName) : IRequest<UserDto>;
+    string LastName,
+    string Password) : IRequest<UserDto>;

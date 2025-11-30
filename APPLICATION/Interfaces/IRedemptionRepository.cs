@@ -10,4 +10,5 @@ public interface IRedemptionRepository
     Task<IReadOnlyList<Redemption>> GetPendingAsync();
     void Add(Redemption redemption);
     Task UpdateAsync(Redemption redemption);
+    Task<int> GetPendingCountAsync();
 }

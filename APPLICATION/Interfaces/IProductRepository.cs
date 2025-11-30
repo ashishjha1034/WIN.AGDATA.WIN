@@ -10,4 +10,6 @@ public interface IProductRepository
     Task<Product?> GetByIdWithInventoryAsync(Guid id);
     void Add(Product product);
     Task UpdateAsync(Product product);
+    Task<IReadOnlyList<Product>> GetByCategoryAsync(Guid categoryId);
+    Task<IReadOnlyList<ProductCategory>> GetCategoriesAsync();
 }
