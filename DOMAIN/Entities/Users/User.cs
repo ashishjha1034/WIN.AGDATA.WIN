@@ -67,4 +67,16 @@ public class User : AuditableEntity<Guid>, IActivatable
         var assignment = new UserRoleAssignment(this, role, assignedBy);
         Roles.Add(assignment);
     }
+    public void UpdateProfile(string firstName, string lastName)
+    {
+        if (string.IsNullOrWhiteSpace(firstName))
+            throw new InvalidOperationException("First name cannot be empty");
+
+        if (string.IsNullOrWhiteSpace(lastName))
+            throw new InvalidOperationException("Last name cannot be empty");
+
+        FirstName = firstName;
+        LastName = lastName;
+    }
+
 }

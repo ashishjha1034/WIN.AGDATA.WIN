@@ -8,11 +8,16 @@ public class AdjustPointsHandler : IRequestHandler<AdjustPointsCommand>
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AdjustPointsHandler(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public AdjustPointsHandler(
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
     }
 
     public async Task Handle(AdjustPointsCommand request, CancellationToken ct)
@@ -20,13 +25,15 @@ public class AdjustPointsHandler : IRequestHandler<AdjustPointsCommand>
         var user = await _userRepository.GetByIdWithPointsAsync(request.UserId)
                    ?? throw new InvalidOperationException("User not found");
 
+        var currentUserId = _currentUserService.GetCurrentUserId();
+
         if (request.Amount > 0)
         {
-            user.PointsAccount.AddPoints(request.Amount, request.Reason);
+            user.PointsAccount.AddPoints(request.Amount, currentUserId);
         }
         else
         {
-            user.PointsAccount.SpendPoints(Math.Abs(request.Amount), request.Reason);
+            user.PointsAccount.SpendPoints(Math.Abs(request.Amount), currentUserId);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);

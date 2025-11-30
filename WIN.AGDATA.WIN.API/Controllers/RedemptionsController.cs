@@ -2,113 +2,198 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
-using WIN.AGDATA.WIN.Domain.Enums;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
+/// <summary>
+/// Redemption management endpoints for product redemptions and approvals
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
+[SwaggerTag("Redemptions")]
 public class RedemptionsController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly IRedemptionRepository _repo;
+    private readonly IRedemptionRepository _redemptionRepository;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IMapper _mapper;
 
-    public RedemptionsController(IMediator mediator, IRedemptionRepository repo, IMapper mapper)
+    public RedemptionsController(
+        IMediator mediator,
+        IRedemptionRepository redemptionRepository,
+        ICurrentUserService currentUserService,
+        IMapper mapper)
     {
         _mediator = mediator;
-        _repo = repo;
+        _redemptionRepository = redemptionRepository;
+        _currentUserService = currentUserService;
         _mapper = mapper;
     }
 
+    /// <summary>
+    /// Create new redemption request
+    /// </summary>
+    /// <remarks>
+    /// Request to redeem a product using earned points.
+    /// User must have sufficient points balance.
+    /// 
+    /// Example:
+    ///
+    ///     POST /api/redemptions
+    ///     {
+    ///       "productId": "00000000-0000-0000-0000-000000000000",
+    ///       "quantity": 1
+    ///     }
+    /// </remarks>
+    /// <param name="request">Redemption request details</param>
+    /// <returns>Created redemption</returns>
+    /// <response code="201">Redemption created successfully</response>
+    /// <response code="400">Invalid request or insufficient points</response>
+    /// <response code="401">Unauthorized</response>
     [HttpPost]
-    [Authorize]
-    public async Task<ActionResult<RedemptionDto>> Create([FromBody] CreateRedemptionRequest request)
+    [SwaggerOperation(Summary = "Create redemption", Description = "Request to redeem a product")]
+    [ProducesResponseType(typeof(RedemptionDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<RedemptionDto>> CreateRedemption([FromBody] CreateRedemptionRequest request)
     {
-        var userId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _mediator.Send(new CreateRedemptionCommand(userId, request.ProductId, request.Quantity));
-        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var command = new CreateRedemptionCommand(userId, request.ProductId, request.Quantity);
+            var result = await _mediator.Send(command);
+
+            return CreatedAtAction(nameof(GetRedemption), new { id = result.Id }, result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to create redemption", error = ex.Message });
+        }
     }
 
+    /// <summary>
+    /// Get redemption by ID
+    /// </summary>
+    /// <remarks>
+    /// Retrieve details of a specific redemption request.
+    /// Users can only view their own redemptions. Admins can view any.
+    /// </remarks>
+    /// <param name="id">Redemption ID</param>
+    /// <returns>Redemption details</returns>
+    /// <response code="200">Redemption found</response>
+    /// <response code="403">Access denied</response>
+    /// <response code="404">Redemption not found</response>
     [HttpGet("{id:guid}")]
-    [Authorize]
-    public async Task<ActionResult<RedemptionDto>> GetById(Guid id)
+    [SwaggerOperation(Summary = "Get redemption", Description = "Retrieve redemption details")]
+    [ProducesResponseType(typeof(RedemptionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetRedemption(Guid id)
     {
-        var redemption = await _repo.GetByIdWithDetailsAsync(id);
-        if (redemption == null) return NotFound();
-        return Ok(_mapper.Map<RedemptionDto>(redemption));
+        try
+        {
+            var redemption = await _redemptionRepository.GetByIdWithDetailsAsync(id);
+
+            if (redemption == null)
+                return NotFound(new { message = "Redemption not found" });
+
+            var userId = _currentUserService.GetCurrentUserId();
+            var isAdmin = _currentUserService.IsAdmin();
+
+            if (redemption.UserId != userId && !isAdmin)
+                return Forbid("You can only view your own redemptions");
+
+            return Ok(_mapper.Map<RedemptionDto>(redemption));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve redemption", error = ex.Message });
+        }
     }
 
+    /// <summary>
+    /// Get user's redemptions
+    /// </summary>
+    /// <remarks>
+    /// List all redemption requests for the current user.
+    /// </remarks>
+    /// <returns>List of redemptions</returns>
+    /// <response code="200">Redemptions retrieved</response>
+    [HttpGet("my-redemptions")]
+    [SwaggerOperation(Summary = "Get my redemptions", Description = "List your redemption requests")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetMyRedemptions()
+    {
+        try
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var redemptions = await _redemptionRepository.GetByUserIdAsync(userId);
+
+            return Ok(new
+            {
+                count = redemptions.Count,
+                data = _mapper.Map<List<RedemptionDto>>(redemptions)
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve redemptions", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get redemption by user ID
+    /// </summary>
+    /// <remarks>
+    /// List all redemptions for a specific user.
+    /// Admins only - users can only view their own.
+    /// </remarks>
+    /// <param name="userId">User ID</param>
+    /// <returns>User's redemptions</returns>
+    /// <response code="200">Redemptions retrieved</response>
+    /// <response code="403">Access denied</response>
     [HttpGet("user/{userId:guid}")]
-    [Authorize]
-    public async Task<ActionResult<IReadOnlyList<RedemptionDto>>> GetUserRedemptions(Guid userId)
+    [SwaggerOperation(Summary = "Get user redemptions", Description = "List redemptions for specific user")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> GetRedemptionsByUser(Guid userId)
     {
-        var redemptions = await _repo.GetByUserIdAsync(userId);
-        return Ok(_mapper.Map<List<RedemptionDto>>(redemptions));
-    }
+        try
+        {
+            var currentUserId = _currentUserService.GetCurrentUserId();
+            var isAdmin = _currentUserService.IsAdmin();
 
-    [HttpGet("pending")]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<IReadOnlyList<RedemptionDto>>> GetPending()
-    {
-        var pending = await _repo.GetPendingAsync();
-        return Ok(_mapper.Map<List<RedemptionDto>>(pending));
-    }
+            if (userId != currentUserId && !isAdmin)
+                return Forbid("You can only view your own redemptions");
 
-    [HttpPost("{id:guid}/approve")]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Approve(Guid id, [FromBody] ApproveRedemptionRequest request)
-    {
-        var redemption = await _repo.GetByIdAsync(id);
-        if (redemption == null) return NotFound();
+            var redemptions = await _redemptionRepository.GetByUserIdAsync(userId);
 
-        redemption.Approve(request.ApprovedBy, request.Notes);
-        await _repo.UpdateAsync(redemption);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/reject")]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Reject(Guid id, [FromBody] RejectRedemptionRequest request)
-    {
-        var redemption = await _repo.GetByIdAsync(id);
-        if (redemption == null) return NotFound();
-
-        redemption.Reject(request.RejectedBy, request.Reason);
-        await _repo.UpdateAsync(redemption);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/deliver")]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Deliver(Guid id, [FromBody] DeliverRedemptionRequest request)
-    {
-        var redemption = await _repo.GetByIdAsync(id);
-        if (redemption == null) return NotFound();
-
-        redemption.MarkDelivered(request.DeliveredBy, request.Notes);
-        await _repo.UpdateAsync(redemption);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/cancel")]
-    [Authorize]
-    public async Task<IActionResult> Cancel(Guid id)
-    {
-        var userId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var redemption = await _repo.GetByIdAsync(id);
-        if (redemption == null || (redemption.UserId != userId && !User.IsInRole("Admin")))
-            return Forbid();
-
-        redemption.Cancel(userId, "User cancelled");
-        await _repo.UpdateAsync(redemption);
-        return NoContent();
+            return Ok(new
+            {
+                count = redemptions.Count,
+                userId = userId,
+                data = _mapper.Map<List<RedemptionDto>>(redemptions)
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve redemptions", error = ex.Message });
+        }
     }
 }
-
-public record ApproveRedemptionRequest(Guid ApprovedBy, string? Notes);
-public record RejectRedemptionRequest(Guid RejectedBy, string Reason);
-public record DeliverRedemptionRequest(Guid DeliveredBy, string? Notes);

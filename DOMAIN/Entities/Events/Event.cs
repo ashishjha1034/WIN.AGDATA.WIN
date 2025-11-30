@@ -54,4 +54,13 @@ public class Event : AuditableEntity<Guid>
             throw new DomainException("Cannot change points reward after event started");
         PointsPerParticipant = points;
     }
+    public void AddParticipant(Guid userId)
+    {
+        if (_participants.Any(p => p.UserId == userId))
+            throw new DomainException($"User {userId} is already registered for this event");
+
+        var participant = new EventParticipant(Id, userId);
+        _participants.Add(participant);
+    }
+
 }

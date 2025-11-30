@@ -9,12 +9,18 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
     private readonly IEventRepository _eventRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AwardEventPointsHandler(IEventRepository eventRepository, IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public AwardEventPointsHandler(
+        IEventRepository eventRepository,
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
         _eventRepository = eventRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
     }
 
     public async Task Handle(AwardEventPointsCommand request, CancellationToken ct)
@@ -28,9 +34,12 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
         var user = await _userRepository.GetByIdWithPointsAsync(participant.UserId)
                    ?? throw new InvalidOperationException("User not found");
 
-        user.PointsAccount.AddPoints(request.Points, $"Award for event: {@event.Name}");
+        var currentUserId = _currentUserService.GetCurrentUserId();
 
-        participant.AwardPoints(request.Points);
+        user.PointsAccount.AddPoints(request.Points, currentUserId);
+
+        // AwardPoints requires: (int points, int? rank, Guid awardedBy)
+        participant.AwardPoints(request.Points, rank: null, currentUserId);
 
         await _unitOfWork.SaveChangesAsync(ct);
     }

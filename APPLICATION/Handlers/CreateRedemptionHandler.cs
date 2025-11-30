@@ -15,19 +15,22 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
     private readonly IProductRepository _productRepo;
     private readonly IUserRepository _userRepo;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
 
     public CreateRedemptionHandler(
         IMapper mapper,
         IRedemptionRepository redemptionRepo,
         IProductRepository productRepo,
         IUserRepository userRepo,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
         _mapper = mapper;
         _redemptionRepo = redemptionRepo;
         _productRepo = productRepo;
         _userRepo = userRepo;
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
     }
 
     public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken ct)
@@ -36,7 +39,8 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
                      ?? throw new DomainException("Product not found or inactive");
 
         var pointsCost = product.CurrentPricing * request.Quantity;
-        if (pointsCost <= 0) throw new DomainException("Invalid points cost");
+        if (pointsCost <= 0)
+            throw new DomainException("Invalid points cost");
 
         var user = await _userRepo.GetByIdWithPointsAsync(request.UserId)
                   ?? throw new DomainException("User not found");
@@ -47,8 +51,9 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
         // Reserve stock
         product.Inventory.AdjustStock(-request.Quantity, request.UserId);
 
-        // Deduct points
-        user.PointsAccount.SpendPoints(pointsCost, Guid.NewGuid());
+        // Deduct points - use current user ID who is making the redemption
+        var currentUserId = _currentUserService.GetCurrentUserId();
+        user.PointsAccount.SpendPoints(pointsCost, currentUserId);
 
         var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
         _redemptionRepo.Add(redemption);

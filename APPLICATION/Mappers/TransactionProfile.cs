@@ -9,6 +9,8 @@ public class TransactionProfile : Profile
     public TransactionProfile()
     {
         CreateMap<UserPointsTransaction, TransactionDto>()
-            .ForMember(d => d.Type, o => o.MapFrom(s => s.Type.ToString()));
+            .ForMember(d => d.Type, o => o.MapFrom(s => s.TransactionType.ToString()))
+            .ForMember(d => d.Amount, o => o.MapFrom(s => s.Points))
+            .ForMember(d => d.Description, o => o.MapFrom(s => s.Description));
     }
 }

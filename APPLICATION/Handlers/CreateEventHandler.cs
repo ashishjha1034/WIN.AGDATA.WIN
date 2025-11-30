@@ -22,7 +22,10 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
 
     public async Task<EventDto> Handle(CreateEventCommand request, CancellationToken ct)
     {
-        var @event = new Event(request.Name, request.StartDate, request.EndDate, request.Description);
+        var @event = new Event(
+            request.Name,
+            request.Description,
+            request.StartDate); // EventDate parameter
 
         _eventRepository.Add(@event);
         await _unitOfWork.SaveChangesAsync(ct);

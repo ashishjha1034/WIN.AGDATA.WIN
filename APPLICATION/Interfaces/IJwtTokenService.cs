@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Security.Claims;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Interfaces;
 
 public interface IJwtTokenService
 {
-    string GenerateToken(Domain.Entities.Users.User user);
+    string GenerateToken(User user);
+    string GenerateRefreshToken();
+    ClaimsPrincipal? ValidateToken(string token);
+    ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 }
