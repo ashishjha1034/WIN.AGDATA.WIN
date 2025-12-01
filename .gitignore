@@ -37,3 +37,6 @@ Thumbs.db
 *.db-shm
 *.db-wal
 
+WIN.AGDATA.WIN.API/appsettings.json
+WIN.AGDATA.WIN.API/appsettings.Development.json
+
