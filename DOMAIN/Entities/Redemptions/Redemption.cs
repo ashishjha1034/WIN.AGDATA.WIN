@@ -1,44 +1,76 @@
-﻿using WIN.AGDATA.WIN.Domain.Exceptions;
+﻿using WIN.AGDATA.WIN.Domain.Common;
+using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.Enums;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions
+namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+
+public class Redemption : AuditableEntity<Guid>
 {
-    public class Redemption
+    public Guid Id { get; private set; } = Guid.NewGuid();
+    public Guid UserId { get; private set; }
+    public Guid ProductId { get; private set; }
+    public int PointsSpent { get; private set; }
+    public int Quantity { get; private set; }
+    public RedemptionStatus Status { get; private set; } = RedemptionStatus.Pending;
+    public string? AdminNotes { get; private set; }
+    public Guid? ApprovedBy { get; private set; }
+    public DateTime? ApprovedAt { get; private set; }
+    public Guid? DeliveredBy { get; private set; }
+    public DateTime? DeliveredAt { get; private set; }
+
+    public User User { get; private set; } = null!;
+    public Product Product { get; private set; } = null!;
+
+    private Redemption() { }
+
+    public Redemption(Guid userId, Guid productId, int pointsSpent, int quantity)
     {
-        public Guid Id { get; }
-        public string EmployeeId { get; }
-        public Guid ProductId { get; }
-        public int PointsCost { get; }
-        public DateTime RequestedAt { get; }
+        UserId = userId;
+        ProductId = productId;
+        PointsSpent = pointsSpent;
+        Quantity = quantity;
+    }
 
-        public Redemption(string employeeId, Guid productId, int pointsCost)
-        {
-            ValidateEmployeeId(employeeId);
-            ValidateProductId(productId);
-            ValidatePointsCost(pointsCost);
+    public void Approve(Guid approvedBy, string? notes = null)
+    {
+        if (Status != RedemptionStatus.Pending)
+            throw new DomainException("Only pending redemptions can be approved");
 
-            Id = Guid.NewGuid();
-            EmployeeId = employeeId.Trim().ToUpper();
-            ProductId = productId;
-            PointsCost = pointsCost;
-            RequestedAt = DateTime.UtcNow;
-        }
+        Status = RedemptionStatus.Approved;
+        ApprovedBy = approvedBy;
+        ApprovedAt = DateTime.UtcNow;
+        AdminNotes = notes;
+    }
 
-        private void ValidateEmployeeId(string employeeId)
-        {
-            if (string.IsNullOrWhiteSpace(employeeId))
-                throw new DomainException("Employee ID is required");
-        }
+    public void Reject(Guid rejectedBy, string reason)
+    {
+        if (Status != RedemptionStatus.Pending)
+            throw new DomainException("Only pending redemptions can be rejected");
 
-        private void ValidateProductId(Guid productId)
-        {
-            if (productId == Guid.Empty)
-                throw new DomainException("Product ID is required");
-        }
+        Status = RedemptionStatus.Rejected;
+        ApprovedBy = rejectedBy;
+        ApprovedAt = DateTime.UtcNow;
+        AdminNotes = reason;
+    }
 
-        private void ValidatePointsCost(int pointsCost)
-        {
-            if (pointsCost <= 0)
-                throw new DomainException("Points cost must be positive");
-        }
+    public void MarkDelivered(Guid deliveredBy, string? notes = null)
+    {
+        if (Status != RedemptionStatus.Approved)
+            throw new DomainException("Only approved redemptions can be delivered");
+
+        Status = RedemptionStatus.Delivered;
+        DeliveredBy = deliveredBy;
+        DeliveredAt = DateTime.UtcNow;
+        AdminNotes = notes ?? AdminNotes;
+    }
+
+    public void Cancel(Guid cancelledBy, string? reason = null)
+    {
+        if (Status is RedemptionStatus.Delivered or RedemptionStatus.Rejected)
+            throw new DomainException("Delivered or rejected redemptions cannot be cancelled");
+
+        Status = RedemptionStatus.Cancelled;
+        AdminNotes = reason ?? AdminNotes;
     }
 }

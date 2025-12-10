@@ -1,129 +1,235 @@
-using System.Xml.Linq;
-using WIN.AGDATA.WIN.Application.Interfaces;
-using WIN.AGDATA.WIN.Application.Services;
-using WIN_AGDATA_WIN.Application.Interfaces;
-using WIN_AGDATA_WIN.Application.Services;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using WIN.AGDATA.WIN.API.Extensions;
+using WIN.AGDATA.WIN.API.Middleware;
+using WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
+using WIN.AGDATA.WIN.Infrastructure.Data;
+using WIN.AGDATA.WIN.Infrastructure.DependencyInjection;
+using Microsoft.OpenApi;
+using Microsoft.OpenApi.Models;
+using WIN.AGDATA.WIN.API.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container        
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+// ===== Add Services =====
+
+// Application & Infrastructure
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// ===== JWT Configuration =====
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var secretKey = jwtSettings["SecretKey"]
+    ?? throw new InvalidOperationException("JWT SecretKey is not configured");
+var issuer = jwtSettings["Issuer"]
+    ?? throw new InvalidOperationException("JWT Issuer is not configured");
+var audience = jwtSettings["Audience"]
+    ?? throw new InvalidOperationException("JWT Audience is not configured");
+
+var key = Encoding.UTF8.GetBytes(secretKey);
+
+builder.Services.AddAuthentication(options =>
 {
-    c.SwaggerDoc("v1", new() { Title = "AGDATA Reward Points API", Version = "v1" });
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = true,
+        ValidIssuer = issuer,
+        ValidateAudience = true,
+        ValidAudience = audience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (context.Exception is SecurityTokenExpiredException)
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
+// ===== Authorization Policies =====
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
+
+    options.AddPolicy("ManagerOrAdmin", policy =>
+        policy.RequireRole("Manager", "Admin"));
+
+    options.AddPolicy("EmployeeOrAbove", policy =>
+        policy.RequireRole("Employee", "Manager", "Admin"));
+});
+
+// ===== CORS Configuration =====
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]?
+            .Split(",", StringSplitOptions.RemoveEmptyEntries)
+            ?? new[] { "http://localhost:3000", "http://localhost:4200" };
+
+        policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
     });
 });
 
-// Register our application services manually (since DI extension might have issues)
-builder.Services.AddSingleton<IUserService, UserService>();
-builder.Services.AddSingleton<IEventService, EventService>();
-builder.Services.AddSingleton<IProductService, ProductService>();
-builder.Services.AddSingleton<IPointsService, PointsService>();
-builder.Services.AddSingleton<IRedemptionService>(provider =>
+// ===== Swagger Configuration =====
+builder.Services.AddSwaggerGen(options =>
 {
-    var userService = provider.GetRequiredService<IUserService>();
-    var productService = provider.GetRequiredService<IProductService>();
-    return new RedemptionService(userService, productService);
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {   
+        Title = "WIN.AGDATA.WIN - Reward Points Management System API",
+        Version = "v1.0.0",
+        Description = "Production-ready API for enterprise reward points system with JWT authentication and role-based access control",
+        Contact = new OpenApiContact
+        {
+            Name = "AGDATA Support",
+            Email = "support@agdata.com",
+            Url = new Uri("https://agdata.com")
+        },
+        License = new OpenApiLicense
+        {
+            Name = "MIT License",
+            Url = new Uri("https://opensource.org/licenses/MIT")
+        }
+    });
+
+    // Include XML Comments
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+
+    // JWT Bearer Token Security
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type =  SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = @"JWT Authorization header using the Bearer scheme. 
+                      Enter 'Bearer' [space] and then your token in the text input below.
+                      Example: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] { }
+        }
+    });
+
+    // Enable annotations
+    options.EnableAnnotations();
+    options.OrderActionsBy(apiDesc => $"{apiDesc.ActionDescriptor.RouteValues["controller"]}_{apiDesc.HttpMethod}");
 });
+
+// ===== Controllers & Services =====
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// ===== Configure Middleware =====
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
+    app.UseSwagger(options =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "AGDATA Reward Points API v1");
-        c.RoutePrefix = string.Empty; // Serve at root
+        options.SerializeAsV2 = false;
+    });
+
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Reward Points System API v1.0");
+        options.RoutePrefix = string.Empty; // Swagger at root
+        options.DefaultModelsExpandDepth(2);
+        options.DefaultModelExpandDepth(2);
+        options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+        options.EnableFilter();
+        options.ShowCommonExtensions();
+        options.DisplayOperationId();
+        options.DocumentTitle = "WIN.AGDATA.WIN - API Documentation";
     });
 }
-app.UseCors("AllowAll");
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/error");
+}
+
+// ===== Security & CORS =====
 app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
+
+// ===== Exception Handling =====
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// ===== Authentication & Authorization =====
+app.UseAuthentication();
 app.UseAuthorization();
+
+// ===== Controllers =====
 app.MapControllers();
 
-// Global error handling middleware
-app.Use(async (context, next) =>
+// ===== Health Check Endpoint =====
+app.MapGet("/health", () =>
+    Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow, environment = app.Environment.EnvironmentName }))
+    .WithName("Health")
+    .WithOpenApi()
+    .AllowAnonymous();
+
+// ===== Database Initialization =====
+using (var scope = app.Services.CreateScope())
 {
     try
     {
-        await next();
-    }
-    catch (System.Exception ex)
-    {
-        // Check if it's our DomainException
-        if (ex.GetType().Name == "DomainException")
-        {
-            context.Response.StatusCode = 400; // Bad Request
-            await context.Response.WriteAsJsonAsync(new { error = ex.Message });
-        }
-        else
-        {
-            context.Response.StatusCode = 500; // Internal Server Error
-            await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred" });
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // Log the exception
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError(ex, "Unhandled exception occurred");
-        }
-    }
-});
+        // Run migrations
+        await dbContext.Database.MigrateAsync();
+        Console.WriteLine("✓ Database migrations applied successfully");
 
-// Seed some sample data
-await SeedSampleData(app);
-
-app.Run();
-
-// Sample data seeding method
-async Task SeedSampleData(WebApplication app)
-{
-    using var scope = app.Services.CreateScope();
-    var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
-    var productService = scope.ServiceProvider.GetRequiredService<IProductService>();
-    var eventService = scope.ServiceProvider.GetRequiredService<IEventService>();
-
-    try
-    {
-        // Seed sample users
-        userService.CreateUser("EMP001", "john.doe@agdata.com", "John", "Doe");
-        userService.CreateUser("EMP002", "jane.smith@agdata.com", "Jane", "Smith");
-
-        // Seed sample products
-        productService.CreateProduct("Wireless Mouse", "Ergonomic wireless mouse", 500, 10);
-        productService.CreateProduct("Company T-Shirt", "Official AGDATA t-shirt", 300, 25);
-        productService.CreateProduct("Noise Cancelling Headphones", "Premium headphones", 1500, 5);
-
-        // Seed sample event
-        var prizeTiers = new List<WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier>
-        {
-            new WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier(1, 1000, "First Prize"),
-            new WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier(2, 500, "Second Prize"),
-            new WIN.AGDATA.WIN.Domain.Entities.Events.PrizeTier(3, 250, "Third Prize")
-        };
-
-        eventService.CreateEvent(
-            "Hackathon 2024",
-            "Annual coding competition",
-            DateTime.Now.AddDays(7),
-            prizeTiers
-        );
-
-        Console.WriteLine("Sample data seeded successfully!");
+        // Run seeding
+        await SeedData.SeedAsync(dbContext);
+        Console.WriteLine("✓ Database seeding completed successfully");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error seeding sample data: {ex.Message}");
+        Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
+        throw;
     }
 }
+
+app.Run();

@@ -1,48 +1,66 @@
-﻿using System.Reflection;
-using WIN.AGDATA.WIN.Domain.Entities.Events;
-using WIN.AGDATA.WIN.Domain.Exceptions;
+﻿using WIN.AGDATA.WIN.Domain.Common;
 
-namespace WIN_AGDATA_WIN.Domain.Entities.Events
+namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+
+public class Event : AuditableEntity<Guid>
 {
-    public class Event
+    public Guid Id { get; private set; }
+    public string Name { get; private set; } = null!;
+    public string Description { get; private set; } = null!;
+    public DateTime EventDate { get; private set; }
+    public EventStatus Status { get; private set; }
+    public int? TotalPointsPool { get; private set; }
+    public string? Location { get; private set; }
+    public int? MaxParticipants { get; private set; }
+    public DateTime? RegistrationEndDate { get; private set; }
+    public string? BannerImageUrl { get; private set; }
+    public int PointsPerParticipant { get; private set; } = 0;
+
+    // Navigation
+    public IReadOnlyCollection<EventParticipant> Participants => _participants.AsReadOnly();
+    private readonly List<EventParticipant> _participants = new();
+
+    private Event() { }
+
+    public Event(
+        string name,
+        string description,
+        DateTime eventDate,
+        int? totalPointsPool = null,
+        string? location = null,
+        int? maxParticipants = null,
+        DateTime? registrationEndDate = null,
+        string? bannerImageUrl = null)
     {
-        public string EventId { get; }  // Simple string ID like EmployeeId
-        public WIN.AGDATA.WIN.Domain.Entities.Events.EventInfo Info { get; }
-        public PrizePool Prizes { get; }
-        public EventStatus Status { get; }
-
-        public Event(string eventId, string name, string description, DateTime eventDate, List<PrizeTier> prizeTiers)
-        {
-            ValidateEventId(eventId);
-
-            EventId = eventId.Trim().ToUpper();
-            Info = new WIN.AGDATA.WIN.Domain.Entities.Events.EventInfo(name, description, eventDate);
-            Prizes = new PrizePool(prizeTiers);
-            Status = new EventStatus();
-        }
-
-        // Simple delegation methods
-        public void AddPrizeTier(PrizeTier tier) => Prizes.AddTier(tier);
-        public void RemovePrizeTier(int rank) => Prizes.RemoveTier(rank);
-        public void CompleteEvent(List<Winner> winners) => Status.Complete(winners, Prizes);
-
-        public bool CanAllocatePoints() => Status.IsActive && Info.IsRecent();
-        public int? GetPointsForRank(int rank) => Prizes.GetPoints(rank);
-
-        private void ValidateEventId(string eventId)
-        {
-            if (string.IsNullOrWhiteSpace(eventId))
-                throw new DomainException("Event ID is required");
-
-            if (eventId.Trim().Length < 3)
-                throw new DomainException("Event ID must be at least 3 characters");
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is Event eventObj && EventId == eventObj.EventId;
-        }
-
-        public override int GetHashCode() => EventId.GetHashCode();
+        Id = Guid.NewGuid();
+        Name = name;
+        Description = description;
+        EventDate = eventDate;
+        TotalPointsPool = totalPointsPool;
+        Location = location;
+        MaxParticipants = maxParticipants;
+        RegistrationEndDate = registrationEndDate;
+        BannerImageUrl = bannerImageUrl;
+        Status = EventStatus.Draft;
     }
+
+    public void Start() => Status = EventStatus.Active;
+    public void Complete() => Status = EventStatus.Completed;
+    public void Cancel() => Status = EventStatus.Cancelled;
+
+    public void SetPointsReward(int points)
+    {
+        if (Status != EventStatus.Draft)
+            throw new DomainException("Cannot change points reward after event started");
+        PointsPerParticipant = points;
+    }
+    public void AddParticipant(Guid userId)
+    {
+        if (_participants.Any(p => p.UserId == userId))
+            throw new DomainException($"User {userId} is already registered for this event");
+
+        var participant = new EventParticipant(Id, userId);
+        _participants.Add(participant);
+    }
+
 }

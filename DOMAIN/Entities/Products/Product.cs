@@ -1,33 +1,51 @@
-﻿using Domain.Entities.Users;
+﻿using WIN.AGDATA.WIN.Domain.Common;
 
-namespace WIN.AGDATA.WIN.Domain.Entities.Products
+namespace WIN.AGDATA.WIN.Domain.Entities.Products;
+
+public class Product : AuditableEntity<Guid>, IActivatable
 {
-    public class Product
+    public Guid Id { get; private set; } = Guid.NewGuid();
+    public string Name { get; private set; } = null!;
+    public string? Description { get; private set; }
+    public Guid CategoryId { get; private set; }
+    public string? ImageUrl { get; private set; }
+    public bool IsActive { get; private set; } = true;
+
+    public ProductCategory Category { get; private set; } = null!;
+    public InventoryItem Inventory { get; private set; } = null!;
+    public ProductPricing Pricing { get; private set; } = null!;
+
+    private Product() { }
+
+    public Product(string name, string? description, Guid categoryId, int pointsCost, string? imageUrl)
     {
-        public Identity Identity { get; }
-        public Pricing Pricing { get; }
-        public Inventory Inventory { get; }
+        ValidationGuards.NotNullOrWhiteSpace(name, nameof(name));
+        if (pointsCost <= 0) throw new DomainException("PointsCost must be positive");
 
-        public Product(string name, string description, int requiredPoints, int stockQuantity = 0)
-        {
-            Identity = new Identity(name, description);
-            Pricing = new Pricing(requiredPoints);
-            Inventory = new Inventory(stockQuantity);
-        }
-        public void UpdateDetails(string name, string description, int points)
-        {
-            Identity.UpdateName(name);
-            Identity.UpdateDescription(description);
-            Pricing.UpdatePoints(points);
-        }
+        Name = name;
+        Description = description;
+        CategoryId = categoryId;
+        ImageUrl = imageUrl;
 
-        public void IncreaseStock(int quantity) => Inventory.IncreaseStock(quantity);
-        public void DecreaseStock(int quantity) => Inventory.DecreaseStock(quantity);
-
-        //availability
-        public bool IsAvailable() => Inventory.IsInStock();
-
-        public bool CanBeRedeemedBy(User user)
-            => IsAvailable() && Pricing.CanAfford(user.Points.Balance);
+        Inventory = new InventoryItem(this);
+        Pricing = new ProductPricing(Id, pointsCost);
     }
+
+    public void UpdateDetails(string name, string? description, Guid categoryId, int pointsCost, string? imageUrl)
+    {
+        ValidationGuards.NotNullOrWhiteSpace(name, nameof(name));
+        if (pointsCost <= 0) throw new DomainException("PointsCost must be positive");
+
+        Name = name;
+        Description = description;
+        CategoryId = categoryId;
+        ImageUrl = imageUrl;
+
+        Pricing = new ProductPricing(Id, pointsCost);
+    }
+
+    public void Activate() => IsActive = true;
+    public void Deactivate(string reason) => IsActive = false;
+
+    public int CurrentPricing => Pricing.CurrentPricing;
 }
