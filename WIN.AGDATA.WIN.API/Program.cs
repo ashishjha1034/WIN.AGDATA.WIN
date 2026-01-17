@@ -1,235 +1,220 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using WIN.AGDATA.WIN.API.Extensions;
 using WIN.AGDATA.WIN.API.Middleware;
 using WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 using WIN.AGDATA.WIN.Infrastructure.DependencyInjection;
-using Microsoft.OpenApi;
-using Microsoft.OpenApi.Models;
-using WIN.AGDATA.WIN.API.Extensions;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===== Add Services =====
-
-// Application & Infrastructure
+// ===== Application & Infrastructure =====
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // ===== JWT Configuration =====
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var secretKey = jwtSettings["SecretKey"]
-    ?? throw new InvalidOperationException("JWT SecretKey is not configured");
-var issuer = jwtSettings["Issuer"]
-    ?? throw new InvalidOperationException("JWT Issuer is not configured");
-var audience = jwtSettings["Audience"]
-    ?? throw new InvalidOperationException("JWT Audience is not configured");
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
+var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured");
+var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured");
 
-var key = Encoding.UTF8.GetBytes(secretKey);
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = true,
-        ValidIssuer = issuer,
-        ValidateAudience = true,
-        ValidAudience = audience,
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
-    };
+builder.Services
+	.AddAuthentication(options =>
+	{
+		options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+		options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+	})
+	.AddJwtBearer(options =>
+	{
+		options.TokenValidationParameters = new TokenValidationParameters
+		{
+			ValidateIssuerSigningKey = true,
+			IssuerSigningKey = signingKey,
+			ValidateIssuer = true,
+			ValidIssuer = issuer,
+			ValidateAudience = true,
+			ValidAudience = audience,
+			ValidateLifetime = true,
+			ClockSkew = TimeSpan.Zero
+		};
 
-    options.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = context =>
-        {
-            if (context.Exception is SecurityTokenExpiredException)
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-
-            return Task.CompletedTask;
-        }
-    };
-});
+		options.Events = new JwtBearerEvents
+		{
+			OnAuthenticationFailed = ctx =>
+			{
+				if (ctx.Exception is SecurityTokenExpiredException)
+					ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+				return Task.CompletedTask;
+			}
+		};
+	});
 
 // ===== Authorization Policies =====
 builder.Services.AddAuthorization(options =>
 {
-    options.DefaultPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
+	options.DefaultPolicy = new AuthorizationPolicyBuilder()
+		.RequireAuthenticatedUser()
+		.Build();
 
-    options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole("Admin"));
-
-    options.AddPolicy("ManagerOrAdmin", policy =>
-        policy.RequireRole("Manager", "Admin"));
-
-    options.AddPolicy("EmployeeOrAbove", policy =>
-        policy.RequireRole("Employee", "Manager", "Admin"));
+	options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+	options.AddPolicy("ManagerOrAdmin", policy => policy.RequireRole("Manager", "Admin"));
+	options.AddPolicy("EmployeeOrAbove", policy => policy.RequireRole("Employee", "Manager", "Admin"));
 });
 
-// ===== CORS Configuration =====
+// ===== CORS Configuration (define ONCE, before Build) =====
+// IMPORTANT: WithOrigins must list EXACT origins (scheme + host + port).
+// We include both swagger dev origins and typical Angular dev origins.
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]?
-            .Split(",", StringSplitOptions.RemoveEmptyEntries)
-            ?? new[] { "http://localhost:3000", "http://localhost:4200" };
-
-        policy
-            .WithOrigins(allowedOrigins)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
-    });
+	options.AddPolicy("AllowFrontend", policy =>
+	{
+		policy.WithOrigins(
+				// Swagger served over HTTP in dev
+				"http://localhost:5155",
+				// Swagger served over HTTPS in dev
+				"https://localhost:7113",
+				// Typical Angular dev ports (HTTP/HTTPS)
+				"http://localhost:4200",
+				"https://localhost:4200",
+				// Add any custom frontend origins you use
+				"http://localhost:3000",
+				"https://localhost:3000"
+			)
+			.AllowAnyHeader()
+			.AllowAnyMethod()
+			.AllowCredentials(); // only if you use cookies/auth flows needing credentials
+	});
 });
 
-// ===== Swagger Configuration =====
+// ===== Swagger =====
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {   
-        Title = "WIN.AGDATA.WIN - Reward Points Management System API",
-        Version = "v1.0.0",
-        Description = "Production-ready API for enterprise reward points system with JWT authentication and role-based access control",
-        Contact = new OpenApiContact
-        {
-            Name = "AGDATA Support",
-            Email = "support@agdata.com",
-            Url = new Uri("https://agdata.com")
-        },
-        License = new OpenApiLicense
-        {
-            Name = "MIT License",
-            Url = new Uri("https://opensource.org/licenses/MIT")
-        }
-    });
+	options.SwaggerDoc("v1", new OpenApiInfo
+	{
+		Title = "WIN.AGDATA.WIN - Reward Points Management System API",
+		Version = "v1.0.0",
+		Description = "Production-ready API for enterprise reward points system with JWT authentication and role-based access control",
+		Contact = new OpenApiContact
+		{
+			Name = "AGDATA Support",
+			Email = "support@agdata.com",
+			Url = new Uri("https://agdata.com")
+		},
+		License = new OpenApiLicense
+		{
+			Name = "MIT License",
+			Url = new Uri("https://opensource.org/licenses/MIT")
+		}
+	});
 
-    // Include XML Comments
-    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-        options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+	// XML comments (optional, if file exists)
+	var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+	var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+	if (File.Exists(xmlPath))
+		options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
 
-    // JWT Bearer Token Security
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type =  SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = @"JWT Authorization header using the Bearer scheme. 
-                      Enter 'Bearer' [space] and then your token in the text input below.
-                      Example: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'"
-    });
+	// JWT auth in Swagger
+	options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+	{
+		Name = "Authorization",
+		Type = SecuritySchemeType.Http,
+		Scheme = "bearer",
+		BearerFormat = "JWT",
+		Description =
+			"JWT Authorization header using the Bearer scheme.\n" +
+			"Enter 'Bearer' [space] and then your token.\n" +
+			"Example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+	});
 
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] { }
-        }
-    });
+	options.AddSecurityRequirement(new OpenApiSecurityRequirement
+	{
+		{
+			new OpenApiSecurityScheme
+			{
+				Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+			},
+			Array.Empty<string>()
+		}
+	});
 
-    // Enable annotations
-    options.EnableAnnotations();
-    options.OrderActionsBy(apiDesc => $"{apiDesc.ActionDescriptor.RouteValues["controller"]}_{apiDesc.HttpMethod}");
+	options.EnableAnnotations();
+	options.OrderActionsBy(apiDesc => $"{apiDesc.ActionDescriptor.RouteValues["controller"]}_{apiDesc.HttpMethod}");
 });
 
-// ===== Controllers & Services =====
+// ===== Controllers =====
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
 
 var app = builder.Build();
 
-// ===== Configure Middleware =====
+// ===== Swagger UI =====
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger(options =>
-    {
-        options.SerializeAsV2 = false;
-    });
-
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Reward Points System API v1.0");
-        options.RoutePrefix = string.Empty; // Swagger at root
-        options.DefaultModelsExpandDepth(2);
-        options.DefaultModelExpandDepth(2);
-        options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
-        options.EnableFilter();
-        options.ShowCommonExtensions();
-        options.DisplayOperationId();
-        options.DocumentTitle = "WIN.AGDATA.WIN - API Documentation";
-    });
+	app.UseSwagger(c => { c.SerializeAsV2 = false; });
+	app.UseSwaggerUI(options =>
+	{
+		options.SwaggerEndpoint("/swagger/v1/swagger.json", "Reward Points System API v1.0");
+		options.RoutePrefix = string.Empty; // serve at root
+		options.DefaultModelsExpandDepth(2);
+		options.DefaultModelExpandDepth(2);
+		options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+		options.EnableFilter();
+		options.ShowCommonExtensions();
+		options.DisplayOperationId();
+		options.DocumentTitle = "WIN.AGDATA.WIN - API Documentation";
+	});
 }
-
-if (!app.Environment.IsDevelopment())
+else
 {
-    app.UseExceptionHandler("/error");
+	app.UseExceptionHandler("/error");
 }
 
-// ===== Security & CORS =====
-app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");
-
-// ===== Exception Handling =====
+// ===== Security & CORS (ORDER MATTERS) =====
+app.UseHttpsRedirection();     // causes redirect from http://5155 to https://7113 if both profiles are enabled
+app.UseCors("AllowFrontend");  // MUST come before auth/authorization to apply to preflight requests
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-// ===== Authentication & Authorization =====
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ===== Controllers =====
 app.MapControllers();
 
-// ===== Health Check Endpoint =====
+// ===== Health Check =====
 app.MapGet("/health", () =>
-    Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow, environment = app.Environment.EnvironmentName }))
-    .WithName("Health")
-    .WithOpenApi()
-    .AllowAnonymous();
+	Results.Ok(new
+	{
+		status = "healthy",
+		timestamp = DateTime.UtcNow,
+		environment = app.Environment.EnvironmentName
+	}))
+	.WithName("Health")
+	.WithOpenApi()
+	.AllowAnonymous();
 
-// ===== Database Initialization =====
+// ===== DB Init (migrate + seed) =====
 using (var scope = app.Services.CreateScope())
 {
-    try
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+	try
+	{
+		var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+		await db.Database.MigrateAsync();
+		Console.WriteLine("✓ Database migrations applied successfully");
 
-        // Run migrations
-        await dbContext.Database.MigrateAsync();
-        Console.WriteLine("✓ Database migrations applied successfully");
-
-        // Run seeding
-        await SeedData.SeedAsync(dbContext);
-        Console.WriteLine("✓ Database seeding completed successfully");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
-        throw;
-    }
+		await SeedData.SeedAsync(db);
+		Console.WriteLine("✓ Database seeding completed successfully");
+	}
+	catch (Exception ex)
+	{
+		Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
+		throw;
+	}
 }
 
 app.Run();

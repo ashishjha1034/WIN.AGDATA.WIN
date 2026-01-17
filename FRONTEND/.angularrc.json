@@ -1,0 +1,14 @@
+{
+  "extends": "@angular/cli/lib/config/schema",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "win-agdata-frontend": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {}
+    }
+  }
+}

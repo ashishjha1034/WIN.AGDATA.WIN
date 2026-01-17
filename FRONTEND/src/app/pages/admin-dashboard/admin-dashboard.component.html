@@ -1,0 +1,24 @@
+<div class="admin-container">
+  <nav class="navbar">
+    <div class="navbar-left">
+      <h1 class="navbar-brand">WIN.AGDATA</h1>
+      <span class="badge badge-admin">Admin</span>
+    </div>
+    <div class="navbar-right">
+      <span class="user-name">{{ userName }}</span>
+      <button class="btn-logout" (click)="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="dashboard-content">
+    <h2>Admin Dashboard</h2>
+    <p>Welcome to the admin dashboard, {{ userName }}!</p>
+    <p>This dashboard provides access to:</p>
+    <ul>
+      <li>User management</li>
+      <li>Points adjustment</li>
+      <li>System statistics</li>
+      <li>Redemption approvals</li>
+    </ul>
+  </div>
+</div>

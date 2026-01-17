@@ -1,0 +1,114 @@
+<div class="login-container">
+  <div class="login-sidebar">
+    <div class="logo-container">
+      <svg class="agdata-logo" viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+        <text x="10" y="70" font-size="60" font-weight="bold" fill="#ffffff">AGDATA</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="login-main">
+    <div class="login-box">
+      <h1>Sign in</h1>
+
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <!-- Error Message -->
+        <div *ngIf="error" class="error-message" role="alert">
+          <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          {{ error }}
+        </div>
+
+        <!-- Email Field -->
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <div class="input-wrapper">
+            <input
+              id="email"
+              type="email"
+              formControlName="email"
+              placeholder="your.email&#64;example.com"
+              class="form-input"
+              [class.input-error]="emailControl?.invalid && emailControl?.touched"
+            />
+            <svg *ngIf="emailControl?.valid && emailControl?.touched" class="check-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+            </svg>
+          </div>
+          <div *ngIf="emailControl?.invalid && emailControl?.touched" class="error-text">
+            <span *ngIf="emailControl?.hasError('required')">Email is required</span>
+            <span *ngIf="emailControl?.hasError('email')">Please enter a valid email</span>
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-wrapper password-wrapper">
+            <input
+              id="password"
+              [type]="showPassword ? 'text' : 'password'"
+              formControlName="password"
+              placeholder="Enter your password"
+              class="form-input"
+              [class.input-error]="passwordControl?.invalid && passwordControl?.touched"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              (click)="togglePasswordVisibility()"
+              title="Toggle password visibility"
+            >
+              <svg *ngIf="!showPassword" class="eye-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+              <svg *ngIf="showPassword" class="eye-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11.83 9L15.29 12.46c.04-.3.06-.63.06-.96 0-1.66-1.34-3-3-3-.33 0-.66.02-.96.07zM19.07 4.93L4.93 19.07c1.44 1.13 3.23 1.93 5.07 1.93 5.52 0 10-4.48 10-10 0-1.84-.8-3.63-1.93-5.07zM12 2C6.48 2 1.73 5.61 1 10.5c.81 2.03 2.12 3.89 3.73 5.32l2.64-2.64c-.36-.71-.57-1.51-.57-2.38 0-2.66 2.24-4.8 5.2-4.8 1.87 0 3.47.87 4.54 2.22l2.64-2.64c-1.42-1.61-3.28-2.92-5.38-3.73zM12 22c5.52 0 10-4.48 10-10 0-.83-.12-1.63-.35-2.39l-2.08 2.08c.18.44.29.92.29 1.41 0 2.66-2.24 4.8-5.2 4.8-1.21 0-2.37-.39-3.33-1.07l-2.33 2.33C10.37 21.88 11.16 22 12 22z"/>
+              </svg>
+            </button>
+            <svg *ngIf="passwordControl?.valid && passwordControl?.touched" class="check-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+            </svg>
+          </div>
+          <div *ngIf="passwordControl?.invalid && passwordControl?.touched" class="error-text">
+            <span *ngIf="passwordControl?.hasError('required')">Password is required</span>
+            <span *ngIf="passwordControl?.hasError('minlength')">Password must be at least 6 characters</span>
+          </div>
+        </div>
+
+        <!-- Forgot Password -->
+        <div class="forgot-password">
+          <a href="#forgot">Forgot password?</a>
+        </div>
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          class="btn-signin"
+          [disabled]="loginForm.invalid || loading"
+        >
+          <span *ngIf="!loading">Sign in</span>
+          <span *ngIf="loading" class="spinner">
+            <span class="spinner-dot"></span>
+            Signing in...
+          </span>
+        </button>
+
+        <!-- Demo Credentials Info -->
+        <div class="demo-info">
+          <p><strong>Demo Credentials:</strong></p>
+          <p><strong>Admin:</strong> admin&#64;agdata.com / Admin&#64;123456</p>
+        </div>
+      </form>
+
+      <!-- Register Link -->
+      <div class="register-section">
+        <p>Don't have an account?</p>
+        <button type="button" class="btn-register" (click)="navigateToRegister()">
+          Create account
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
