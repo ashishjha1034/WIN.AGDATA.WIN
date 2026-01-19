@@ -85,13 +85,14 @@ public class AuthController : ControllerBase
                 return Unauthorized(new { message = "User account is inactive" });
 
             var token = _jwtTokenService.GenerateToken(user);
-            var refreshToken = _jwtTokenService.GenerateRefreshToken(); // ✅ ADD THIS
+            var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
             return Ok(new
             {
                 token,
-                refreshToken,  // ✅ ADD THIS
-                expiresIn = 15 * 60, // 15 minutes in seconds ✅ ADD THIS
+                refreshToken,
+                expiresIn = 15 * 60, // 15 minutes in seconds
+                mustChangePassword = user.MustChangePassword,
                 user = new
                 {
                     user.Id,
@@ -168,6 +169,9 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
             return BadRequest(new { message = "Refresh token is required" });
 
+        if (string.IsNullOrWhiteSpace(request.Token))
+            return BadRequest(new { message = "Access token is required" });
+
         try
         {
             var principal = _jwtTokenService.GetPrincipalFromExpiredToken(request.Token);
@@ -177,7 +181,7 @@ public class AuthController : ControllerBase
 
             var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (!Guid.TryParse(userIdClaim, out var userId))
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized(new { message = "Invalid user ID in token" });
 
             var user = await _userRepository.GetByIdWithDetailsAsync(userId);
@@ -219,6 +223,92 @@ public class AuthController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Logout failed", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Change password (available even if MustChangePassword is true)
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out var currentUserId))
+                return Unauthorized(new { message = "User ID not found in token" });
+
+            var command = new ChangePasswordCommand(currentUserId, request.CurrentPassword, request.NewPassword);
+            await _mediator.Send(command);
+
+            return Ok(new { message = "Password changed successfully" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Password change failed", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Request password reset
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var command = new ForgotPasswordCommand(request.Email);
+            await _mediator.Send(command);
+
+            // Always return generic success message to prevent email enumeration
+            return Ok(new { message = "If the account exists, a reset link has been sent to the email address." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "An error occurred processing your request", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Reset password with token
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var command = new ResetPasswordCommand(request.Token, request.NewPassword);
+            await _mediator.Send(command);
+
+            return Ok(new { message = "Password reset successful. You can now login with your new password." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Password reset failed", error = ex.Message });
         }
     }
 

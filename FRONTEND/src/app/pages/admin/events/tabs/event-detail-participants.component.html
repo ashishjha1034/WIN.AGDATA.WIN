@@ -1,0 +1,137 @@
+<div class="participants-content">
+  <div class="participants-header">
+    <div class="counts">
+      <div class="count-item">
+        <span class="label">Total</span>
+        <span class="value">{{ participants?.length || 0 }}</span>
+      </div>
+      <div class="count-item">
+        <span class="label">Registered</span>
+        <span class="value">{{ getParticipantCount().registered }}</span>
+      </div>
+      <div class="count-item">
+        <span class="label">Checked-In</span>
+        <span class="value">{{ getParticipantCount().checkedIn }}</span>
+      </div>
+      <div class="count-item">
+        <span class="label">Attended</span>
+        <span class="value">{{ getParticipantCount().attended }}</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-primary" (click)="bulkCheckIn()" title="Bulk check-in all registered participants">
+        ✓ Bulk Check-In
+      </button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="status-filter">
+      <button 
+        *ngFor="let status of attendanceStatusOptions"
+        class="filter-btn"
+        [class.active]="selectedAttendanceStatus === status.value"
+        (click)="onStatusFilterChange(status.value)"
+      >
+        {{ status.label }}
+      </button>
+    </div>
+
+    <div class="search-box">
+      <input 
+        type="text" 
+        placeholder="Search by name or employee ID..."
+        [(ngModel)]="searchText"
+        (input)="onSearch(searchText)"
+        class="search-input"
+      />
+      <span class="search-icon">🔍</span>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div *ngIf="isLoading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading participants...</p>
+    </div>
+
+    <div *ngIf="!isLoading && participants.length === 0" class="empty-state">
+      <p>No participants yet</p>
+    </div>
+
+    <table class="participants-table" *ngIf="!isLoading && filteredParticipants.length > 0">
+      <thead>
+        <tr>
+          <th class="col-name">Name</th>
+          <th class="col-employee-id">Employee ID</th>
+          <th class="col-email">Email</th>
+          <th class="col-status">Attendance Status</th>
+          <th class="col-rank">Rank</th>
+          <th class="col-points">Points</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let participant of filteredParticipants" class="table-row">
+          <td class="col-name">{{ participant.name }}</td>
+          <td class="col-employee-id">{{ participant.employeeId }}</td>
+          <td class="col-email">{{ participant.email }}</td>
+          <td class="col-status">
+                <span class="status-badge" [class]="(participant.attendanceStatus || '').toLowerCase().replace('-', '')">
+              {{ participant.attendanceStatus || 'Unknown' }}
+            </span>
+          </td>
+          <td class="col-rank">
+            <span class="rank-badge" *ngIf="participant.rank">{{ participant.rank }}</span>
+            <span class="rank-badge empty" *ngIf="!participant.rank">—</span>
+          </td>
+          <td class="col-points">
+            <span class="points-value" *ngIf="participant.points">{{ participant.points | number }}</span>
+            <span class="points-value empty" *ngIf="!participant.points">—</span>
+          </td>
+          <td class="col-actions">
+            <button 
+              class="btn-action"
+              (click)="checkInParticipant(participant.userId)"
+              *ngIf="participant.attendanceStatus === 'Registered'"
+              title="Check in this participant"
+            >
+              Check-In
+            </button>
+            <button 
+              class="btn-action btn-danger"
+              (click)="removeParticipant(participant.userId)"
+              title="Remove participant"
+            >
+              Remove
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination" *ngIf="!isLoading && (participants?.length || 0) > 0">
+    <span class="pagination-info">
+      Showing {{ (currentPage - 1) * pageSize + 1 }} to {{ Math.min(currentPage * pageSize, (participants?.length || 0)) }} of {{ participants?.length || 0 }}
+    </span>
+    <div class="pagination-controls">
+      <button 
+        class="btn-page"
+        [disabled]="currentPage === 1"
+        (click)="currentPage = currentPage - 1; applyFilters()"
+      >
+        ◀
+      </button>
+      <span class="page-number">{{ currentPage }}</span>
+      <button 
+        class="btn-page"
+        [disabled]="currentPage >= getTotalPages()"
+        (click)="currentPage = currentPage + 1; applyFilters()"
+      >
+        ▶
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,177 @@
+<div class="admin-layout">
+  <app-admin-sidebar></app-admin-sidebar>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="isLoading">
+    <div class="spinner"></div>
+    <p>Loading event details...</p>
+  </div>
+
+  <!-- Error State -->
+  <div class="event-detail-container" *ngIf="!isLoading && showErrorAlert">
+    <div class="alert alert-danger">
+      <div class="alert-content">
+        <span class="alert-icon">⚠️</span>
+        <span class="alert-text">{{ errorMessage }}</span>
+        <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="event-detail-container" *ngIf="!isLoading && !showErrorAlert && event">
+    <!-- Header -->
+    <div class="event-detail-header">
+    <div class="header-top">
+      <button class="btn-back" (click)="goBack()" title="Back to events">← Back</button>
+      <h1 class="event-title">{{ event?.name }}</h1>
+      <span 
+        class="status-badge"
+        [style.backgroundColor]="getStatusColor(event?.status || '')"
+      >
+        {{ event?.status }}
+      </span>
+    </div>
+
+    <div class="header-info">
+      <div class="info-item">
+        <span class="label">Event Date</span>
+        <span class="value">{{ formatDate(event?.eventDate || '') }}</span>
+      </div>
+      <div class="divider"></div>
+      <div class="info-item">
+        <span class="label">Status</span>
+        <span class="value">{{ event?.status }}</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="editEvent()" *ngIf="event?.status === 'Draft'">
+        ✏️ Edit Event
+      </button>
+      <button 
+        class="btn btn-danger" 
+        (click)="completeEvent()"
+        *ngIf="event?.status === 'Active' && isAdmin()"
+      >
+        ✓ Complete Event
+      </button>
+      <button 
+        class="btn btn-danger" 
+        (click)="cancelEvent()"
+        *ngIf="(event?.status === 'Draft' || event?.status === 'Active' || event?.status === 'Upcoming') && isAdmin()"
+      >
+        ✕ Cancel Event
+      </button>
+      <button class="btn-more" title="More actions">⋮</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <div class="tabs-nav">
+      <button 
+        class="tab-link"
+        [class.active]="activeTab === 'overview'"
+        (click)="switchTab('overview')"
+      >
+        Overview
+      </button>
+      <button 
+        class="tab-link"
+        [class.active]="activeTab === 'participants'"
+        (click)="switchTab('participants')"
+      >
+        Participants
+      </button>
+      <button 
+        class="tab-link"
+        [class.active]="activeTab === 'points'"
+        (click)="switchTab('points')"
+      >
+        Points & Rewards
+      </button>
+    </div>
+
+    <div class="tabs-content">
+      <!-- Overview Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'overview'">
+        <app-event-detail-overview [event]="event"></app-event-detail-overview>
+      </div>
+
+      <!-- Participants Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'participants'">
+        <app-event-detail-participants [eventId]="eventId" [event]="event"></app-event-detail-participants>
+      </div>
+
+      <!-- Points & Rewards Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'points'">
+        <app-event-detail-points [eventId]="eventId" [event]="event"></app-event-detail-points>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modals -->
+  <div class="modal" *ngIf="showConfirmComplete" (click)="showConfirmComplete = false">
+    <div class="modal-content modal-warning" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>✓ Complete Event?</h3>
+        <button class="modal-close" (click)="showConfirmComplete = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>You're about to mark this event as <strong>Completed</strong>.</p>
+        <div class="confirmation-summary" *ngIf="event">
+          <div class="summary-row">
+            <span class="label">Event Name:</span>
+            <span class="value">{{ event.name }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Current Status:</span>
+            <span class="value status-badge" [ngClass]="'status-' + event.status">{{ event.status }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Participants:</span>
+            <span class="value">{{ event.participantCount }}</span>
+          </div>
+        </div>
+        <p class="warning-text">⚠️ Once completed, you cannot change this status. Ensure all points have been awarded.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" (click)="showConfirmComplete = false">Keep Editing</button>
+        <button class="btn btn-danger" (click)="confirmCompleteEvent()">Yes, Complete Event</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" *ngIf="showConfirmCancel" (click)="showConfirmCancel = false">
+    <div class="modal-content modal-danger" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>⚠️ Cancel Event?</h3>
+        <button class="modal-close" (click)="showConfirmCancel = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>You're about to <strong>cancel this event</strong>. This is a destructive action.</p>
+        <div class="confirmation-summary" *ngIf="event">
+          <div class="summary-row">
+            <span class="label">Event Name:</span>
+            <span class="value">{{ event.name }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Current Status:</span>
+            <span class="value status-badge" [ngClass]="'status-' + event.status">{{ event.status }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Participants Registered:</span>
+            <span class="value">{{ event.registeredCount }}</span>
+          </div>
+        </div>
+        <p class="warning-text">⚠️ All registered participants will be notified. Points already awarded will not be refunded.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" (click)="showConfirmCancel = false">Keep Event</button>
+        <button class="btn btn-danger" (click)="confirmCancelEvent()">Yes, Cancel Event</button>
+      </div>
+    </div>
+  </div>
+</div>
+

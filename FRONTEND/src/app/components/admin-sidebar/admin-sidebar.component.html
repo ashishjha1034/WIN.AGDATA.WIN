@@ -1,0 +1,56 @@
+<aside class="sidebar" [class.collapsed]="isCollapsed">
+  <!-- Logo Section -->
+  <div class="sidebar-header">
+    <div class="logo-wrapper">
+      <img src="assets/agdata-logo.svg" alt="AGDATA" class="agdata-logo" *ngIf="!isCollapsed"/>
+    </div>
+    <button class="toggle-btn" (click)="toggleSidebar()" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59zm0 6L14 12l-6 6 6 6 1.41-1.41L10.83 18l4.58-4.59z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Navigation Menu -->
+  <nav class="sidebar-nav">
+    <ul class="menu-list">
+      <li *ngFor="let item of menuItems" class="menu-item">
+        <a
+          [routerLink]="item.path"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: false }"
+          class="menu-link"
+          [title]="item.label"
+        >
+          <span class="menu-icon">{{ item.icon }}</span>
+          <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
+          <span class="badge" *ngIf="item.badge && !isCollapsed">{{ item.badge }}</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- User Section -->
+  <div class="sidebar-footer">
+    <div class="user-info" *ngIf="currentUser && !isCollapsed">
+      <div class="user-avatar">
+        {{ currentUser.firstName?.charAt(0) || '' }}{{ currentUser.lastName?.charAt(0) || '' }}
+      </div>
+      <div class="user-details">
+        <p class="user-name">{{ currentUser.firstName }} {{ currentUser.lastName }}</p>
+        <p class="user-role">{{ currentUser.roles?.[0] || 'User' }}</p>
+      </div>
+    </div>
+    <div class="user-avatar-only" *ngIf="currentUser && isCollapsed">
+      {{ currentUser.firstName?.charAt(0) || '' }}{{ currentUser.lastName?.charAt(0) || '' }}
+    </div>
+
+    <!-- Logout Button -->
+    <button class="logout-btn" (click)="logout()" title="Logout">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+      </svg>
+      <span *ngIf="!isCollapsed">Logout</span>
+    </button>
+  </div>
+</aside>

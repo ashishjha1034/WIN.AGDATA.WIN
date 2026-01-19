@@ -1,9 +1,12 @@
 import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-unauthorized',
   templateUrl: './unauthorized.component.html',
-  styleUrls: ['./unauthorized.component.css']
+  styleUrls: ['./unauthorized.component.css'],
+  standalone: true,
+  imports: [CommonModule]
 })
 export class UnauthorizedComponent {
   goBack(): void {

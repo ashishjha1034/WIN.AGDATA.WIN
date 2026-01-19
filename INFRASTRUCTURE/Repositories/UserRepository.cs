@@ -24,13 +24,24 @@ public class UserRepository : Repository<User>, IUserRepository
         => await _context.Users.FirstOrDefaultAsync(u => u.EmployeeId == employeeId);
 
     public async Task<User?> GetByEmailAsync(string email)
-        => await _context.Users.FirstOrDefaultAsync(u => u.Email.Value == email);
+        => await _context.Users
+            .Include(u => u.Roles).ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.Email.Value == email);
 
     public async Task<Role?> GetRoleByNameAsync(string name)
         => await _context.Roles.FirstOrDefaultAsync(r => r.Name == name);
 
     public async Task<IReadOnlyList<User>> GetActiveUsersAsync()
-        => await _context.Users.Where(u => u.IsActive).ToListAsync();
+        => await _context.Users
+            .Include(u => u.PointsAccount)
+            .Include(u => u.Roles).ThenInclude(ur => ur.Role)
+            .Where(u => u.IsActive).ToListAsync();
+
+    public override async Task<IReadOnlyList<User>> GetAllAsync()
+        => await _context.Users
+            .Include(u => u.PointsAccount)
+            .Include(u => u.Roles).ThenInclude(ur => ur.Role)
+            .ToListAsync();
 
     public async Task UpdateAsync(User user)
     {

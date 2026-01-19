@@ -14,6 +14,7 @@ namespace WIN.AGDATA.WIN.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = "PasswordChanged")]
 [SwaggerTag("Events")]
 public class EventController : ControllerBase
 {
@@ -93,7 +94,7 @@ public class EventController : ControllerBase
 
             return Ok(new
             {
-                @event = _mapper.Map<EventDto>(@event),
+                data = _mapper.Map<EventDto>(@event),
                 participantCount = @event.Participants.Count
             });
         }
@@ -116,9 +117,11 @@ public class EventController : ControllerBase
     ///     POST /api/events
     ///     {
     ///       "name": "Q4 Awards Ceremony",
-    ///       "startDate": "2025-04-01T00:00:00Z",
-    ///       "endDate": "2025-04-30T23:59:59Z",
-    ///       "description": "Quarterly employee recognition event"
+    ///       "eventDate": "2025-04-15T09:00:00Z",
+    ///       "description": "Quarterly employee recognition event",
+    ///       "totalPointsPool": 5000,
+    ///       "location": "Main Hall",
+    ///       "maxParticipants": 100
     ///     }
     /// </remarks>
     /// <param name="request">Event creation details</param>
@@ -141,9 +144,13 @@ public class EventController : ControllerBase
         {
             var command = new CreateEventCommand(
                 request.Name,
-                request.StartDate,
-                request.EndDate,
-                request.Description
+                request.EventDate,
+                request.Description,
+                request.TotalPointsPool,
+                request.Location,
+                request.MaxParticipants,
+                request.RegistrationEndDate,
+                request.BannerImageUrl
             );
 
             var result = await _mediator.Send(command);
@@ -170,7 +177,7 @@ public class EventController : ControllerBase
     /// <response code="400">Already registered or event not found</response>
     /// <response code="401">Unauthorized</response>
     [HttpPost("{id:guid}/register")]
-    [Authorize]
+    [Authorize(Policy = "PasswordChanged")]
     [SwaggerOperation(Summary = "Register for event", Description = "Join an event")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -188,12 +195,21 @@ public class EventController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { 
+                message = ex.Message,
+                error = ex.InnerException?.Message,
+                eventId = id
+            });
         }
         catch (Exception ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
-                new { message = "Failed to register for event", error = ex.Message });
+                new { 
+                    message = "Failed to register for event", 
+                    error = ex.Message,
+                    innerError = ex.InnerException?.Message,
+                    eventId = id
+                });
         }
     }
 
@@ -262,11 +278,7 @@ public class EventController : ControllerBase
         try
         {
             var userId = _currentUserService.GetCurrentUserId();
-            var allEvents = await _eventRepository.GetAllAsync();
-
-            var myEvents = allEvents
-                .Where(e => e.Participants.Any(p => p.UserId == userId))
-                .ToList();
+            var myEvents = await _eventRepository.GetUserEventsAsync(userId);
 
             return Ok(new
             {

@@ -1,0 +1,470 @@
+<div class="admin-layout">
+  <app-admin-sidebar></app-admin-sidebar>
+  
+  <div class="product-management-container">
+    <!-- Error Alert -->
+    <div *ngIf="showErrorAlert" class="alert alert-danger">
+      <div class="alert-content">
+        <span class="alert-icon">⚠️</span>
+        <span class="alert-text">{{ errorMessage }}</span>
+        <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+      </div>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">Products Management</h1>
+      </div>
+      <div class="header-right">
+        <input 
+          type="text" 
+          placeholder="Search by product name or category..."
+          [(ngModel)]="searchText"
+          (input)="onSearch(searchText)"
+          class="search-input-header"
+        />
+        <div class="header-user-info">
+          <span class="user-label">Admin | Super Admin</span>
+          <button class="btn-logout">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-strip" *ngIf="kpi || isLoading">
+      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+        <div class="kpi-icon products-icon">📦</div>
+        <div class="kpi-content">
+          <div class="kpi-label">Total Active Products</div>
+          <div class="kpi-value">{{ kpi?.totalActiveProducts || 0 }}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+        <div class="kpi-icon low-stock-icon">📊</div>
+        <div class="kpi-content">
+          <div class="kpi-label">Low Stock Products</div>
+          <div class="kpi-value">{{ kpi?.lowStockProducts || 0 }}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+        <div class="kpi-icon inactive-icon">📋</div>
+        <div class="kpi-content">
+          <div class="kpi-label">Inactive Products</div>
+          <div class="kpi-value">{{ kpi?.inactiveProducts || 0 }}</div>
+        </div>
+      </div>
+
+      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+        <div class="kpi-icon points-icon">💰</div>
+        <div class="kpi-content">
+          <div class="kpi-label">Total Redeemable</div>
+          <div class="kpi-value">{{ kpi?.totalRedeemablePoints || 0 | number }}</div>
+          <div class="kpi-sublabel">Points</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Title and Controls -->
+    <div class="products-header">
+      <h2 class="section-title">Products Management</h2>
+      <div class="header-actions">
+        <button class="btn btn-filter" (click)="openFilterDrawer()" title="Filter products">
+          <span class="filter-icon">⚙️</span> Filter
+        </button>
+        <button class="btn btn-primary" (click)="openAddProductModal()" title="Add Product">
+          <span class="btn-icon">➕</span> Add Product
+        </button>
+      </div>
+    </div>
+
+    <!-- Products Table -->
+    <div class="table-container">
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading products...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isLoading && filteredProducts.length === 0 && !hasLoadError" class="empty-state">
+        <div class="empty-icon">📭</div>
+        <h3 class="empty-title">No products found</h3>
+        <p class="empty-description">
+          <ng-container *ngIf="searchText">
+            No products match your search criteria
+          </ng-container>
+          <ng-container *ngIf="!searchText">
+            Create your first product to get started
+          </ng-container>
+        </p>
+        <button class="btn btn-primary btn-empty-action" (click)="openAddProductModal()">
+          ➕ Add First Product
+        </button>
+      </div>
+
+      <!-- Products Table -->
+      <table class="products-table" *ngIf="!isLoading && filteredProducts.length > 0" #productsTable>
+        <thead>
+          <tr class="table-header">
+            <th class="col-product">Product</th>
+            <th class="col-category">Category</th>
+            <th class="col-points">Points Cost</th>
+            <th class="col-stock">Stock</th>
+            <th class="col-status">Status</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            *ngFor="let product of filteredProducts"
+            class="table-row"
+            [class.selected]="selectedRows.has(product.id)"
+          >
+            <td class="col-product">
+              <div class="product-cell">
+                <div class="product-image">
+                  <img [src]="product.imageUrl || 'assets/placeholder-product.png'" 
+                       [alt]="product.name"
+                       (error)="$any($event.target).src='assets/placeholder-product.png'" />
+                </div>
+                <div class="product-info">
+                  <div class="product-name">
+                    {{ product.name }}
+                  </div>
+                  <div class="product-category-sub">{{ product.categoryName }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="col-category">
+              <span class="category-badge">{{ product.categoryName }}</span>
+            </td>
+            <td class="col-points">
+              <span class="points-value">{{ product.pointsCost | number }}</span>
+            </td>
+            <td class="col-stock">
+              <span class="stock-value" [class.low-stock]="product.stockLevel < 10 && product.stockLevel > 0"
+                    [class.out-of-stock]="product.stockLevel === 0">
+                {{ product.stockLevel === 999999 ? 'Unlimited' : product.stockLevel }}
+              </span>
+            </td>
+            <td class="col-status">
+              <span class="status-badge" [ngClass]="getStatusClass(product)">
+                {{ getStatusText(product) }}
+              </span>
+            </td>
+            <td class="col-actions">
+              <button class="btn-action btn-edit" 
+                      (click)="editProduct(product.id, $event)" 
+                      title="Edit">
+                Edit
+              </button>
+              <div class="dropdown-actions">
+                <button class="btn-more" 
+                        (click)="toggleDropdown(product.id, $event)"
+                        title="More actions">⋮</button>
+                <div class="dropdown-menu" [class.show]="isDropdownActive(product.id)">
+                  <button (click)="editProduct(product.id, $event)">
+                    <span class="icon">✏️</span> Edit
+                  </button>
+                  <button (click)="adjustStock(product.id, $event)">
+                    <span class="icon">📊</span> Adjust Stock
+                  </button>
+                  <button (click)="deactivateProduct(product, $event)">
+                    <span class="icon">⏸️</span> Deactivate
+                  </button>
+                  <button (click)="viewRedemptions(product.id, $event)">
+                    <span class="icon">👁️</span> View Redemptions
+                  </button>
+                  <button (click)="viewAuditTrail(product.id, $event)">
+                    <span class="icon">🕒</span> Audit Trail
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="!isLoading && filteredProducts.length > 0">
+      <div class="pagination-info">
+        Showing {{ (currentPage - 1) * pageSize + 1 }} to 
+        {{ Math.min(currentPage * pageSize, products.length) }} of 50 entries
+      </div>
+      <div class="pagination-controls">
+        <button 
+          class="btn-page"
+          [disabled]="currentPage === 1"
+          (click)="previousPage()"
+        >
+          Previous
+        </button>
+        <button 
+          *ngFor="let page of [1, 2, 3, 4]"
+          class="btn-page-number"
+          [class.active]="currentPage === page"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        <button 
+          class="btn-page"
+          [disabled]="currentPage >= totalPages"
+          (click)="nextPage()"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Drawer -->
+<div class="filter-drawer" *ngIf="showFilterDrawer" (click)="closeFilterDrawer()">
+  <div class="drawer-content" (click)="$event.stopPropagation()">
+    <div class="drawer-header">
+      <h3>Filter Products</h3>
+      <button class="close-btn" (click)="closeFilterDrawer()">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Category Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Categories</label>
+        <div class="checkbox-group">
+          <div class="checkbox-item" *ngFor="let category of categories">
+            <input 
+              type="checkbox" 
+              [id]="'cat-' + category.id"
+              [checked]="activeFilter.categoryIds.includes(category.id)"
+              (change)="onCategoryFilterChange(category.id, $event)"
+            />
+            <label [for]="'cat-' + category.id">{{ category.name }}</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <div class="radio-group">
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="status-all" 
+              name="status" 
+              value="all"
+              [checked]="activeFilter.status === 'all'"
+              (change)="activeFilter.status = 'all'"
+            />
+            <label for="status-all">All Products</label>
+          </div>
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="status-active" 
+              name="status" 
+              value="active"
+              [checked]="activeFilter.status === 'active'"
+              (change)="activeFilter.status = 'active'"
+            />
+            <label for="status-active">Active Only</label>
+          </div>
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="status-inactive" 
+              name="status" 
+              value="inactive"
+              [checked]="activeFilter.status === 'inactive'"
+              (change)="activeFilter.status = 'inactive'"
+            />
+            <label for="status-inactive">Inactive Only</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Level Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Stock Level</label>
+        <div class="radio-group">
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="stock-all" 
+              name="stock" 
+              value="all"
+              [checked]="activeFilter.stockLevel === 'all'"
+              (change)="activeFilter.stockLevel = 'all'"
+            />
+            <label for="stock-all">All Levels</label>
+          </div>
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="stock-low" 
+              name="stock" 
+              value="low"
+              [checked]="activeFilter.stockLevel === 'low'"
+              (change)="activeFilter.stockLevel = 'low'"
+            />
+            <label for="stock-low">Low Stock (< 10)</label>
+          </div>
+          <div class="radio-item">
+            <input 
+              type="radio" 
+              id="stock-out" 
+              name="stock" 
+              value="out"
+              [checked]="activeFilter.stockLevel === 'out'"
+              (change)="activeFilter.stockLevel = 'out'"
+            />
+            <label for="stock-out">Out of Stock (0)</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Points Range Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Points Range</label>
+        <div class="range-inputs">
+          <input 
+            type="number" 
+            placeholder="Min Points"
+            [(ngModel)]="activeFilter.minPoints"
+            class="range-input"
+            min="0"
+          />
+          <span class="range-separator">-</span>
+          <input 
+            type="number" 
+            placeholder="Max Points"
+            [(ngModel)]="activeFilter.maxPoints"
+            class="range-input"
+            min="0"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn-reset" (click)="resetFilters()">Reset All</button>
+      <button class="btn-apply" (click)="applyFilters()">Apply Filters</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal-overlay" *ngIf="showAddProductModal" (click)="closeAddProductModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Add New Product</h3>
+      <button class="close-btn" (click)="closeAddProductModal()">✕</button>
+    </div>
+
+    <form class="modal-form" (ngSubmit)="submitNewProduct()">
+      <div class="form-group">
+        <label for="product-name" class="form-label required">Product Name</label>
+        <input 
+          type="text" 
+          id="product-name"
+          [(ngModel)]="newProduct.name"
+          name="name"
+          class="form-input"
+          placeholder="Enter product name"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="product-description" class="form-label">Description</label>
+        <textarea 
+          id="product-description"
+          [(ngModel)]="newProduct.description"
+          name="description"
+          class="form-textarea"
+          placeholder="Enter product description"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="product-category" class="form-label required">Category</label>
+        <select 
+          id="product-category"
+          [(ngModel)]="newProduct.categoryId"
+          name="categoryId"
+          class="form-select"
+          required
+        >
+          <option value="">Select a category</option>
+          <option *ngFor="let category of categories" [value]="category.id">
+            {{ category.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="product-points" class="form-label required">Points Cost</label>
+          <input 
+            type="number" 
+            id="product-points"
+            [(ngModel)]="newProduct.pointsCost"
+            name="pointsCost"
+            class="form-input"
+            placeholder="0"
+            min="0"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="product-stock" class="form-label">Initial Stock</label>
+          <input 
+            type="number" 
+            id="product-stock"
+            [(ngModel)]="newProduct.initialStock"
+            name="initialStock"
+            class="form-input"
+            placeholder="0"
+            min="0"
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="product-image" class="form-label">Image URL</label>
+        <input 
+          type="text" 
+          id="product-image"
+          [(ngModel)]="newProduct.imageUrl"
+          name="imageUrl"
+          class="form-input"
+          placeholder="https://example.com/image.jpg"
+        />
+      </div>
+
+      <div class="form-group-checkbox">
+        <input 
+          type="checkbox" 
+          id="product-active"
+          [(ngModel)]="newProduct.isActive"
+          name="isActive"
+        />
+        <label for="product-active">Set as Active</label>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeAddProductModal()">Cancel</button>
+        <button type="submit" class="btn-submit" [disabled]="isSubmitting">
+          {{ isSubmitting ? 'Creating...' : 'Create Product' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

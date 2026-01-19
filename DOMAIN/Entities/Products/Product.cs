@@ -47,5 +47,5 @@ public class Product : AuditableEntity<Guid>, IActivatable
     public void Activate() => IsActive = true;
     public void Deactivate(string reason) => IsActive = false;
 
-    public int CurrentPricing => Pricing.CurrentPricing;
+    public int CurrentPricing => Pricing?.CurrentPricing ?? 0;
 }

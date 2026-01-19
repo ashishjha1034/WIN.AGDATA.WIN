@@ -4,6 +4,7 @@ using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
+using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Redemptions;
@@ -14,6 +15,7 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
     private readonly IRedemptionRepository _redemptionRepo;
     private readonly IProductRepository _productRepo;
     private readonly IUserRepository _userRepo;
+    private readonly ITransactionRepository _transactionRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
 
@@ -22,6 +24,7 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
         IRedemptionRepository redemptionRepo,
         IProductRepository productRepo,
         IUserRepository userRepo,
+        ITransactionRepository transactionRepo,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUserService)
     {
@@ -29,6 +32,7 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
         _redemptionRepo = redemptionRepo;
         _productRepo = productRepo;
         _userRepo = userRepo;
+        _transactionRepo = transactionRepo;
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
     }
@@ -57,6 +61,19 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
 
         var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
         _redemptionRepo.Add(redemption);
+
+        // Create transaction record for redemption
+        var transaction = UserPointsTransaction.CreateRedeemed(
+            userId: request.UserId,
+            points: pointsCost,
+            source: "Product Redemption",
+            sourceId: request.ProductId,
+            description: $"Redeemed {product.Name} (Qty: {request.Quantity})",
+            balanceAfter: user.PointsAccount.CurrentBalance,
+            processedBy: currentUserId
+        );
+
+        _transactionRepo.Add(transaction);
 
         await _unitOfWork.SaveChangesAsync(ct);
 

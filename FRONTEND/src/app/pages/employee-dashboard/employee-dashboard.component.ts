@@ -3,11 +3,14 @@ import { AuthService } from '../../services/auth.service';
 import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-employee-dashboard',
   templateUrl: './employee-dashboard.component.html',
-  styleUrls: ['./employee-dashboard.component.css']
+  styleUrls: ['./employee-dashboard.component.css'],
+  standalone: true,
+  imports: [CommonModule]
 })
 export class EmployeeDashboardComponent implements OnInit, OnDestroy {
   userName: string = '';

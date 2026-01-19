@@ -2,6 +2,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
@@ -20,15 +21,18 @@ public class ProductsController : ControllerBase
     private readonly IProductRepository _productRepository;
     private readonly IMediator _mediator;
     private readonly IMapper _mapper;
+    private readonly IUnitOfWork _unitOfWork;
 
     public ProductsController(
         IProductRepository productRepository,
         IMediator mediator,
-        IMapper mapper)
+        IMapper mapper,
+        IUnitOfWork unitOfWork)
     {
         _productRepository = productRepository;
         _mediator = mediator;
         _mapper = mapper;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -169,7 +173,7 @@ public class ProductsController : ControllerBase
     /// <response code="400">Invalid input</response>
     /// <response code="403">Forbidden - admin only</response>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
     [SwaggerOperation(Summary = "Create product", Description = "Add new product to catalog (admin only)")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -206,15 +210,16 @@ public class ProductsController : ControllerBase
     /// <remarks>
     /// Modify product information like name, description, and points cost.
     /// Admin only operation.
+    /// All fields are optional - only provide the fields you want to update.
     /// </remarks>
     /// <param name="id">Product ID</param>
-    /// <param name="request">Updated product details</param>
+    /// <param name="request">Updated product details (partial updates supported)</param>
     /// <returns>Confirmation message</returns>
     /// <response code="200">Product updated</response>
     /// <response code="403">Forbidden - admin only</response>
     /// <response code="404">Product not found</response>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
     [SwaggerOperation(Summary = "Update product", Description = "Modify product information (admin only)")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -226,15 +231,30 @@ public class ProductsController : ControllerBase
 
         try
         {
-            var product = await _productRepository.GetByIdAsync(id);
+            // Get product with tracking (no AsNoTracking)
+            var product = await _productRepository.GetByIdForUpdateAsync(id);
             if (product == null)
                 return NotFound(new { message = "Product not found" });
 
-            product.UpdateDetails(request.Name, request.Description, request.CategoryId, request.PointsCost, request.ImageUrl);
+            // Only update fields that are provided (not null/empty)
+            var name = !string.IsNullOrWhiteSpace(request.Name) ? request.Name : product.Name;
+            var description = request.Description ?? product.Description;
+            var categoryId = request.CategoryId ?? product.CategoryId;
+            var pointsCost = request.PointsCost ?? product.CurrentPricing;
+            var imageUrl = request.ImageUrl ?? product.ImageUrl;
 
-            await _productRepository.UpdateAsync(product);
+            // Update the product
+            product.UpdateDetails(name, description, categoryId, pointsCost, imageUrl);
+
+            // SaveChangesAsync will track and save changes automatically
+            await _unitOfWork.SaveChangesAsync();
 
             return Ok(new { message = "Product updated successfully", productId = id });
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            return StatusCode(StatusCodes.Status409Conflict,
+                new { message = "Product was modified by another user. Please refresh and try again.", error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -252,13 +272,13 @@ public class ProductsController : ControllerBase
     /// Positive numbers add to stock, negative numbers deduct.
     /// </remarks>
     /// <param name="id">Product ID</param>
-    /// <param name="request">Stock adjustment amount</param>
+    /// <param name="request">Stock adjustment amount and operation type</param>
     /// <returns>Updated stock level</returns>
     /// <response code="200">Stock adjusted</response>
     /// <response code="403">Forbidden - admin only</response>
     /// <response code="404">Product not found</response>
     [HttpPut("{id:guid}/stock")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
     [SwaggerOperation(Summary = "Adjust stock", Description = "Update product inventory level (admin only)")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -274,15 +294,30 @@ public class ProductsController : ControllerBase
             if (product == null)
                 return NotFound(new { message = "Product not found" });
 
-            product.Inventory.AdjustStock(request.AdjustBy, Guid.Empty);
+            var adjustmentAmount = request.Amount;
+            
+            // Handle operation type
+            if (request.Operation?.ToLower() == "decrease")
+            {
+                adjustmentAmount = -Math.Abs(request.Amount);
+            }
+            else if (request.Operation?.ToLower() == "increase")
+            {
+                adjustmentAmount = Math.Abs(request.Amount);
+            }
+            // "adjust" uses the amount as-is (can be positive or negative)
+
+            product.Inventory.AdjustStock(adjustmentAmount, Guid.Empty);
             await _productRepository.UpdateAsync(product);
+            await _unitOfWork.SaveChangesAsync();
 
             return Ok(new
             {
                 message = "Stock adjusted successfully",
                 productId = id,
-                adjustment = request.AdjustBy,
-                newStock = product.Inventory.CurrentStock
+                adjustment = adjustmentAmount,
+                operation = request.Operation ?? "adjust",
+                newStock = product.Inventory.QuantityAvailable
             });
         }
         catch (Exception ex)

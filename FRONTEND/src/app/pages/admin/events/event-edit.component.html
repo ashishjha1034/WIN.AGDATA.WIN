@@ -1,0 +1,226 @@
+<div class="event-edit-container">
+  <div class="page-header">
+    <div class="back-button">
+      <button type="button" class="btn-back" (click)="onCancel()">
+        ← Back to Event
+      </button>
+    </div>
+    <h1>Edit Event</h1>
+    <p class="subtitle" *ngIf="eventDetail">
+      {{ eventDetail.name }} • Status: <span class="status-badge" [ngClass]="'status-' + eventDetail.status">{{ eventDetail.status }}</span>
+    </p>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading event details...</p>
+  </div>
+
+  <!-- Error Alert -->
+  <div *ngIf="showErrorAlert && !isLoading" class="alert alert-danger">
+    <div class="alert-content">
+      <span class="alert-icon">⚠️</span>
+      <span class="alert-text">{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+    </div>
+  </div>
+
+  <!-- Form Card -->
+  <div *ngIf="!isLoading" class="form-card">
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <!-- Form Sections -->
+      <div class="form-section">
+        <h3 class="section-title">Event Details</h3>
+
+        <!-- Event Name -->
+        <div class="form-group">
+          <label for="name" class="form-label">
+            Event Name <span class="required">*</span>
+          </label>
+          <input
+            id="name"
+            type="text"
+            class="form-input"
+            formControlName="name"
+            placeholder="e.g., Spring Sales Contest"
+            [class.is-invalid]="f['name'].invalid && f['name'].touched"
+          />
+          <div *ngIf="f['name'].invalid && f['name'].touched" class="error-text">
+            <span *ngIf="f['name'].hasError('required')">Event name is required</span>
+            <span *ngIf="f['name'].hasError('minlength')">Minimum 3 characters</span>
+            <span *ngIf="f['name'].hasError('maxlength')">Maximum 100 characters</span>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label for="description" class="form-label">
+            Description <span class="required">*</span>
+          </label>
+          <textarea
+            id="description"
+            class="form-textarea"
+            formControlName="description"
+            placeholder="Describe the event purpose and key details..."
+            rows="4"
+            [class.is-invalid]="f['description'].invalid && f['description'].touched"
+          ></textarea>
+          <div *ngIf="f['description'].invalid && f['description'].touched" class="error-text">
+            <span *ngIf="f['description'].hasError('required')">Description is required</span>
+            <span *ngIf="f['description'].hasError('minlength')">Minimum 10 characters</span>
+            <span *ngIf="f['description'].hasError('maxlength')">Maximum 500 characters</span>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-group">
+          <label for="location" class="form-label">Location</label>
+          <input
+            id="location"
+            type="text"
+            class="form-input"
+            formControlName="location"
+            placeholder="e.g., Conference Room A or Virtual"
+          />
+        </div>
+      </div>
+
+      <!-- Date & Time Section -->
+      <div class="form-section">
+        <h3 class="section-title">Event Timeline</h3>
+
+        <div class="form-row">
+          <!-- Registration Deadline -->
+          <div class="form-group">
+            <label for="registrationDeadline" class="form-label">
+              Registration Deadline <span class="required">*</span>
+            </label>
+            <input
+              id="registrationDeadline"
+              type="date"
+              class="form-input"
+              formControlName="registrationDeadline"
+              [class.is-invalid]="f['registrationDeadline'].invalid && f['registrationDeadline'].touched"
+            />
+            <small class="form-hint">Registrations close on this date</small>
+          </div>
+
+          <!-- Event Start Date -->
+          <div class="form-group">
+            <label for="eventDate" class="form-label">
+              Event Start Date <span class="required">*</span>
+            </label>
+            <input
+              id="eventDate"
+              type="date"
+              class="form-input"
+              formControlName="eventDate"
+              [class.is-invalid]="f['eventDate'].invalid && f['eventDate'].touched"
+            />
+            <small class="form-hint">When the event begins</small>
+          </div>
+        </div>
+
+        <!-- Event End Date -->
+        <div class="form-group">
+          <label for="endDate" class="form-label">
+            Event End Date <span class="required">*</span>
+          </label>
+          <input
+            id="endDate"
+            type="date"
+            class="form-input"
+            formControlName="endDate"
+            [class.is-invalid]="f['endDate'].invalid && f['endDate'].touched"
+          />
+          <small class="form-hint">When the event concludes</small>
+        </div>
+      </div>
+
+      <!-- Points & Participants Section -->
+      <div class="form-section">
+        <h3 class="section-title">Participants & Points</h3>
+
+        <div class="form-row">
+          <!-- Max Participants -->
+          <div class="form-group">
+            <label for="maxParticipants" class="form-label">
+              Max Participants <span class="required">*</span>
+            </label>
+            <input
+              id="maxParticipants"
+              type="number"
+              class="form-input"
+              formControlName="maxParticipants"
+              placeholder="0"
+              min="1"
+              [class.is-invalid]="f['maxParticipants'].invalid && f['maxParticipants'].touched"
+            />
+            <small class="form-hint">Maximum number of event participants</small>
+          </div>
+
+          <!-- Points Per Participant -->
+          <div class="form-group">
+            <label for="pointsPerParticipant" class="form-label">
+              Points Per Participant <span class="required">*</span>
+              <span *ngIf="pointsLocked" class="lock-badge">🔒 Locked</span>
+            </label>
+            <input
+              id="pointsPerParticipant"
+              type="number"
+              class="form-input"
+              formControlName="pointsPerParticipant"
+              placeholder="0"
+              min="1"
+              [disabled]="pointsLocked"
+              [class.is-invalid]="f['pointsPerParticipant'].invalid && f['pointsPerParticipant'].touched"
+            />
+            <small class="form-hint" *ngIf="pointsLocked">
+              Points are locked when event is Active
+            </small>
+            <small class="form-hint" *ngIf="!pointsLocked">
+              Points per participant (editable only in Draft)
+            </small>
+          </div>
+        </div>
+
+        <!-- Calculated Total Points -->
+        <div class="info-box">
+          <div class="info-row">
+            <span class="info-label">Estimated Total Points Pool:</span>
+            <span class="info-value">
+              {{ (f['maxParticipants'].value || 0) * (f['pointsPerParticipant'].value || 0)
+              | number }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Info -->
+      <div class="form-section" *ngIf="eventDetail">
+        <h3 class="section-title">Event Status</h3>
+        <div class="info-box" [ngClass]="'info-' + eventDetail.status.toLowerCase()">
+          <strong>Current Status:</strong> {{ eventDetail.status }}
+          <small *ngIf="eventDetail.status === 'Draft'">
+            This event is in draft status and can be edited freely before activation.
+          </small>
+          <small *ngIf="eventDetail.status === 'Active'">
+            This event is active. Some fields like points are locked and cannot be changed.
+          </small>
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="isSubmitting">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!form.valid || isSubmitting">
+          <span *ngIf="!isSubmitting">Save Changes</span>
+          <span *ngIf="isSubmitting">Saving...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

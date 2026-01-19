@@ -69,4 +69,33 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
         return (items, totalCount);
     }
 
+    public async Task<IReadOnlyList<(int Month, int Year, int PointsEarned, int PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6)
+    {
+        var startDate = DateTime.UtcNow.AddMonths(-months);
+        
+        var transactions = await _context.UserPointsTransactions
+            .AsNoTracking()
+            .Where(t => t.Timestamp >= startDate)
+            .ToListAsync();
+
+        var chartData = transactions
+            .GroupBy(t => new { t.Timestamp.Year, t.Timestamp.Month })
+            .OrderBy(g => g.Key.Year)
+            .ThenBy(g => g.Key.Month)
+            .Select(g => (
+                Month: g.Key.Month,
+                Year: g.Key.Year,
+                PointsEarned: g.Where(t => t.TransactionType == PointsTransactionType.Earned).Sum(t => t.Points),
+                PointsRedeemed: g.Where(t => t.TransactionType == PointsTransactionType.Redeemed).Sum(t => t.Points)
+            ))
+            .ToList()
+            .AsReadOnly();
+
+        return chartData;
+    }
+
+    public void Add(UserPointsTransaction transaction)
+    {
+        _dbSet.Add(transaction);
+    }
 }

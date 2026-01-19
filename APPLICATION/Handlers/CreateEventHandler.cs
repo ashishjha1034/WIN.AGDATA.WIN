@@ -25,7 +25,12 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
         var @event = new Event(
             request.Name,
             request.Description,
-            request.StartDate); // EventDate parameter
+            request.EventDate,
+            request.TotalPointsPool,
+            request.Location,
+            request.MaxParticipants,
+            request.RegistrationEndDate,
+            request.BannerImageUrl);
 
         _eventRepository.Add(@event);
         await _unitOfWork.SaveChangesAsync(ct);

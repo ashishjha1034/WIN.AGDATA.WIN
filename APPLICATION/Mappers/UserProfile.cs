@@ -10,6 +10,7 @@ public class UserProfile : Profile
     {
         CreateMap<User, UserDto>()
             .ForMember(d => d.Email, o => o.MapFrom(s => s.Email.Value))
+            .ForMember(d => d.MustChangePassword, o => o.MapFrom(s => s.MustChangePassword))
             .ForMember(d => d.CurrentBalance, o => o.MapFrom(s => s.PointsAccount.CurrentBalance))
             .ForMember(d => d.TotalEarned, o => o.MapFrom(s => s.PointsAccount.TotalEarned))
             .ForMember(d => d.TotalRedeemed, o => o.MapFrom(s => s.PointsAccount.TotalRedeemed))

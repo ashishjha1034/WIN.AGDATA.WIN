@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
     public DbSet<UserPointsAccount> UserPointsAccounts => Set<UserPointsAccount>();
     public DbSet<UserPointsTransaction> UserPointsTransactions => Set<UserPointsTransaction>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();

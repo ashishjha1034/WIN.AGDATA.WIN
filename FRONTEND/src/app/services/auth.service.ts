@@ -1,13 +1,15 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, BehaviorSubject, tap, catchError } from 'rxjs';
 import { LoginRequest, LoginResponse, UserInfo } from '../models/auth.models';
+import { HttpErrorService } from './http-error.service';
+import { API_CONFIG } from '../config/api.config';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly API_URL = 'http://localhost:5000/api/auth';
+  private readonly API_URL = `${API_CONFIG.getApiUrl()}/auth`;
   private tokenKey = 'agdata_token';
   private refreshTokenKey = 'agdata_refresh_token';
   private userKey = 'agdata_user';
@@ -17,6 +19,7 @@ export class AuthService {
 
   private userSubject = new BehaviorSubject<UserInfo | null>(this.getStoredUser());
   public user$ = this.userSubject.asObservable();
+  public currentUser$ = this.userSubject.asObservable();
 
   private rolesSubject = new BehaviorSubject<string[]>(this.getStoredRoles());
   public roles$ = this.rolesSubject.asObservable();
@@ -27,24 +30,33 @@ export class AuthService {
   private errorSubject = new BehaviorSubject<string | null>(null);
   public error$ = this.errorSubject.asObservable();
 
-  constructor(private http: HttpClient) {
+  constructor(
+    private http: HttpClient,
+    private errorService: HttpErrorService
+  ) {
     this.validateTokenOnInit();
+    console.log('AuthService initialized with API URL:', this.API_URL);
   }
 
   login(credentials: LoginRequest): Observable<LoginResponse> {
     this.loadingSubject.next(true);
     this.errorSubject.next(null);
 
-    return this.http.post<LoginResponse>(`${this.API_URL}/login`, credentials).pipe(
+    const loginUrl = `${this.API_URL}${API_CONFIG.endpoints.auth.login}`;
+    console.log('Sending login request to:', loginUrl);
+
+    return this.http.post<LoginResponse>(loginUrl, credentials).pipe(
       tap(response => {
+        console.log('Login successful:', response);
         this.storeToken(response.token);
         this.storeRefreshToken(response.refreshToken);
         this.storeUser(response.user);
         this.updateAuthState(response.user);
         this.loadingSubject.next(false);
       }),
-      catchError(error => {
-        const errorMessage = error?.error?.message || 'Login failed. Please try again.';
+      catchError((error: HttpErrorResponse) => {
+        console.error('Login error response:', error);
+        const errorMessage = this.errorService.getErrorMessage(error);
         this.errorSubject.next(errorMessage);
         this.loadingSubject.next(false);
         throw error;
@@ -60,6 +72,50 @@ export class AuthService {
     this.errorSubject.next(null);
   }
 
+  forgotPassword(email: string): Observable<any> {
+    this.loadingSubject.next(true);
+    this.errorSubject.next(null);
+
+    const forgotUrl = `${this.API_URL}/forgot-password`;
+    console.log('Sending forgot password request to:', forgotUrl);
+
+    return this.http.post<any>(forgotUrl, { email }).pipe(
+      tap(response => {
+        console.log('Forgot password request successful');
+        this.loadingSubject.next(false);
+      }),
+      catchError((error: HttpErrorResponse) => {
+        console.error('Forgot password error:', error);
+        const errorMessage = this.errorService.getErrorMessage(error);
+        this.errorSubject.next(errorMessage);
+        this.loadingSubject.next(false);
+        throw error;
+      })
+    );
+  }
+
+  resetPassword(request: { token: string; newPassword: string }): Observable<any> {
+    this.loadingSubject.next(true);
+    this.errorSubject.next(null);
+
+    const resetUrl = `${this.API_URL}/reset-password`;
+    console.log('Sending reset password request to:', resetUrl);
+
+    return this.http.post<any>(resetUrl, request).pipe(
+      tap(response => {
+        console.log('Reset password successful');
+        this.loadingSubject.next(false);
+      }),
+      catchError((error: HttpErrorResponse) => {
+        console.error('Reset password error:', error);
+        const errorMessage = this.errorService.getErrorMessage(error);
+        this.errorSubject.next(errorMessage);
+        this.loadingSubject.next(false);
+        throw error;
+      })
+    );
+  }
+
   refreshToken(): Observable<LoginResponse> {
     const refreshToken = this.getRefreshToken();
     const token = this.getToken();
@@ -69,7 +125,9 @@ export class AuthService {
       throw new Error('No refresh token available');
     }
 
-    return this.http.post<LoginResponse>(`${this.API_URL}/refresh-token`, {
+    const refreshUrl = `${this.API_URL}${API_CONFIG.endpoints.auth.refreshToken}`;
+
+    return this.http.post<LoginResponse>(refreshUrl, {
       token,
       refreshToken
     }).pipe(
@@ -77,7 +135,8 @@ export class AuthService {
         this.storeToken(response.token);
         this.storeRefreshToken(response.refreshToken);
       }),
-      catchError(error => {
+      catchError((error: HttpErrorResponse) => {
+        console.error('Token refresh error:', error);
         this.logout();
         throw error;
       })
@@ -98,6 +157,10 @@ export class AuthService {
 
   getUser(): UserInfo | null {
     return this.userSubject.value;
+  }
+
+  getCurrentUser(): UserInfo | null {
+    return this.getStoredUser();
   }
 
   getRoles(): string[] {

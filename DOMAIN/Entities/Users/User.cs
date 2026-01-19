@@ -12,6 +12,8 @@ public class User : AuditableEntity<Guid>, IActivatable
     public string FirstName { get; private set; } = null!;
     public string LastName { get; private set; } = null!;
     public bool IsActive { get; private set; } = true;
+    public bool MustChangePassword { get; private set; } = false;
+    public DateTime? LastPasswordChangedAt { get; private set; }
 
     public UserPointsAccount PointsAccount { get; private set; } = new();
     public ICollection<UserRoleAssignment> Roles { get; private set; } = new List<UserRoleAssignment>();
@@ -38,10 +40,36 @@ public class User : AuditableEntity<Guid>, IActivatable
     {
         ValidationGuards.NotNullOrWhiteSpace(password, nameof(password));
         _passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
+        LastPasswordChangedAt = DateTime.UtcNow;
+        MustChangePassword = false;
     }
 
     public bool VerifyPassword(string password)
         => BCrypt.Net.BCrypt.Verify(password, _passwordHash);
+
+    public void RequirePasswordChange()
+    {
+        MustChangePassword = true;
+    }
+
+    public void ChangePassword(string currentPassword, string newPassword)
+    {
+        ValidationGuards.NotNullOrWhiteSpace(currentPassword, nameof(currentPassword));
+        ValidationGuards.NotNullOrWhiteSpace(newPassword, nameof(newPassword));
+
+        if (!VerifyPassword(currentPassword))
+            throw new InvalidOperationException("Current password is incorrect");
+
+        SetPassword(newPassword);
+    }
+
+    public void ForceSetTemporaryPassword(string temporaryPassword, bool byAdmin = false)
+    {
+        ValidationGuards.NotNullOrWhiteSpace(temporaryPassword, nameof(temporaryPassword));
+        _passwordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword);
+        MustChangePassword = true;
+        LastPasswordChangedAt = DateTime.UtcNow;
+    }
 
     public void Activate() => IsActive = true;
     public void Deactivate(string reason) => IsActive = false;

@@ -1,4 +1,4 @@
-﻿
+﻿using Humanizer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -13,34 +13,48 @@ using WIN.AGDATA.WIN.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===== Application & Infrastructure =====
+// =======================================================
+// Application & Infrastructure
+// =======================================================
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// ===== JWT Configuration =====
+// =======================================================
+// JWT Configuration
+// =======================================================
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
-var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured");
-var audience = jwtSection["Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured");
 
-var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+var secretKey = jwtSection["SecretKey"]
+	?? throw new InvalidOperationException("JWT SecretKey is not configured");
 
+var issuer = jwtSection["Issuer"]
+	?? throw new InvalidOperationException("JWT Issuer is not configured");
+
+var audience = jwtSection["Audience"]
+	?? throw new InvalidOperationException("JWT Audience is not configured");
+
+var signingKey = new SymmetricSecurityKey(
+	Encoding.UTF8.GetBytes(secretKey)
+);
+
+// =======================================================
+// Authentication (JWT Bearer)
+// =======================================================
 builder.Services
-	.AddAuthentication(options =>
-	{
-		options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-		options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-	})
+	.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 	.AddJwtBearer(options =>
 	{
 		options.TokenValidationParameters = new TokenValidationParameters
 		{
 			ValidateIssuerSigningKey = true,
 			IssuerSigningKey = signingKey,
+
 			ValidateIssuer = true,
 			ValidIssuer = issuer,
+
 			ValidateAudience = true,
 			ValidAudience = audience,
+
 			ValidateLifetime = true,
 			ClockSkew = TimeSpan.Zero
 		};
@@ -49,89 +63,101 @@ builder.Services
 		{
 			OnAuthenticationFailed = ctx =>
 			{
-				if (ctx.Exception is SecurityTokenExpiredException)
-					ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+				Console.WriteLine($"[JWT] Authentication failed: {ctx.Exception.Message}");
+				return Task.CompletedTask;
+			},
+			OnChallenge = ctx =>
+			{
+				Console.WriteLine($"[JWT] Challenge: {ctx.Error} - {ctx.ErrorDescription}");
+				return Task.CompletedTask;
+			},
+			OnMessageReceived = ctx =>
+			{
+				var token = ctx.Request.Headers["Authorization"]
+					.FirstOrDefault()?
+					.Split(" ")
+					.Last();
+
+				if (!string.IsNullOrWhiteSpace(token))
+				{
+					ctx.Token = token;
+				}
+
 				return Task.CompletedTask;
 			}
 		};
 	});
 
-// ===== Authorization Policies =====
+// =======================================================
+// Authorization
+// =======================================================
 builder.Services.AddAuthorization(options =>
 {
 	options.DefaultPolicy = new AuthorizationPolicyBuilder()
 		.RequireAuthenticatedUser()
 		.Build();
 
-	options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-	options.AddPolicy("ManagerOrAdmin", policy => policy.RequireRole("Manager", "Admin"));
-	options.AddPolicy("EmployeeOrAbove", policy => policy.RequireRole("Employee", "Manager", "Admin"));
+	options.AddPolicy("AdminOnly", policy =>
+		policy.RequireRole("Admin"));
+
+	options.AddPolicy("ManagerOrAdmin", policy =>
+		policy.RequireRole("Manager", "Admin"));
+
+	options.AddPolicy("EmployeeOrAbove", policy =>
+		policy.RequireRole("Employee", "Manager", "Admin"));
+
+	options.AddPolicy("PasswordChanged", policy =>
+		policy.RequireAssertion(context =>
+		{
+			var isAdmin = context.User.IsInRole("Admin");
+			var pwdChangedClaim = context.User.FindFirst("pwdChanged")?.Value;
+			return isAdmin || pwdChangedClaim == "true";
+		}));
 });
 
-// ===== CORS Configuration (define ONCE, before Build) =====
-// IMPORTANT: WithOrigins must list EXACT origins (scheme + host + port).
-// We include both swagger dev origins and typical Angular dev origins.
+// =======================================================
+// CORS
+// =======================================================
 builder.Services.AddCors(options =>
 {
 	options.AddPolicy("AllowFrontend", policy =>
 	{
 		policy.WithOrigins(
-				// Swagger served over HTTP in dev
 				"http://localhost:5155",
-				// Swagger served over HTTPS in dev
 				"https://localhost:7113",
-				// Typical Angular dev ports (HTTP/HTTPS)
 				"http://localhost:4200",
 				"https://localhost:4200",
-				// Add any custom frontend origins you use
 				"http://localhost:3000",
 				"https://localhost:3000"
 			)
 			.AllowAnyHeader()
 			.AllowAnyMethod()
-			.AllowCredentials(); // only if you use cookies/auth flows needing credentials
+			.AllowCredentials();
 	});
 });
 
-// ===== Swagger =====
+// =======================================================
+// Swagger
+// =======================================================
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
 	options.SwaggerDoc("v1", new OpenApiInfo
 	{
-		Title = "WIN.AGDATA.WIN - Reward Points Management System API",
+		Title = "WIN.AGDATA.WIN - Reward Points API",
 		Version = "v1.0.0",
-		Description = "Production-ready API for enterprise reward points system with JWT authentication and role-based access control",
-		Contact = new OpenApiContact
-		{
-			Name = "AGDATA Support",
-			Email = "support@agdata.com",
-			Url = new Uri("https://agdata.com")
-		},
-		License = new OpenApiLicense
-		{
-			Name = "MIT License",
-			Url = new Uri("https://opensource.org/licenses/MIT")
-		}
+		Description = "JWT secured API with role-based authorization"
 	});
 
-	// XML comments (optional, if file exists)
-	var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-	var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-	if (File.Exists(xmlPath))
-		options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
-
-	// JWT auth in Swagger
+	// JWT Support in Swagger
 	options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
 	{
 		Name = "Authorization",
 		Type = SecuritySchemeType.Http,
-		Scheme = "bearer",
+		Scheme = "Bearer",
 		BearerFormat = "JWT",
-		Description =
-			"JWT Authorization header using the Bearer scheme.\n" +
-			"Enter 'Bearer' [space] and then your token.\n" +
-			"Example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+		In = ParameterLocation.Header,
+		Description = "Paste ONLY the JWT token. Do NOT prefix with Bearer."
 	});
 
 	options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -139,36 +165,49 @@ builder.Services.AddSwaggerGen(options =>
 		{
 			new OpenApiSecurityScheme
 			{
-				Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+				Reference = new OpenApiReference
+				{
+					Type = ReferenceType.SecurityScheme,
+					Id = "Bearer"
+				}
 			},
 			Array.Empty<string>()
 		}
 	});
 
 	options.EnableAnnotations();
-	options.OrderActionsBy(apiDesc => $"{apiDesc.ActionDescriptor.RouteValues["controller"]}_{apiDesc.HttpMethod}");
 });
 
-// ===== Controllers =====
+// =======================================================
+// Controllers
+// =======================================================
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// ===== Swagger UI =====
+// =======================================================
+// JWT Config Debug (Startup Log)
+// =======================================================
+using (var scope = app.Services.CreateScope())
+{
+	var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+	Console.WriteLine($"[JWT] Issuer   = {cfg["Jwt:Issuer"]}");
+	Console.WriteLine($"[JWT] Audience = {cfg["Jwt:Audience"]}");
+	Console.WriteLine($"[JWT] Secret   = {(string.IsNullOrWhiteSpace(cfg["Jwt:SecretKey"]) ? "MISSING" : "PRESENT")}");
+}
+
+// =======================================================
+// Swagger UI
+// =======================================================
 if (app.Environment.IsDevelopment())
 {
-	app.UseSwagger(c => { c.SerializeAsV2 = false; });
+	app.UseSwagger();
 	app.UseSwaggerUI(options =>
 	{
-		options.SwaggerEndpoint("/swagger/v1/swagger.json", "Reward Points System API v1.0");
-		options.RoutePrefix = string.Empty; // serve at root
-		options.DefaultModelsExpandDepth(2);
-		options.DefaultModelExpandDepth(2);
-		options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
-		options.EnableFilter();
-		options.ShowCommonExtensions();
+		options.SwaggerEndpoint("/swagger/v1/swagger.json", "WIN.AGDATA.WIN API v1");
+		options.RoutePrefix = string.Empty;
 		options.DisplayOperationId();
-		options.DocumentTitle = "WIN.AGDATA.WIN - API Documentation";
+		options.EnableFilter();
 	});
 }
 else
@@ -176,17 +215,24 @@ else
 	app.UseExceptionHandler("/error");
 }
 
-// ===== Security & CORS (ORDER MATTERS) =====
-app.UseHttpsRedirection();     // causes redirect from http://5155 to https://7113 if both profiles are enabled
-app.UseCors("AllowFrontend");  // MUST come before auth/authorization to apply to preflight requests
+// =======================================================
+// Middleware Order (CRITICAL)
+// =======================================================
+app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ===== Controllers =====
+// =======================================================
+// Routes
+// =======================================================
 app.MapControllers();
 
-// ===== Health Check =====
+// =======================================================
+// Health Check
+// =======================================================
 app.MapGet("/health", () =>
 	Results.Ok(new
 	{
@@ -194,21 +240,20 @@ app.MapGet("/health", () =>
 		timestamp = DateTime.UtcNow,
 		environment = app.Environment.EnvironmentName
 	}))
-	.WithName("Health")
-	.WithOpenApi()
 	.AllowAnonymous();
 
-// ===== DB Init (migrate + seed) =====
+// =======================================================
+// Database Init (Migrate + Seed)
+// =======================================================
 using (var scope = app.Services.CreateScope())
 {
 	try
 	{
 		var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 		await db.Database.MigrateAsync();
-		Console.WriteLine("✓ Database migrations applied successfully");
-
 		await SeedData.SeedAsync(db);
-		Console.WriteLine("✓ Database seeding completed successfully");
+
+		Console.WriteLine("✓ Database initialized successfully");
 	}
 	catch (Exception ex)
 	{

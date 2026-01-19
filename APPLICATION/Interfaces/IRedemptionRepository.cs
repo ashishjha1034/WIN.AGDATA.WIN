@@ -8,7 +8,9 @@ public interface IRedemptionRepository
     Task<Redemption?> GetByIdWithDetailsAsync(Guid id);
     Task<IReadOnlyList<Redemption>> GetByUserIdAsync(Guid userId);
     Task<IReadOnlyList<Redemption>> GetPendingAsync();
+    Task<IReadOnlyList<Redemption>> GetAllWithDetailsAsync();
     void Add(Redemption redemption);
     Task UpdateAsync(Redemption redemption);
     Task<int> GetPendingCountAsync();
+    Task SaveChangesAsync();
 }

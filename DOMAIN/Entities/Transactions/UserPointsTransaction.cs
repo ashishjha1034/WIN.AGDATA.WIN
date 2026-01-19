@@ -1,5 +1,7 @@
 ﻿using WIN.AGDATA.WIN.Domain.Common;
 using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.Enums;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
@@ -40,5 +42,40 @@ public class UserPointsTransaction : Entity<Guid>
         BalanceAfter = balanceAfter;
         Timestamp = DateTime.UtcNow;
         ProcessedBy = processedBy;
+    }
+
+    // Factory method for easy creation
+    public static UserPointsTransaction CreateEarned(
+        Guid userId,
+        int points,
+        string source,
+        Guid? sourceId,
+        string description,
+        int balanceAfter,
+        Guid processedBy)
+        => new(userId, points, PointsTransactionType.Earned, source, sourceId, description, balanceAfter, processedBy);
+
+    public static UserPointsTransaction CreateRedeemed(
+        Guid userId,
+        int points,
+        string source,
+        Guid? sourceId,
+        string description,
+        int balanceAfter,
+        Guid processedBy)
+        => new(userId, points, PointsTransactionType.Redeemed, source, sourceId, description, balanceAfter, processedBy);
+
+    public static UserPointsTransaction CreateAdjusted(
+        Guid userId,
+        int points,
+        string source,
+        Guid? sourceId,
+        string description,
+        int balanceAfter,
+        Guid processedBy)
+    {
+        var transactionType = points > 0 ? PointsTransactionType.Earned : PointsTransactionType.Redeemed;
+        var absPoints = Math.Abs(points);
+        return new(userId, absPoints, transactionType, source, sourceId, description, balanceAfter, processedBy);
     }
 }

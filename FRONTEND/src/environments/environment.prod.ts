@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.agdata.com/api'
+  apiUrl: 'https://localhost:7113/'
 };

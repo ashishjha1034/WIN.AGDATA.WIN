@@ -9,7 +9,7 @@ public class EventProfile : Profile
     public EventProfile()
     {
         CreateMap<Event, EventDto>()
-            .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
-            .ForMember(d => d.ParticipantCount, o => o.MapFrom(s => s.Participants.Count));
+            .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
     }
 }
+

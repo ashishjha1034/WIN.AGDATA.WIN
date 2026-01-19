@@ -34,7 +34,10 @@
 
 .agdata-logo {
   width: 300px;
-  height: 150px;
+  height: auto;
+  max-width: 90%;
+  display: block;
+  object-fit: contain;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 

@@ -1,0 +1,239 @@
+<div class="admin-layout">
+  <app-admin-sidebar></app-admin-sidebar>
+  
+  <div class="event-management-container">
+  <!-- Error Alert -->
+  <div *ngIf="showErrorAlert" class="alert alert-danger">
+    <div class="alert-content">
+      <span class="alert-icon">⚠️</span>
+      <span class="alert-text">{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1 class="page-title">Event Management</h1>
+      <p class="page-subtitle">Create, monitor, and control reward events</p>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-primary" (click)="createEvent()" title="Create Event">
+        <span class="btn-icon">➕</span>
+        Create Event
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div class="kpi-strip" *ngIf="kpi || isLoading">
+    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-content">
+        <div class="kpi-label">Total Events</div>
+        <div class="kpi-value">{{ kpi?.totalEvents || 0 }}</div>
+      </div>
+    </div>
+
+    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+      <div class="kpi-icon">▶️</div>
+      <div class="kpi-content">
+        <div class="kpi-label">Active Events</div>
+        <div class="kpi-value">{{ kpi?.activeEvents || 0 }}</div>
+      </div>
+    </div>
+
+    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-content">
+        <div class="kpi-label">Upcoming Events</div>
+        <div class="kpi-value">{{ kpi?.upcomingEvents || 0 }}</div>
+      </div>
+    </div>
+
+    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-content">
+        <div class="kpi-label">Completed Events</div>
+        <div class="kpi-value">{{ kpi?.completedEvents || 0 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Control Area -->
+  <div class="event-control-area">
+    <!-- Status Tabs & Filters -->
+    <div class="control-bar">
+      <div class="status-tabs">
+        <button 
+          *ngFor="let status of statusOptions"
+          class="tab-button"
+          [class.active]="activeStatusTab === status.value"
+          (click)="onStatusTabChange(status.value)"
+        >
+          {{ status.label }}
+        </button>
+      </div>
+
+      <div class="filter-controls">
+        <div class="search-box">
+          <input 
+            type="text" 
+            placeholder="Search events..."
+            [(ngModel)]="searchText"
+            (input)="onSearch(searchText)"
+            class="search-input"
+          />
+          <span class="search-icon">🔍</span>
+        </div>
+
+        <select class="filter-dropdown" title="Filter by participants">
+          <option value="">Participants</option>
+        </select>
+
+        <button class="btn-filter" title="More filters">
+          <span>⚙️</span> Filter
+        </button>
+      </div>
+    </div>
+
+    <!-- Events Table -->
+    <div class="table-container">
+      <div *ngIf="isLoading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading events...</p>
+      </div>
+
+      <div *ngIf="!isLoading && filteredEvents.length === 0" class="empty-state">
+        <div class="empty-icon">📭</div>
+        <p>No events found</p>
+        <p class="empty-subtext">Create your first event to get started</p>
+      </div>
+
+      <table class="events-table" *ngIf="!isLoading && filteredEvents.length > 0" #eventsTable>
+        <thead>
+          <tr class="table-header">
+            <th class="col-checkbox">
+              <input 
+                type="checkbox" 
+                [checked]="isAllSelected()"
+                (change)="toggleAllRows()"
+                class="checkbox"
+              />
+            </th>
+            <th class="col-name">Event Name</th>
+            <th class="col-status">Status</th>
+            <th class="col-date">Event Date</th>
+            <th class="col-participants">Participants</th>
+            <th class="col-points-pp">Points Per Participant</th>
+            <th class="col-total-points">Total Points</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            *ngFor="let event of filteredEvents"
+            class="table-row"
+            [class.selected]="selectedRows.has(event.id)"
+          >
+            <td class="col-checkbox">
+              <input 
+                type="checkbox" 
+                [checked]="selectedRows.has(event.id)"
+                (change)="toggleRowSelection(event.id, event)"
+                class="checkbox"
+              />
+            </td>
+            <td class="col-name">
+              <div class="event-name-cell">
+                <div class="event-name" (click)="openEventDetail(event.id)">
+                  {{ event.name }}
+                </div>
+                <div class="event-desc">{{ event.description | slice:0:50 }}...</div>
+              </div>
+            </td>
+            <td class="col-status">
+              <span 
+                class="status-badge"
+                [style.backgroundColor]="getStatusColor(event.status)"
+                [style.color]="getStatusTextColor(event.status)"
+              >
+                {{ event.status }}
+              </span>
+            </td>
+            <td class="col-date">
+              {{ formatDate(event.eventDate) }}
+            </td>
+            <td class="col-participants">
+              <span class="participant-count">
+                {{ event.participantCount }}<span *ngIf="event.maxParticipants"> / {{ event.maxParticipants }}</span>
+              </span>
+            </td>
+            <td class="col-points-pp">
+              <span class="points-value">{{ event.pointsPerParticipant | number }}</span>
+            </td>
+            <td class="col-total-points">
+              <span class="points-value">{{ event.totalPointsPool | number }}</span>
+            </td>
+            <td class="col-actions">
+              <button 
+                class="btn-action"
+                (click)="openEventDetail(event.id)"
+                title="View event details"
+              >
+                View
+              </button>
+              <button class="btn-more-row" title="More actions">⋮</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && filteredEvents.length === 0 && !hasLoadError" class="empty-state">
+      <div class="empty-icon">📭</div>
+      <h3 class="empty-title">No events yet</h3>
+      <p class="empty-description">
+        <ng-container *ngIf="activeStatusTab !== 'All'">
+          No <strong>{{ activeStatusTab }}</strong> events found
+        </ng-container>
+        <ng-container *ngIf="activeStatusTab === 'All' && searchText">
+          No events match your search
+        </ng-container>
+        <ng-container *ngIf="activeStatusTab === 'All' && !searchText">
+          Create your first event to get started
+        </ng-container>
+      </p>
+      <button class="btn btn-primary btn-empty-action" (click)="createEvent()">
+        ➕ Create First Event
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="!isLoading && filteredEvents.length > 0">
+      <div class="pagination-info">
+        Showing {{ (currentPage - 1) * pageSize + 1 }} to 
+        {{ Math.min(currentPage * pageSize, events.length) }} of {{ events.length }} events
+      </div>
+      <div class="pagination-controls">
+        <button 
+          class="btn-page"
+          [disabled]="currentPage === 1"
+          (click)="onPageChange(currentPage - 1)"
+        >
+          ◀
+        </button>
+        <span class="page-number">{{ currentPage }}</span>
+        <button 
+          class="btn-page"
+          [disabled]="currentPage >= getTotalPages()"
+          (click)="onPageChange(currentPage + 1)"
+        >
+          ▶
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

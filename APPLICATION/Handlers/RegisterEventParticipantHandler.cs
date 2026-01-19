@@ -19,14 +19,28 @@ public class RegisterEventParticipantHandler : IRequestHandler<RegisterEventPart
 
     public async Task Handle(RegisterEventParticipantCommand request, CancellationToken ct)
     {
-        var @event = await _eventRepository.GetByIdWithParticipantsAsync(request.EventId)
-                     ?? throw new InvalidOperationException("Event not found");
+        try
+        {
+            // Validate user exists
+            var user = await _userRepository.GetByIdAsync(request.UserId);
+            if (user == null)
+                throw new InvalidOperationException($"User with ID {request.UserId} not found");
 
-        var user = await _userRepository.GetByIdAsync(request.UserId)
-                   ?? throw new InvalidOperationException("User not found");
+            // Validate event exists
+            var @event = await _eventRepository.GetByIdAsync(request.EventId);
+            if (@event == null)
+                throw new InvalidOperationException($"Event with ID {request.EventId} not found");
 
-        @event.AddParticipant(request.UserId);
-
-        await _unitOfWork.SaveChangesAsync(ct);
+            // Register participant using repository method (avoids concurrency issues)
+            await _eventRepository.AddParticipantAsync(request.EventId, request.UserId);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to register for event: {ex.Message}", ex);
+        }
     }
 }

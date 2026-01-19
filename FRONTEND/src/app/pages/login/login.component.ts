@@ -1,14 +1,17 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
-  styleUrls: ['./login.component.css']
+  styleUrls: ['./login.component.css'],
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule]
 })
 export class LoginComponent implements OnInit, OnDestroy {
   loginForm!: FormGroup;
@@ -33,12 +36,17 @@ export class LoginComponent implements OnInit, OnDestroy {
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
 
-    // Get return URL from route parameters or default to '/'
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
+    // Get return URL from route parameters or default to '/employee/dashboard'
+    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/employee/dashboard';
 
-    // If already logged in, redirect
+    // If already logged in, redirect based on role
     if (this.authService.isAuthenticated()) {
-      this.router.navigateByUrl(this.returnUrl);
+      const user = this.authService.getCurrentUser();
+      if (user && user.roles && user.roles.includes('Admin')) {
+        this.router.navigateByUrl('/admin/dashboard');
+      } else {
+        this.router.navigateByUrl(this.returnUrl);
+      }
     }
 
     // Subscribe to loading and error states
@@ -48,7 +56,12 @@ export class LoginComponent implements OnInit, OnDestroy {
 
     this.authService.error$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(error => this.error = error);
+      .subscribe(error => {
+        if (error) {
+          this.error = error;
+          console.error('Auth error:', error);
+        }
+      });
   }
 
   get emailControl() {
@@ -71,32 +84,42 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.authService.clearError();
     const { email, password } = this.loginForm.value;
 
+    console.log('Attempting login with:', email);
+
     this.authService.login({ email, password })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          console.log('Login successful. Response:', response);
+          console.log('Token stored:', !!this.authService.getToken());
+          
           // Login successful, get user roles
           const roles = response.user.roles;
-          console.log('Login successful. User roles:', roles);
+          console.log('User roles:', roles);
 
-          // Navigate based on role
-          if (roles.includes('Admin')) {
-            this.router.navigateByUrl('/admin/dashboard');
-          } else if (roles.includes('Manager')) {
-            this.router.navigateByUrl('/manager/dashboard');
-          } else {
-            this.router.navigateByUrl('/employee/dashboard');
-          }
+          // Add small delay to ensure state is settled before redirecting
+          setTimeout(() => {
+            // Navigate based on role
+            if (roles.includes('Admin')) {
+              console.log('Redirecting to admin dashboard');
+              this.router.navigateByUrl('/admin/dashboard');
+            } else if (roles.includes('Manager')) {
+              console.log('Redirecting to manager dashboard');
+              this.router.navigateByUrl('/manager/dashboard');
+            } else {
+              console.log('Redirecting to employee dashboard');
+              this.router.navigateByUrl('/employee/dashboard');
+            }
+          }, 100);
         },
         error: (error) => {
           console.error('Login failed:', error);
           // Error is already handled by the service
+          if (!this.error) {
+            this.error = error?.error?.message || error?.error?.title || 'An error occurred during login';
+          }
         }
       });
-  }
-
-  navigateToRegister(): void {
-    this.router.navigate(['/register']);
   }
 
   ngOnDestroy(): void {

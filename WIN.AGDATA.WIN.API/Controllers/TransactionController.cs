@@ -9,7 +9,7 @@ namespace WIN.AGDATA.WIN.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Policy = "PasswordChanged")]
 public class TransactionController : ControllerBase
 {
     private readonly ITransactionRepository _transactionRepository;
@@ -145,8 +145,6 @@ public class TransactionController : ControllerBase
             if (user == null)
                 return NotFound(new { message = "User not found" });
 
-            var totalEarned = await _transactionRepository.GetTotalEarnedAsync();
-            var totalRedeemed = await _transactionRepository.GetTotalRedeemedAsync();
             var userTransactionCount = await _transactionRepository
                 .GetUserTransactionCountAsync(currentUserId);
 
@@ -158,11 +156,6 @@ public class TransactionController : ControllerBase
                     currentBalance = user.PointsAccount.CurrentBalance,
                     totalEarned = user.PointsAccount.TotalEarned,
                     totalRedeemed = user.PointsAccount.TotalRedeemed
-                },
-                system = new
-                {
-                    totalPointsEarned = totalEarned,
-                    totalPointsRedeemed = totalRedeemed
                 },
                 userStats = new
                 {

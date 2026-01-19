@@ -18,6 +18,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.FirstName).IsRequired().HasMaxLength(100);
         builder.Property(u => u.LastName).IsRequired().HasMaxLength(100);
         builder.Property(u => u.IsActive).HasDefaultValue(true);
+        builder.Property(u => u.MustChangePassword).HasDefaultValue(false);
+        builder.Property(u => u.LastPasswordChangedAt).HasColumnType("datetime2").IsRequired(false);
         builder.Property("_passwordHash").HasColumnName("PasswordHash").IsRequired();
 
         builder.HasOne(u => u.PointsAccount)

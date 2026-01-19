@@ -15,4 +15,6 @@ public interface ITransactionRepository
     Task<int> GetUserTransactionCountAsync(Guid userId);
     Task<int> GetTotalEarnedAsync();
     Task<int> GetTotalRedeemedAsync();
+    Task<IReadOnlyList<(int Month, int Year, int PointsEarned, int PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6);
+    void Add(UserPointsTransaction transaction);
 }

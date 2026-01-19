@@ -7,6 +7,10 @@ public interface IEventRepository
     Task<Event?> GetByIdAsync(Guid id);
     Task<IReadOnlyList<Event>> GetAllAsync();
     Task<Event?> GetByIdWithParticipantsAsync(Guid id);
+    Task<IReadOnlyList<Event>> GetRecentEventsAsync(int count = 5);
+    Task<IReadOnlyList<Event>> GetUserEventsAsync(Guid userId);
+    Task<bool> IsUserRegisteredForEventAsync(Guid eventId, Guid userId);
+    Task AddParticipantAsync(Guid eventId, Guid userId);
     void Add(Event @event);
     Task UpdateAsync(Event @event);
 }

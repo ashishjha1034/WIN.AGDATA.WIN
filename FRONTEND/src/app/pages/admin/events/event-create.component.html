@@ -1,0 +1,207 @@
+<div class="event-create-container">
+  <div class="page-header">
+    <div class="back-button">
+      <button type="button" class="btn-back" (click)="onCancel()">
+        ← Back to Events
+      </button>
+    </div>
+    <h1>Create New Event</h1>
+    <p class="subtitle">Set up a new event to manage participants and award points</p>
+  </div>
+
+  <!-- Error Alert -->
+  <div *ngIf="showErrorAlert" class="alert alert-danger">
+    <div class="alert-content">
+      <span class="alert-icon">⚠️</span>
+      <span class="alert-text">{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+    </div>
+  </div>
+
+  <!-- Form Card -->
+  <div class="form-card">
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <!-- Form Sections -->
+      <div class="form-section">
+        <h3 class="section-title">Event Details</h3>
+
+        <!-- Event Name -->
+        <div class="form-group">
+          <label for="name" class="form-label">
+            Event Name <span class="required">*</span>
+          </label>
+          <input
+            id="name"
+            type="text"
+            class="form-input"
+            formControlName="name"
+            placeholder="e.g., Spring Sales Contest"
+            [class.is-invalid]="f['name'].invalid && f['name'].touched"
+          />
+          <div *ngIf="f['name'].invalid && f['name'].touched" class="error-text">
+            <span *ngIf="f['name'].hasError('required')">Event name is required</span>
+            <span *ngIf="f['name'].hasError('minlength')">Minimum 3 characters</span>
+            <span *ngIf="f['name'].hasError('maxlength')">Maximum 100 characters</span>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label for="description" class="form-label">
+            Description <span class="required">*</span>
+          </label>
+          <textarea
+            id="description"
+            class="form-textarea"
+            formControlName="description"
+            placeholder="Describe the event purpose and key details..."
+            rows="4"
+            [class.is-invalid]="f['description'].invalid && f['description'].touched"
+          ></textarea>
+          <div *ngIf="f['description'].invalid && f['description'].touched" class="error-text">
+            <span *ngIf="f['description'].hasError('required')">Description is required</span>
+            <span *ngIf="f['description'].hasError('minlength')">Minimum 10 characters</span>
+            <span *ngIf="f['description'].hasError('maxlength')">Maximum 500 characters</span>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-group">
+          <label for="location" class="form-label">Location</label>
+          <input
+            id="location"
+            type="text"
+            class="form-input"
+            formControlName="location"
+            placeholder="e.g., Conference Room A or Virtual"
+          />
+          <div *ngIf="f['location'].invalid && f['location'].touched" class="error-text">
+            <span>Location max 200 characters</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date & Time Section -->
+      <div class="form-section">
+        <h3 class="section-title">Event Timeline</h3>
+
+        <div class="form-row">
+          <!-- Registration End Date -->
+          <div class="form-group">
+            <label for="registrationEndDate" class="form-label">
+              Registration End Date <span class="required">*</span>
+            </label>
+            <input
+              id="registrationEndDate"
+              type="date"
+              class="form-input"
+              formControlName="registrationEndDate"
+              [class.is-invalid]="f['registrationEndDate'].invalid && f['registrationEndDate'].touched"
+            />
+            <small class="form-hint">Registrations close on this date</small>
+          </div>
+
+          <!-- Event Start Date -->
+          <div class="form-group">
+            <label for="eventDate" class="form-label">
+              Event Date <span class="required">*</span>
+            </label>
+            <input
+              id="eventDate"
+              type="date"
+              class="form-input"
+              formControlName="eventDate"
+              [class.is-invalid]="f['eventDate'].invalid && f['eventDate'].touched"
+            />
+            <small class="form-hint">When the event takes place</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Points & Participants Section -->
+      <div class="form-section">
+        <h3 class="section-title">Event Capacity & Points</h3>
+
+        <div class="form-row">
+          <!-- Max Participants -->
+          <div class="form-group">
+            <label for="maxParticipants" class="form-label">
+              Max Participants (Optional)
+            </label>
+            <input
+              id="maxParticipants"
+              type="number"
+              class="form-input"
+              formControlName="maxParticipants"
+              placeholder="Leave empty for unlimited"
+              min="0"
+            />
+            <small class="form-hint">Maximum number of participants (0 or empty = unlimited)</small>
+          </div>
+
+          <!-- Total Points Pool -->
+          <div class="form-group">
+            <label for="totalPoints" class="form-label">
+              Total Points Pool <span class="required">*</span>
+            </label>
+            <input
+              id="totalPoints"
+              type="number"
+              class="form-input"
+              formControlName="totalPoints"
+              placeholder="0"
+              min="1"
+              [class.is-invalid]="f['totalPoints'].invalid && f['totalPoints'].touched"
+            />
+            <small class="form-hint">Total points available for this event</small>
+            <div *ngIf="f['totalPoints'].invalid && f['totalPoints'].touched" class="error-text">
+              <span *ngIf="f['totalPoints'].hasError('required')">Total points is required</span>
+              <span *ngIf="f['totalPoints'].hasError('min')">Minimum 1 point</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box">
+          <div class="info-row">
+            <span class="info-label">💡 Total Points Pool:</span>
+            <span class="info-value">
+              {{ f['totalPoints'].value || 0 | number }} points
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Section -->
+      <div class="form-section">
+        <h3 class="section-title">Event Status</h3>
+        <div class="info-box info-blue">
+          <span>✓ New events are created in <strong>Draft</strong> status and must be activated manually</span>
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="isSubmitting">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!form.valid || isSubmitting">
+          <span *ngIf="!isSubmitting">Create Event</span>
+          <span *ngIf="isSubmitting">Creating...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Help Text -->
+  <div class="help-section">
+    <h3>Important Notes</h3>
+    <ul>
+      <li>Events start in <strong>Draft</strong> status and must be activated manually</li>
+      <li>Registration deadline should be <strong>before or on</strong> the event date</li>
+      <li>Total points pool defines the maximum points available for distribution</li>
+      <li>Points can be distributed manually or based on participant rankings</li>
+      <li>You can add participants manually or they can register themselves</li>
+    </ul>
+  </div>
+</div>
