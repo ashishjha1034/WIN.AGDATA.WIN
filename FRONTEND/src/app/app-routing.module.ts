@@ -13,6 +13,11 @@ import { ProductManagementComponent } from './pages/admin/products/product-manag
 import { ProductDetailComponent } from './pages/admin/products/product-detail.component';
 import { RedemptionManagementComponent } from './pages/admin/redemptions/redemption-management.component';
 import { EmployeeDashboardComponent } from './pages/employee-dashboard/employee-dashboard.component';
+import { UserDashboardComponent } from './pages/user/user-dashboard/user-dashboard.component';
+import { UserEventsComponent } from './pages/user/events/user-events.component';
+import { UserProductsComponent } from './pages/user/products/user-products.component';
+import { UserRedemptionsComponent } from './pages/user/redemptions/user-redemptions.component';
+import { UserTransactionsComponent } from './pages/user/transactions/user-transactions.component';
 import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
 import { AuthGuard } from './services/auth.guard';
 
@@ -89,6 +94,36 @@ export const appRoutes: Routes = [
     data: { roles: ['Admin'] }
   },
   {
+    path: 'user/dashboard',
+    component: UserDashboardComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Employee', 'Admin'] }
+  },
+  {
+    path: 'user/events',
+    component: UserEventsComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Employee', 'Admin'] }
+  },
+  {
+    path: 'user/products',
+    component: UserProductsComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Employee', 'Admin'] }
+  },
+  {
+    path: 'user/redemptions',
+    component: UserRedemptionsComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Employee', 'Admin'] }
+  },
+  {
+    path: 'user/transactions',
+    component: UserTransactionsComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Employee', 'Admin'] }
+  },
+  {
     path: 'employee/dashboard',
     component: EmployeeDashboardComponent,
     canActivate: [AuthGuard],
@@ -96,9 +131,8 @@ export const appRoutes: Routes = [
   },
   {
     path: 'dashboard',
-    component: EmployeeDashboardComponent,
-    canActivate: [AuthGuard],
-    data: { roles: ['Employee', 'Admin'] }
+    redirectTo: '/user/dashboard',
+    pathMatch: 'full'
   },
   {
     path: 'unauthorized',

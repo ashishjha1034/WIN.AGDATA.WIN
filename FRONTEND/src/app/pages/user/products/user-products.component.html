@@ -1,0 +1,46 @@
+<div class="user-page-wrapper">
+  <app-user-sidebar></app-user-sidebar>
+
+  <div class="user-page-main">
+    <div class="page-header">
+      <div class="search-container">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" class="search-input" placeholder="Search..." [(ngModel)]="searchQuery" />
+      </div>
+
+      <div class="header-right">
+        <div class="user-menu">
+          <span class="user-label">Employee</span>
+          <div class="user-avatar-small">
+            {{ currentUser?.firstName?.charAt(0) || '' }}{{ currentUser?.lastName?.charAt(0) || '' }}
+          </div>
+        </div>
+        <button class="logout-btn" (click)="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="page-content">
+      <h1 class="page-title">Products</h1>
+
+      <div *ngIf="isLoading" class="loading-indicator">
+        <div class="spinner"></div>
+        <p>Loading products...</p>
+      </div>
+
+      <div class="products-grid" *ngIf="!isLoading && products.length > 0">
+        <div class="product-card" *ngFor="let product of products">
+          <h3>{{ product.name }}</h3>
+          <p>{{ product.price }} Points</p>
+          <p>Stock: {{ product.currentStock }}</p>
+        </div>
+      </div>
+
+      <div *ngIf="!isLoading && products.length === 0" class="empty-state">
+        <p>No products available</p>
+      </div>
+    </div>
+  </div>
+</div>

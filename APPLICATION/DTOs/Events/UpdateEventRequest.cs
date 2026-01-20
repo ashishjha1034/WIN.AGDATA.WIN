@@ -1,23 +1,21 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 
-public class CreateEventRequest
+/// <summary>
+/// Request DTO for updating an event.
+/// Only events in Draft (Created) status can be updated.
+/// </summary>
+public class UpdateEventRequest
 {
     [Required(ErrorMessage = "Event name is required")]
     public string Name { get; set; } = null!;
 
-    [Required(ErrorMessage = "Event date is required")]
-    public DateTime EventDate { get; set; }
-
     [Required(ErrorMessage = "Description is required")]
     public string Description { get; set; } = null!;
 
-    public int? TotalPointsPool { get; set; }
-
-    public string? Location { get; set; }
-
-    public int? MaxParticipants { get; set; }
+    [Required(ErrorMessage = "Event date is required")]
+    public DateTime EventDate { get; set; }
 
     /// <summary>
     /// Registration deadline (UTC). Registration is allowed until this date/time (inclusive).
@@ -26,14 +24,11 @@ public class CreateEventRequest
     [Required(ErrorMessage = "RegistrationEndDateUtc is required. Registration deadline must be specified.")]
     public DateTime RegistrationEndDateUtc { get; set; }
 
+    public string? Location { get; set; }
+
+    public int? MaxParticipants { get; set; }
+
     public string? BannerImageUrl { get; set; }
 
-    // Keep old property for backwards compatibility (maps to RegistrationEndDateUtc)
-    [Obsolete("Use RegistrationEndDateUtc instead")]
-    public DateTime? RegistrationEndDate
-    {
-        get => RegistrationEndDateUtc;
-        set { if (value.HasValue) RegistrationEndDateUtc = value.Value; }
-    }
+    public int? TotalPointsPool { get; set; }
 }
-

@@ -36,8 +36,8 @@ export class LoginComponent implements OnInit, OnDestroy {
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
 
-    // Get return URL from route parameters or default to '/employee/dashboard'
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/employee/dashboard';
+    // Get return URL from route parameters or default to '/user/dashboard'
+    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/user/dashboard';
 
     // If already logged in, redirect based on role
     if (this.authService.isAuthenticated()) {
@@ -107,8 +107,8 @@ export class LoginComponent implements OnInit, OnDestroy {
               console.log('Redirecting to manager dashboard');
               this.router.navigateByUrl('/manager/dashboard');
             } else {
-              console.log('Redirecting to employee dashboard');
-              this.router.navigateByUrl('/employee/dashboard');
+              console.log('Redirecting to user dashboard');
+              this.router.navigateByUrl('/user/dashboard');
             }
           }, 100);
         },

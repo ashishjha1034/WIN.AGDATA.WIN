@@ -1,4 +1,6 @@
-﻿namespace WIN.AGDATA.WIN.Domain.Entities.Events;
+﻿using WIN.AGDATA.WIN.Domain.Exceptions;
+
+namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
 public class EventParticipant
 {
@@ -28,15 +30,32 @@ public class EventParticipant
         AttendanceStatus = AttendanceStatus.Registered;
     }
 
+    /// <summary>
+    /// Awards points to this participant.
+    /// </summary>
+    /// <param name="points">Number of points to award</param>
+    /// <param name="rank">Optional rank position</param>
+    /// <param name="awardedBy">ID of the admin awarding points</param>
+    /// <exception cref="DomainException">Thrown if participant is not checked-in or already has points awarded</exception>
     public void AwardPoints(int points, int? rank, Guid awardedBy)
     {
+        // Prevent double-award
+        if (PointsAwarded > 0)
+            throw new DomainException($"Points have already been awarded to this participant. Current points: {PointsAwarded}. Cannot award again.");
+
+        // Must be checked-in (Attended) to receive awards
+        if (AttendanceStatus != AttendanceStatus.Attended)
+            throw new DomainException($"Participant must be checked-in to receive points. Current status: {AttendanceStatus}.");
+
         PointsAwarded = points;
         EventRank = rank;
         AwardedAt = DateTime.UtcNow;
         AwardedBy = awardedBy;
-        AttendanceStatus = AttendanceStatus.Attended;
     }
 
+    /// <summary>
+    /// Marks the participant as checked-in (attended).
+    /// </summary>
     public void MarkCheckedIn()
     {
         CheckedInAt = DateTime.UtcNow;

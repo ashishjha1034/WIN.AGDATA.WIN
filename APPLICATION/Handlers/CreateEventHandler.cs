@@ -22,6 +22,14 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
 
     public async Task<EventDto> Handle(CreateEventCommand request, CancellationToken ct)
     {
+        // Validate RegistrationEndDateUtc is provided (MVP requirement)
+        if (!request.RegistrationEndDateUtc.HasValue)
+            throw new InvalidOperationException("RegistrationEndDateUtc is required. Registration deadline must be specified.");
+
+        // Validate RegistrationEndDateUtc is in the future
+        if (request.RegistrationEndDateUtc.Value <= DateTime.UtcNow)
+            throw new InvalidOperationException("RegistrationEndDateUtc must be in the future.");
+
         var @event = new Event(
             request.Name,
             request.Description,
@@ -29,7 +37,7 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
             request.TotalPointsPool,
             request.Location,
             request.MaxParticipants,
-            request.RegistrationEndDate,
+            request.RegistrationEndDateUtc,
             request.BannerImageUrl);
 
         _eventRepository.Add(@event);
