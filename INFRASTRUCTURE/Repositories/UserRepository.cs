@@ -20,6 +20,15 @@ public class UserRepository : Repository<User>, IUserRepository
             .Include(u => u.PointsAccount)
             .FirstOrDefaultAsync(u => u.Id == id);
 
+    public async Task<IReadOnlyList<User>> GetByIdsWithPointsAsync(IEnumerable<Guid> ids)
+    {
+        var idList = ids.ToList();
+        return await _context.Users
+            .Include(u => u.PointsAccount)
+            .Where(u => idList.Contains(u.Id))
+            .ToListAsync();
+    }
+
     public async Task<User?> GetByEmployeeIdAsync(string employeeId)
         => await _context.Users.FirstOrDefaultAsync(u => u.EmployeeId == employeeId);
 

@@ -30,6 +30,9 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
 
     public async Task Handle(AwardEventPointsCommand request, CancellationToken ct)
     {
+        if (request.Points <= 0)
+            throw new InvalidOperationException("Points must be positive.");
+
         var @event = await _eventRepository.GetByIdWithParticipantsAsync(request.EventId)
                      ?? throw new InvalidOperationException("Event not found");
 
@@ -49,15 +52,26 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
         if (participant.PointsAwarded > 0)
             throw new InvalidOperationException($"Points have already been awarded to this participant. Current points: {participant.PointsAwarded}. Cannot award again.");
 
+        // Pool enforcement: validate remaining points before awarding
+        if (!@event.CanDistributePoints(request.Points))
+        {
+            var remaining = @event.RemainingPoints ?? 0;
+            throw new InvalidOperationException($"Insufficient points in event pool. Requested: {request.Points}, Remaining: {remaining}");
+        }
+
         var user = await _userRepository.GetByIdWithPointsAsync(participant.UserId)
                    ?? throw new InvalidOperationException("User not found");
 
         var currentUserId = _currentUserService.GetCurrentUserId();
 
+        // Reserve points from the event pool (optimistic concurrency protected)
+        @event.ReservePoints(request.Points);
+
+        // Credit user's points account
         user.PointsAccount.AddPoints(request.Points, currentUserId);
 
         // AwardPoints will also validate internally (checked-in, no double-award)
-        participant.AwardPoints(request.Points, rank: null, currentUserId);
+        participant.AwardPoints(request.Points, request.Rank, currentUserId);
 
         // Create transaction record
         var transaction = UserPointsTransaction.CreateEarned(
@@ -65,7 +79,8 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
             points: request.Points,
             source: "Event Participation",
             sourceId: request.EventId,
-            description: $"Points awarded for event participation: {@event.Name}",
+            description: $"Points awarded for event participation: {@event.Name}" + 
+                        (request.Rank.HasValue ? $" (Rank: {request.Rank})" : ""),
             balanceAfter: user.PointsAccount.CurrentBalance,
             processedBy: currentUserId
         );

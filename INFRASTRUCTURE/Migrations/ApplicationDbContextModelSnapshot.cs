@@ -102,6 +102,12 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<DateTime?>("RegistrationEndDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -113,6 +119,11 @@ namespace INFRASTRUCTURE.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DistributedPoints")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.HasKey("Id");
 

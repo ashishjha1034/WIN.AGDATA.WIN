@@ -486,17 +486,26 @@ public class EventController : ControllerBase
     /// - Participant must be checked-in (AttendanceStatus = Attended)
     /// - Cannot award points twice to the same participant (no double-award)
     /// - Cannot award after event is Completed or Cancelled
+    /// - Cannot exceed remaining points in event pool (if pool is set)
+    /// 
+    /// **Example:**
+    /// 
+    ///     POST /api/event/{eventId}/award-points/{participantId}
+    ///     {
+    ///       "points": 100,
+    ///       "rank": 1
+    ///     }
     /// </remarks>
     /// <param name="eventId">Event ID</param>
     /// <param name="participantId">Participant user ID</param>
-    /// <param name="request">Points to award</param>
+    /// <param name="request">Points to award and optional rank</param>
     /// <returns>Confirmation message</returns>
     /// <response code="200">Points awarded</response>
-    /// <response code="400">Invalid request, not checked-in, double-award, or wrong event status</response>
+    /// <response code="400">Invalid request, not checked-in, double-award, pool exceeded, or wrong event status</response>
     /// <response code="403">Forbidden - admin only</response>
     [HttpPost("{eventId:guid}/award-points/{participantId:guid}")]
     [Authorize(Policy = "AdminOnly")]
-    [SwaggerOperation(Summary = "Award event points", Description = "Admin only. Grant points to checked-in participant. Event must be Active. No double awards.")]
+    [SwaggerOperation(Summary = "Award event points", Description = "Admin only. Grant points to checked-in participant. Event must be Active. No double awards. Pool enforcement.")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -507,7 +516,7 @@ public class EventController : ControllerBase
 
         try
         {
-            var command = new AwardEventPointsCommand(eventId, participantId, request.Points);
+            var command = new AwardEventPointsCommand(eventId, participantId, request.Points, request.Rank);
             await _mediator.Send(command);
 
             return Ok(new
@@ -515,7 +524,8 @@ public class EventController : ControllerBase
                 message = "Points awarded successfully",
                 eventId,
                 participantId,
-                points = request.Points
+                points = request.Points,
+                rank = request.Rank
             });
         }
         catch (InvalidOperationException ex)
@@ -530,6 +540,150 @@ public class EventController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Failed to award points", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Bulk award points to multiple participants
+    /// </summary>
+    /// <remarks>
+    /// Award points to multiple participants in a single atomic operation.
+    /// Admin only operation.
+    /// 
+    /// **All-or-Nothing Semantics:**
+    /// - If ANY participant is ineligible (not checked-in, already awarded, not found), the ENTIRE request fails
+    /// - Either all participants receive their awards, or none do
+    /// 
+    /// **Award Rules:**
+    /// - Event must be in Active status
+    /// - All participants must be checked-in (AttendanceStatus = Attended)
+    /// - No participant can already have points awarded
+    /// - Total requested points cannot exceed remaining pool (if pool is set)
+    /// 
+    /// **Example:**
+    /// 
+    ///     POST /api/event/{eventId}/bulk-award-points
+    ///     {
+    ///       "awards": [
+    ///         { "participantId": "guid1", "points": 100, "rank": 1 },
+    ///         { "participantId": "guid2", "points": 75, "rank": 2 },
+    ///         { "participantId": "guid3", "points": 50, "rank": 3 }
+    ///       ]
+    ///     }
+    /// </remarks>
+    /// <param name="eventId">Event ID</param>
+    /// <param name="request">Bulk award request with list of participant awards</param>
+    /// <returns>Result of bulk award operation</returns>
+    /// <response code="200">All points awarded successfully</response>
+    /// <response code="400">Invalid request, ineligible participants, or pool exceeded</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="409">Concurrency conflict - retry request</response>
+    [HttpPost("{eventId:guid}/bulk-award-points")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Bulk award event points", Description = "Admin only. Award points to multiple participants. All-or-nothing semantics. Pool enforcement.")]
+    [ProducesResponseType(typeof(BulkAwardPointsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<BulkAwardPointsResponse>> BulkAwardPoints(Guid eventId, [FromBody] BulkAwardPointsRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var awards = request.Awards
+                .Select(a => new ParticipantAward(a.ParticipantId, a.Points, a.Rank))
+                .ToList();
+
+            var command = new BulkAwardEventPointsCommand(eventId, awards);
+            var result = await _mediator.Send(command);
+
+            return Ok(new BulkAwardPointsResponse
+            {
+                Success = result.Success,
+                Message = "Bulk award completed successfully",
+                EventId = eventId,
+                TotalPointsAwarded = result.TotalPointsAwarded,
+                ParticipantsAwarded = result.ParticipantsAwarded,
+                RemainingPoolPoints = result.RemainingPoolPoints
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message, eventId });
+        }
+        catch (DomainException ex)
+        {
+            return BadRequest(new { message = ex.Message, eventId });
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            return Conflict(new { 
+                message = "Concurrency conflict: Another operation modified the event pool. Please retry.", 
+                eventId,
+                retryable = true
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to bulk award points", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get event pool status
+    /// </summary>
+    /// <remarks>
+    /// Get the current status of the event's points pool.
+    /// Shows total pool, distributed points, and remaining points.
+    /// </remarks>
+    /// <param name="eventId">Event ID</param>
+    /// <returns>Pool status</returns>
+    /// <response code="200">Pool status retrieved</response>
+    /// <response code="404">Event not found</response>
+    [HttpGet("{eventId:guid}/pool-status")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Get event pool status", Description = "Admin only. Get current pool distribution status.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetPoolStatus(Guid eventId)
+    {
+        try
+        {
+            var @event = await _eventRepository.GetByIdWithParticipantsAsync(eventId);
+            
+            if (@event == null)
+                return NotFound(new { message = "Event not found", eventId });
+
+            var participantsAwarded = @event.Participants.Count(p => p.PointsAwarded > 0);
+            var totalParticipants = @event.Participants.Count;
+
+            return Ok(new
+            {
+                eventId,
+                eventName = @event.Name,
+                status = @event.Status.ToString(),
+                pool = new
+                {
+                    totalPool = @event.TotalPointsPool,
+                    distributedPoints = @event.DistributedPoints,
+                    remainingPoints = @event.RemainingPoints,
+                    isUnlimited = !@event.TotalPointsPool.HasValue
+                },
+                participants = new
+                {
+                    total = totalParticipants,
+                    awarded = participantsAwarded,
+                    pending = totalParticipants - participantsAwarded
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to get pool status", error = ex.Message });
         }
     }
 

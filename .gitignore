@@ -11,6 +11,8 @@ obj/
 UpgradeLog*.htm
 UpgradeLog*.XML
 
+/?Readme.md
+
 # Test settings
 testResults/
 TestResults/
@@ -36,6 +38,8 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
+
+*.md
 
 WIN.AGDATA.WIN.API/appsettings.json
 WIN.AGDATA.WIN.API/appsettings.Development.json

@@ -17,6 +17,17 @@ public class Event : AuditableEntity<Guid>
     public string? BannerImageUrl { get; private set; }
     public int PointsPerParticipant { get; private set; } = 0;
 
+    /// <summary>
+    /// Tracks total points distributed from this event's pool.
+    /// Used for O(1) remaining pool calculation: Remaining = TotalPointsPool - DistributedPoints.
+    /// </summary>
+    public int DistributedPoints { get; private set; } = 0;
+
+    /// <summary>
+    /// Concurrency token for optimistic locking on pool operations.
+    /// </summary>
+    public byte[] RowVersion { get; private set; } = null!;
+
     // Navigation
     public IReadOnlyCollection<EventParticipant> Participants => _participants.AsReadOnly();
     private readonly List<EventParticipant> _participants = new();
@@ -126,6 +137,67 @@ public class Event : AuditableEntity<Guid>
             throw new DomainException($"Cannot cancel event. Current status is {Status}. Only Draft or Active events can be cancelled.");
 
         Status = EventStatus.Cancelled;
+    }
+
+    #endregion
+
+    #region Pool Management
+
+    /// <summary>
+    /// Gets the remaining points available in the pool.
+    /// Returns null if pool is unlimited (TotalPointsPool is null).
+    /// </summary>
+    public int? RemainingPoints => TotalPointsPool.HasValue 
+        ? TotalPointsPool.Value - DistributedPoints 
+        : null;
+
+    /// <summary>
+    /// Validates if the requested points can be distributed from the pool.
+    /// </summary>
+    /// <param name="requestedPoints">Points to distribute</param>
+    /// <returns>True if pool is unlimited or has sufficient remaining points</returns>
+    public bool CanDistributePoints(int requestedPoints)
+    {
+        if (requestedPoints <= 0)
+            return false;
+        
+        // Unlimited pool
+        if (!TotalPointsPool.HasValue)
+            return true;
+        
+        return (DistributedPoints + requestedPoints) <= TotalPointsPool.Value;
+    }
+
+    /// <summary>
+    /// Reserves points from the pool for distribution.
+    /// Must be called within a transaction with optimistic concurrency check.
+    /// </summary>
+    /// <param name="points">Points to reserve</param>
+    /// <exception cref="DomainException">Thrown if insufficient points in pool</exception>
+    public void ReservePoints(int points)
+    {
+        if (points <= 0)
+            throw new DomainException("Points to reserve must be positive.");
+
+        if (TotalPointsPool.HasValue && (DistributedPoints + points) > TotalPointsPool.Value)
+        {
+            var remaining = TotalPointsPool.Value - DistributedPoints;
+            throw new DomainException($"Insufficient points in pool. Requested: {points}, Remaining: {remaining}");
+        }
+
+        DistributedPoints += points;
+    }
+
+    /// <summary>
+    /// Sets the distributed points counter. Used for backfill migration.
+    /// </summary>
+    /// <param name="totalDistributed">Total distributed points</param>
+    internal void SetDistributedPoints(int totalDistributed)
+    {
+        if (totalDistributed < 0)
+            throw new DomainException("Distributed points cannot be negative.");
+        
+        DistributedPoints = totalDistributed;
     }
 
     #endregion

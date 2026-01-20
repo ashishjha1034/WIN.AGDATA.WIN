@@ -17,6 +17,14 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.Property(e => e.Status).HasConversion<int>();
 
+        // Pool tracking
+        builder.Property(e => e.DistributedPoints).HasDefaultValue(0);
+        
+        // Optimistic concurrency for pool operations
+        builder.Property(e => e.RowVersion)
+            .IsRowVersion()
+            .IsConcurrencyToken();
+
         builder.HasMany(e => e.Participants)
             .WithOne(ep => ep.Event)
             .HasForeignKey(ep => ep.EventId)
