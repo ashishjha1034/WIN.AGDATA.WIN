@@ -77,7 +77,7 @@ export class EventEditComponent implements OnInit, OnDestroy {
           this.isLoading = false;
 
           // Determine if this event can be edited
-          if (event.status !== 'Draft' && event.status !== 'Active') {
+          if (event.status !== 'Upcoming' && event.status !== 'Live') {
             this.errorMessage = `Cannot edit event in ${event.status} status`;
             this.showErrorAlert = true;
             setTimeout(() => this.router.navigate(['/admin/events', this.eventId]), 2000);
@@ -85,7 +85,7 @@ export class EventEditComponent implements OnInit, OnDestroy {
           }
 
           // Determine if points are locked
-          this.pointsLocked = event.status === 'Active';
+          this.pointsLocked = event.status === 'Live';
 
           // Populate form
           this.populateForm(event);
@@ -104,18 +104,17 @@ export class EventEditComponent implements OnInit, OnDestroy {
       name: event.name,
       description: event.description,
       eventDate: this.formatDateForInput(event.eventDate),
-      registrationDeadline: event.registrationDeadline ? this.formatDateForInput(event.registrationDeadline) : '',
-      endDate: event.endDate ? this.formatDateForInput(event.endDate) : '',
+      registrationDeadline: event.registrationEndDateUtc ? this.formatDateForInput(event.registrationEndDateUtc) : '',
       location: event.location || '',
       maxParticipants: event.maxParticipants,
-      pointsPerParticipant: event.pointsPerParticipant
+      totalPointsPool: event.totalPointsPool
     };
 
     this.form.patchValue(formValue);
 
-    // Lock points fields if event is Active
+    // Lock points fields if event is Live
     if (this.pointsLocked) {
-      this.form.get('pointsPerParticipant')?.disable();
+      this.form.get('totalPointsPool')?.disable();
     }
   }
 
@@ -186,13 +185,12 @@ export class EventEditComponent implements OnInit, OnDestroy {
       name: this.form.value.name,
       description: this.form.value.description,
       eventDate: this.form.value.eventDate,
-      registrationDeadline: this.form.value.registrationDeadline,
-      endDate: this.form.value.endDate,
+      registrationEndDateUtc: this.form.value.registrationDeadline,
       location: this.form.value.location || '',
       maxParticipants: this.form.value.maxParticipants,
-      pointsPerParticipant: this.pointsLocked
-        ? this.eventDetail?.pointsPerParticipant || 0
-        : this.form.value.pointsPerParticipant
+      totalPointsPool: this.pointsLocked
+        ? this.eventDetail?.totalPointsPool || 0
+        : this.form.value.totalPointsPool
     };
 
     console.log('[EventEdit] Submitting form:', request);

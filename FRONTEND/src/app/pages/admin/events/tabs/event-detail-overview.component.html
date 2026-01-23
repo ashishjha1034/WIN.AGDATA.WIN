@@ -12,7 +12,7 @@
           </div>
           <div class="detail-row">
             <span class="label">Status</span>
-            <span class="value badge" [class]="event.status.toLowerCase()">{{ event.status }}</span>
+            <span class="value badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ getStatusLabel(event.status) }}</span>
           </div>
           <div class="detail-row">
             <span class="label">Description</span>
@@ -26,12 +26,12 @@
         <h3 class="card-title">Event Dates</h3>
         <div class="details-group">
           <div class="detail-row">
-            <span class="label">Event Date</span>
+            <span class="label">Event Start Date</span>
             <span class="value">{{ formatDate(event.eventDate) }}</span>
           </div>
-          <div class="detail-row" *ngIf="event.registrationDeadline">
-            <span class="label">Registration Deadline</span>
-            <span class="value">{{ formatDate(event.registrationDeadline) }}</span>
+          <div class="detail-row" *ngIf="event.registrationEndDateUtc">
+            <span class="label">Registration End Date</span>
+            <span class="value">{{ formatDate(event.registrationEndDateUtc) }}</span>
           </div>
           <div class="detail-row" *ngIf="event.maxParticipants">
             <span class="label">Max Participants</span>
@@ -43,51 +43,17 @@
           </div>
         </div>
       </div>
-
-      <!-- Metadata Section -->
-      <div class="card">
-        <h3 class="card-title">Metadata</h3>
-        <div class="details-group">
-          <div class="detail-row">
-            <span class="label">Created By</span>
-            <span class="value">{{ event.createdBy || 'System' }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Created At</span>
-            <span class="value">{{ formatDateTime(event.createdAt || '') }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Last Updated</span>
-            <span class="value">{{ formatDateTime(event.updatedAt || '') }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Event ID</span>
-            <div class="value-copyable">
-              <span class="value">{{ event.id }}</span>
-              <button class="btn-copy" (click)="copyToClipboard(event.id!)" title="Copy">📋</button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Right Column (Summary Cards) -->
     <div class="overview-column right-column">
-      <!-- Summary Cards -->
+      <!-- Summary Cards - Only Total Participants and Total Points Pool -->
       <div class="summary-cards">
         <div class="summary-card">
           <div class="card-icon">👥</div>
           <div class="card-info">
             <div class="card-label">Total Participants</div>
-            <div class="card-value">{{ event.participantCount }}</div>
-          </div>
-        </div>
-
-        <div class="summary-card">
-          <div class="card-icon">🪙</div>
-          <div class="card-info">
-            <div class="card-label">Points Per Participant</div>
-            <div class="card-value">{{ event.pointsPerParticipant | number }}</div>
+            <div class="card-value">{{ event.registeredCount || event.participantCount || 0 }}</div>
           </div>
         </div>
 
@@ -96,30 +62,6 @@
           <div class="card-info">
             <div class="card-label">Total Points Pool</div>
             <div class="card-value">{{ event.totalPointsPool | number }}</div>
-          </div>
-        </div>
-
-        <div class="summary-card">
-          <div class="card-icon">📊</div>
-          <div class="card-info">
-            <div class="card-label">Points Distributed</div>
-            <div class="card-value">{{ event.pointsDistributed | number }}</div>
-          </div>
-        </div>
-
-        <div class="summary-card">
-          <div class="card-icon">📈</div>
-          <div class="card-info">
-            <div class="card-label">Points Remaining</div>
-            <div class="card-value">{{ event.pointsRemaining | number }}</div>
-          </div>
-        </div>
-
-        <div class="summary-card">
-          <div class="card-icon">✓</div>
-          <div class="card-info">
-            <div class="card-label">Registered Count</div>
-            <div class="card-value">{{ event.registeredCount }}</div>
           </div>
         </div>
       </div>
@@ -131,15 +73,19 @@
           <div class="progress-bar">
             <div 
               class="progress-fill"
-              [style.width.%]="(event.pointsDistributed / event.totalPointsPool) * 100"
+              [style.width.%]="getDistributionPercentage()"
             ></div>
           </div>
           <div class="progress-info">
             <span class="progress-label">Distributed</span>
-            <span class="progress-value">{{ event.pointsDistributed | number }} / {{ event.totalPointsPool | number }}</span>
+            <span class="progress-value">{{ event.distributedPoints | number }} / {{ event.totalPointsPool | number }}</span>
           </div>
           <div class="progress-percentage">
-            {{ ((event.pointsDistributed / event.totalPointsPool) * 100) | number:'1.0-0' }}%
+            {{ getDistributionPercentage() }}%
+          </div>
+          <div class="progress-remaining">
+            <span class="label">Remaining:</span>
+            <span class="value">{{ getRemainingPoints() | number }}</span>
           </div>
         </div>
       </div>

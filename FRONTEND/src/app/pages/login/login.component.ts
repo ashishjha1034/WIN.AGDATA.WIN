@@ -38,6 +38,13 @@ export class LoginComponent implements OnInit, OnDestroy {
 
     // Get return URL from route parameters or default to '/user/dashboard'
     this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/user/dashboard';
+    
+    // Check if redirected due to expired token
+    const expired = this.route.snapshot.queryParams['expired'];
+    if (expired === 'true') {
+      this.error = 'Your session has expired. Please log in again.';
+      console.warn('[Login] User redirected due to expired token');
+    }
 
     // If already logged in, redirect based on role
     if (this.authService.isAuthenticated()) {

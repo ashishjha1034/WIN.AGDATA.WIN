@@ -16,7 +16,13 @@ export interface UserTransaction {
   type: string;
   description: string;
   points: number;
+  amount?: number;
+  source?: string;
+  sourceId?: string | null;
+  balanceAfter?: number;
+  processedBy?: string | null;
   createdAt: string;
+  timestamp?: string;
 }
 
 export interface UserEvent {
@@ -35,28 +41,44 @@ export interface UserProduct {
   name: string;
   description: string;
   category: string;
+  categoryId?: string;
   price: number;
+  pointsCost: number;
   imageUrl?: string;
   currentStock: number;
   isActive: boolean;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 export interface UserRedemption {
   id: string;
   productId: string;
   productName: string;
+  productDescription?: string;
+  productCategory?: string;
+  productImageUrl?: string;
+  productPointsPerUnit: number;
   quantity: number;
   pointsSpent: number;
   status: string;
+  statusCode: number;
+  adminNotes?: string;
   createdAt: string;
   approvedAt?: string;
   deliveredAt?: string;
+  userCurrentBalance?: number;
 }
 
 export interface RedemptionStatusCounts {
   pending: number;
   approved: number;
   delivered: number;
+  rejected: number;
 }
 
 @Injectable({
@@ -139,8 +161,14 @@ export class UserDashboardService {
           id: t.id,
           type: t.type || t.Type || 'Transaction',
           description: t.description || t.Description || t.type || t.Type,
-          points: t.points ?? t.Points ?? 0,
-          createdAt: t.createdAt || t.CreatedAt
+          points: t.amount ?? t.Amount ?? t.points ?? t.Points ?? 0,
+          amount: t.amount ?? t.Amount ?? t.points ?? t.Points ?? 0,
+          source: t.source || t.Source || '',
+          sourceId: t.sourceId || t.SourceId || null,
+          balanceAfter: t.balanceAfter ?? t.BalanceAfter ?? 0,
+          processedBy: t.processedBy || t.ProcessedBy || null,
+          createdAt: t.timestamp || t.Timestamp || t.createdAt || t.CreatedAt,
+          timestamp: t.timestamp || t.Timestamp || t.createdAt || t.CreatedAt
         }));
       }),
       catchError(error => {
@@ -235,10 +263,12 @@ export class UserDashboardService {
           id: p.id,
           name: p.name || p.Name,
           description: p.description || p.Description || '',
-          category: p.category || p.Category || '',
+          category: p.categoryName || p.CategoryName || '',
+          categoryId: p.categoryId || p.CategoryId || '',
           price: p.price ?? p.Price ?? 0,
+          pointsCost: p.pointsCost ?? p.PointsCost ?? p.price ?? p.Price ?? 0,
           imageUrl: p.imageUrl || p.ImageUrl,
-          currentStock: p.currentStock ?? p.CurrentStock ?? 0,
+          currentStock: p.stockLevel ?? p.StockLevel ?? 0,
           isActive: p.isActive ?? p.IsActive ?? true
         }));
       }),
@@ -247,6 +277,47 @@ export class UserDashboardService {
         return of([]);
       })
     );
+  }
+
+  /**
+   * Fetch product categories
+   */
+  getProductCategories(): Observable<ProductCategory[]> {
+    const url = `${this.API_URL}/products/categories/all`;
+    console.log('Fetching product categories from:', url);
+    return this.http.get<any>(url).pipe(
+      map(response => {
+        console.log('Categories response:', response);
+        const categories = response.data || response || [];
+        return categories.map((c: any) => ({
+          id: c.id || c.Id,
+          name: c.name || c.Name,
+          description: c.description || c.Description
+        }));
+      }),
+      catchError(error => {
+        console.error('Error fetching product categories:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get current user's points balance
+   */
+  getUserPoints(): Observable<number> {
+    return this.getUserStats().pipe(
+      map(stats => stats.currentBalance)
+    );
+  }
+
+  /**
+   * Create a redemption request
+   */
+  createRedemption(productId: string, quantity: number): Observable<any> {
+    const url = `${this.API_URL}/redemptions`;
+    console.log('Creating redemption:', url, { productId, quantity });
+    return this.http.post<any>(url, { productId, quantity });
   }
 
   /**
@@ -262,10 +333,12 @@ export class UserDashboardService {
           id: p.id,
           name: p.name || p.Name,
           description: p.description || p.Description || '',
-          category: p.category || p.Category || '',
+          category: p.categoryName || p.CategoryName || '',
+          categoryId: p.categoryId || p.CategoryId || '',
           price: p.price ?? p.Price ?? 0,
+          pointsCost: p.pointsCost ?? p.PointsCost ?? p.price ?? p.Price ?? 0,
           imageUrl: p.imageUrl || p.ImageUrl,
-          currentStock: p.currentStock ?? p.CurrentStock ?? 0,
+          currentStock: p.stockLevel ?? p.StockLevel ?? 0,
           isActive: p.isActive ?? p.IsActive ?? true
         };
       })
@@ -292,23 +365,63 @@ export class UserDashboardService {
       map(response => {
         console.log('Redemptions response:', response);
         const redemptions = response.data || [];
-        return redemptions.map((r: any) => ({
-          id: r.id,
-          productId: r.productId || r.ProductId,
-          productName: r.productName || r.ProductName || 'Product',
-          quantity: r.quantity ?? r.Quantity ?? 1,
-          pointsSpent: r.pointsSpent ?? r.PointsSpent ?? 0,
-          status: r.status || r.Status || 'Pending',
-          createdAt: r.createdAt || r.CreatedAt,
-          approvedAt: r.approvedAt || r.ApprovedAt,
-          deliveredAt: r.deliveredAt || r.DeliveredAt
-        }));
+        return redemptions.map((r: any) => {
+          const statusCode = this.parseRedemptionStatus(r.status || r.Status);
+          return {
+            id: r.id,
+            productId: r.productId || r.ProductId,
+            productName: r.productName || r.ProductName || 'Product',
+            productDescription: r.productDescription || r.ProductDescription || '',
+            productCategory: r.productCategory || r.ProductCategory || '',
+            productImageUrl: r.productImageUrl || r.ProductImageUrl || '',
+            productPointsPerUnit: r.productPointsPerUnit || r.ProductPointsPerUnit || Math.round((r.pointsSpent || r.PointsSpent || 0) / (r.quantity || r.Quantity || 1)),
+            quantity: r.quantity ?? r.Quantity ?? 1,
+            pointsSpent: r.pointsSpent ?? r.PointsSpent ?? 0,
+            status: this.getStatusLabel(statusCode),
+            statusCode: statusCode,
+            adminNotes: r.adminNotes || r.AdminNotes || null,
+            createdAt: r.createdAt || r.CreatedAt,
+            approvedAt: r.approvedAt || r.ApprovedAt,
+            deliveredAt: r.deliveredAt || r.DeliveredAt,
+            userCurrentBalance: r.userCurrentBalance || r.UserCurrentBalance
+          };
+        });
       }),
       catchError(error => {
         console.error('Error fetching redemptions:', error);
         return of([]);
       })
     );
+  }
+
+  /**
+   * Parse redemption status from API response
+   */
+  private parseRedemptionStatus(status: any): number {
+    if (typeof status === 'number') return status;
+    if (typeof status === 'string') {
+      const statusLower = status.toLowerCase();
+      if (statusLower === 'pending' || status === '0') return 0;
+      if (statusLower === 'approved' || status === '1') return 1;
+      if (statusLower === 'rejected' || status === '2') return 2;
+      if (statusLower === 'delivered' || status === '3') return 3;
+      if (statusLower === 'cancelled' || status === '4') return 4;
+    }
+    return 0;
+  }
+
+  /**
+   * Get status label from status code
+   */
+  private getStatusLabel(statusCode: number): string {
+    switch (statusCode) {
+      case 0: return 'Pending';
+      case 1: return 'Approved';
+      case 2: return 'Rejected';
+      case 3: return 'Delivered';
+      case 4: return 'Cancelled';
+      default: return 'Pending';
+    }
   }
 
   /**
@@ -321,16 +434,19 @@ export class UserDashboardService {
         const counts = {
           pending: 0,
           approved: 0,
-          delivered: 0
+          delivered: 0,
+          rejected: 0
         };
         
         redemptions.forEach(r => {
-          const status = (r.status || '').toLowerCase();
-          if (status === 'pending' || status === '0') {
+          const statusCode = r.statusCode;
+          if (statusCode === 0) {
             counts.pending++;
-          } else if (status === 'approved' || status === '1') {
+          } else if (statusCode === 1) {
             counts.approved++;
-          } else if (status === 'delivered' || status === '2') {
+          } else if (statusCode === 2) {
+            counts.rejected++;
+          } else if (statusCode === 3) {
             counts.delivered++;
           }
         });
@@ -340,7 +456,7 @@ export class UserDashboardService {
       }),
       catchError(error => {
         console.error('Error calculating redemption counts:', error);
-        return of({ pending: 0, approved: 0, delivered: 0 });
+        return of({ pending: 0, approved: 0, delivered: 0, rejected: 0 });
       })
     );
   }

@@ -1,20 +1,15 @@
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams, HttpErrorResponse } from '@angular/common/http';
+import { Injectable, signal, computed } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, BehaviorSubject, throwError } from 'rxjs';
-import { catchError, tap, finalize } from 'rxjs/operators';
+import { catchError, tap, map, finalize } from 'rxjs/operators';
 import { API_CONFIG } from '../config/api.config';
 import {
-  User,
-  UserWithDetails,
-  UserStats,
-  AdjustPointsRequest,
-  CreateUserRequest,
+  UserListItem,
+  InviteUserRequest,
   UpdateUserRequest,
   UserListResponse,
   UserDetailsResponse,
-  StatsDto,
-  PaginationOptions,
-  UserFilterCriteria
+  StatsDto
 } from '../models/user.models';
 
 @Injectable({
@@ -22,6 +17,7 @@ import {
 })
 export class AdminUsersService {
   private readonly API_URL = `${API_CONFIG.getApiUrl()}/admin`;
+  private readonly USERS_API_URL = `${API_CONFIG.getApiUrl()}/users`; // For user CRUD operations
   
   private loadingSubject = new BehaviorSubject<boolean>(false);
   public loading$ = this.loadingSubject.asObservable();
@@ -75,9 +71,9 @@ export class AdminUsersService {
   }
 
   /**
-   * Create a new user
+   * Create/invite a new user - aligned with backend InviteUserRequest
    */
-  createUser(request: CreateUserRequest): Observable<any> {
+  createUser(request: InviteUserRequest): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
@@ -88,66 +84,62 @@ export class AdminUsersService {
   }
 
   /**
-   * Update user information
+   * Update user information - uses /api/users endpoint
    */
   updateUser(userId: string, request: UpdateUserRequest): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
-    return this.http.put(`${this.API_URL}/users/${userId}`, request).pipe(
+    return this.http.put(`${this.USERS_API_URL}/${userId}`, request).pipe(
       tap(() => this.setLoading(false)),
       catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Adjust user points
-   */
-  adjustPoints(request: AdjustPointsRequest): Observable<any> {
-    this.setLoading(true);
-    this.clearError();
-
-    return this.http.post(`${this.API_URL}/adjust-points`, request).pipe(
-      tap(() => this.setLoading(false)),
-      catchError(error => this.handleError(error))
-    );
-  }
-
-  /**
-   * Activate a user
+   * Activate a user - uses /api/users endpoint
    */
   activateUser(userId: string): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
-    return this.http.post(`${this.API_URL}/users/${userId}/activate`, {}).pipe(
+    return this.http.post(`${this.USERS_API_URL}/${userId}/activate`, {}).pipe(
       tap(() => this.setLoading(false)),
       catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Deactivate a user
+   * Deactivate a user - uses /api/users endpoint
    */
   deactivateUser(userId: string): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
-    return this.http.post(`${this.API_URL}/users/${userId}/deactivate`, {}).pipe(
+    return this.http.post(`${this.USERS_API_URL}/${userId}/deactivate`, {}).pipe(
       tap(() => this.setLoading(false)),
       catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Delete a user
+   * Delete a user - uses /api/users endpoint
    */
   deleteUser(userId: string): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
-    return this.http.delete(`${this.API_URL}/users/${userId}`).pipe(
+    return this.http.delete(`${this.USERS_API_URL}/${userId}`).pipe(
       tap(() => this.setLoading(false)),
+      catchError(error => this.handleError(error))
+    );
+  }
+
+  /**
+   * Get user transactions
+   */
+  getUserTransactions(userId: string, pageNumber: number = 1, pageSize: number = 50): Observable<any> {
+    return this.http.get(`${API_CONFIG.getApiUrl()}/Transaction/user/${userId}?pageNumber=${pageNumber}&pageSize=${pageSize}`).pipe(
       catchError(error => this.handleError(error))
     );
   }

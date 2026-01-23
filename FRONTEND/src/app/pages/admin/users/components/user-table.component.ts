@@ -1,49 +1,60 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { User } from '../../../../models/user.models';
+import { trigger, transition, style, animate } from '@angular/animations';
+import { UserListItem } from '../../../../models/user.models';
 
 export interface UserTableAction {
-  type: 'view' | 'edit' | 'points' | 'transactions' | 'reset-password' | 'toggle-status' | 'delete';
+  type: 'view' | 'edit' | 'transactions' | 'reset-password' | 'toggle-status' | 'delete';
   userId: string;
-  user: User;
+  user: UserListItem;
 }
 
 @Component({
   selector: 'app-user-table',
   standalone: true,
   imports: [CommonModule],
+  animations: [
+    trigger('fadeInOut', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translateY(-8px)' }),
+        animate('150ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
+      ]),
+      transition(':leave', [
+        animate('100ms ease-in', style({ opacity: 0, transform: 'translateY(-8px)' }))
+      ])
+    ])
+  ],
   template: `
     <div class="table-container">
       <table class="users-table">
         <thead>
           <tr>
-            <th class="checkbox-col">
-              <input
-                type="checkbox"
-                [checked]="allSelected"
-                (change)="toggleSelectAll()"
-              />
-            </th>
             <th>User</th>
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
             <th>Balance</th>
-            <th>Last Active</th>
             <th class="actions-col">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngIf="users.length === 0" class="empty-row">
-            <td colspan="8" class="empty-message">No users found</td>
-          </tr>
-          <tr *ngFor="let user of users" class="user-row">
-            <td class="checkbox-col">
-              <input type="checkbox" [(ngModel)]="selectedUsers[user.id]" />
+          <tr *ngIf="isLoading" class="loading-row">
+            <td colspan="6" class="loading-message">
+              <div class="spinner"></div>
+              Loading users...
             </td>
+          </tr>
+          <tr *ngIf="!isLoading && users.length === 0" class="empty-row">
+            <td colspan="6" class="empty-message">No users found</td>
+          </tr>
+          <tr 
+            *ngFor="let user of users" 
+            class="user-row"
+            (dblclick)="onRowDoubleClick(user)"
+          >
             <td class="user-cell">
               <div class="user-info">
-                <div class="user-avatar">{{ user.firstName.charAt(0) }}{{ user.lastName.charAt(0) }}</div>
+                <div class="user-avatar">{{ getInitials(user) }}</div>
                 <div class="user-details">
                   <div class="user-name">{{ user.firstName }} {{ user.lastName }}</div>
                   <div class="user-id">{{ user.employeeId }}</div>
@@ -53,6 +64,7 @@ export interface UserTableAction {
             <td>{{ user.email }}</td>
             <td>
               <span *ngFor="let role of user.roles" class="role-chip">{{ role }}</span>
+              <span *ngIf="!user.roles || user.roles.length === 0" class="role-chip">Employee</span>
             </td>
             <td>
               <span class="status-badge" [class.active]="user.isActive" [class.inactive]="!user.isActive">
@@ -61,21 +73,22 @@ export interface UserTableAction {
             </td>
             <td>
               <div class="balance-info">
-                <div class="balance-amount">{{ getBalance(user) | number }}</div>
-                <div class="balance-detail">+{{ getEarned(user) | number }} / -{{ getRedeemed(user) | number }}</div>
+                <div class="balance-amount">{{ user.points?.current ?? 0 | number }}</div>
+                <div class="balance-detail">
+                  <span class="earned">+{{ user.points?.earned ?? 0 | number }}</span> / 
+                  <span class="redeemed">-{{ user.points?.redeemed ?? 0 | number }}</span>
+                </div>
               </div>
             </td>
-            <td class="last-active">{{ user.lastActive || '—' }}</td>
             <td class="actions-col">
               <div class="action-menu">
-                <button class="menu-btn" (click)="toggleMenu(user.id)">⋯</button>
+                <button class="menu-btn" (click)="toggleMenu($event, user.id)">⋯</button>
                 <div class="menu-dropdown" *ngIf="activeMenuId === user.id" @fadeInOut>
-                  <button (click)="onAction('view', user)">View</button>
+                  <button (click)="onAction('view', user)">View Details</button>
                   <button (click)="onAction('edit', user)">Edit</button>
-                  <button (click)="onAction('points', user)">Adjust Points</button>
                   <button (click)="onAction('transactions', user)">Transactions</button>
                   <button (click)="onAction('reset-password', user)">Reset Password</button>
-                  <button class="divider"></button>
+                  <div class="menu-divider"></div>
                   <button
                     [class.deactivate]="user.isActive"
                     (click)="onAction('toggle-status', user)"
@@ -138,11 +151,6 @@ export interface UserTableAction {
       text-transform: uppercase;
       font-size: 12px;
       letter-spacing: 0.5px;
-    }
-
-    .checkbox-col {
-      width: 40px;
-      text-align: center;
     }
 
     .actions-col {
@@ -259,11 +267,6 @@ export interface UserTableAction {
       color: #9ca3af;
     }
 
-    .last-active {
-      color: #9ca3af;
-      font-size: 13px;
-    }
-
     .action-menu {
       position: relative;
       display: inline-block;
@@ -314,24 +317,61 @@ export interface UserTableAction {
       color: #1f2937;
     }
 
-    .menu-dropdown button.divider {
+    .menu-dropdown .menu-divider {
       height: 1px;
       padding: 0;
       margin: 4px 0;
       background: #e5e7eb;
-      cursor: default;
     }
 
-    .menu-dropdown button.divider:hover {
-      background: #e5e7eb;
-    }
-
-    .menu-dropdown button.deactivate {
-      color: #dc2626;
-    }
-
+    .menu-dropdown button.deactivate,
     .menu-dropdown button.delete {
       color: #dc2626;
+    }
+
+    .menu-dropdown button.deactivate:hover,
+    .menu-dropdown button.delete:hover {
+      background: #fee2e2;
+    }
+
+    .loading-row {
+      background: #f9fafb;
+    }
+
+    .loading-message {
+      text-align: center;
+      color: #6b7280;
+      padding: 32px 16px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #4b5563;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .balance-detail .earned {
+      color: #10b981;
+    }
+
+    .balance-detail .redeemed {
+      color: #ef4444;
+    }
+
+    .user-row {
+      cursor: pointer;
     }
 
     .pagination {
@@ -372,16 +412,10 @@ export interface UserTableAction {
       color: #6b7280;
       font-weight: 500;
     }
-
-    input[type="checkbox"] {
-      cursor: pointer;
-      accent-color: #4b5563;
-    }
   `]
 })
-export class UserTableComponent implements OnInit {
-  @Input() users: User[] = [];
-  @Input() userDetails: { [key: string]: any } = {};
+export class UserTableComponent {
+  @Input() users: UserListItem[] = [];
   @Input() currentPage = 1;
   @Input() pageSize = 10;
   @Input() totalItems = 0;
@@ -389,36 +423,36 @@ export class UserTableComponent implements OnInit {
 
   @Output() actionTriggered = new EventEmitter<UserTableAction>();
   @Output() pageChanged = new EventEmitter<number>();
+  @Output() rowDoubleClicked = new EventEmitter<UserListItem>();
 
-  selectedUsers: { [key: string]: boolean } = {};
   activeMenuId: string | null = null;
 
-  ngOnInit(): void {
-    this.users.forEach(user => {
-      this.selectedUsers[user.id] = false;
-    });
-  }
-
-  get allSelected(): boolean {
-    return this.users.length > 0 && this.users.every(u => this.selectedUsers[u.id]);
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event): void {
+    // Close menu when clicking outside
+    if (this.activeMenuId && !(event.target as HTMLElement).closest('.action-menu')) {
+      this.activeMenuId = null;
+    }
   }
 
   get totalPages(): number {
     return Math.ceil(this.totalItems / this.pageSize) || 1;
   }
 
-  toggleSelectAll(): void {
-    const newState = !this.allSelected;
-    this.users.forEach(user => {
-      this.selectedUsers[user.id] = newState;
-    });
+  getInitials(user: UserListItem): string {
+    return `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase();
   }
 
-  toggleMenu(userId: string): void {
+  toggleMenu(event: Event, userId: string): void {
+    event.stopPropagation();
     this.activeMenuId = this.activeMenuId === userId ? null : userId;
   }
 
-  onAction(type: UserTableAction['type'], user: User): void {
+  onRowDoubleClick(user: UserListItem): void {
+    this.rowDoubleClicked.emit(user);
+  }
+
+  onAction(type: UserTableAction['type'], user: UserListItem): void {
     this.activeMenuId = null;
     this.actionTriggered.emit({
       type,
@@ -437,17 +471,5 @@ export class UserTableComponent implements OnInit {
     if (this.currentPage < this.totalPages) {
       this.pageChanged.emit(this.currentPage + 1);
     }
-  }
-
-  getBalance(user: User): number {
-    return this.userDetails[user.id]?.points.current || 0;
-  }
-
-  getEarned(user: User): number {
-    return this.userDetails[user.id]?.points.earned || 0;
-  }
-
-  getRedeemed(user: User): number {
-    return this.userDetails[user.id]?.points.redeemed || 0;
   }
 }

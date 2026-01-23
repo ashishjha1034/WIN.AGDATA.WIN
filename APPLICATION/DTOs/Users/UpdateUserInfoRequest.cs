@@ -3,4 +3,5 @@
 public record UpdateUserInfoRequest(
     string FirstName,
     string LastName,
-    string Email);
+    string Email,
+    string? EmployeeId = null);

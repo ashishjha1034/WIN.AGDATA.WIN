@@ -1,13 +1,13 @@
-import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime } from 'rxjs/operators';
+import { takeUntil, debounceTime, finalize } from 'rxjs/operators';
 
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AdminGroupsService } from '../../../services/admin-groups.service';
-import { User, UserFilterCriteria, StatsDto, CreateUserRequest, UserWithDetails } from '../../../models/user.models';
+import { UserListItem, UserFilterCriteria, StatsDto, InviteUserRequest } from '../../../models/user.models';
 import { Group } from '../../../models/group.models';
 
 import { KPICardComponent } from './components/kpi-card.component';
@@ -40,23 +40,59 @@ import { AddGroupMembersModalComponent } from './components/add-group-members-mo
 })
 export class AdminUsersComponent implements OnInit, OnDestroy {
   @ViewChild(UserDetailDrawerComponent) drawerComponent?: UserDetailDrawerComponent;
+  @ViewChild(AddUserModalComponent) addUserModalComponent?: AddUserModalComponent;
 
   // Tab management
   activeTab: 'users' | 'groups' = 'users';
 
-  // Users data
-  users: User[] = [];
-  filteredUsers: User[] = [];
+  // Users data - using signals for reactivity
+  private usersSignal = signal<UserListItem[]>([]);
+  private searchQuerySignal = signal<string>('');
+  private filtersSignal = signal<UserFilterCriteria>({});
+  
+  // Computed filtered users - automatically updates when signals change
+  filteredUsers = computed(() => {
+    let filtered = [...this.usersSignal()];
+    const query = this.searchQuerySignal().toLowerCase();
+    const filters = this.filtersSignal();
+
+    // Apply search filter
+    if (query) {
+      filtered = filtered.filter(user =>
+        user.firstName.toLowerCase().includes(query) ||
+        user.lastName.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.employeeId.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply status filter
+    if (filters.status) {
+      filtered = filtered.filter(user =>
+        (filters.status === 'active' && user.isActive) ||
+        (filters.status === 'inactive' && !user.isActive)
+      );
+    }
+
+    // Apply role filter
+    if (filters.role) {
+      filtered = filtered.filter(user =>
+        user.roles?.includes(filters.role!)
+      );
+    }
+
+    return filtered;
+  });
+
   stats: StatsDto | null = null;
 
-  // Pagination
+  // Pagination - computed from filtered users
   currentPage = 1;
   pageSize = 10;
-  totalItems = 0;
-
-  // Filters and Search
-  currentFilters: UserFilterCriteria = {};
-  searchQuery = '';
+  
+  get totalItems(): number {
+    return this.filteredUsers().length;
+  }
 
   // UI States
   isLoading = false;
@@ -69,7 +105,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   isDrawerOpen = false;
   selectedUserId: string | null = null;
 
-  // Groups data
+  // Groups data (placeholder - not MVP)
   groups: Group[] = [];
   selectedGroupId: string | null = null;
   selectedGroupName: string = '';
@@ -83,14 +119,13 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     private adminUsersService: AdminUsersService,
     private groupsService: AdminGroupsService
   ) {
-    // Debounce filter changes
+    // Debounce filter changes and update signal
     this.filterSubject.pipe(
       debounceTime(300),
       takeUntil(this.destroy$)
     ).subscribe(filters => {
-      this.currentFilters = filters;
+      this.filtersSignal.set(filters);
       this.currentPage = 1;
-      this.applyFilters();
     });
   }
 
@@ -100,25 +135,25 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load all users
+   * Load all users from API
    */
   private loadUsers(): void {
     this.isLoading = true;
     this.error = null;
 
-    this.adminUsersService.getAllUsers(true).pipe(
-      takeUntil(this.destroy$)
+    this.adminUsersService.getAllUsers(false).pipe(
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isLoading = false;
+      })
     ).subscribe({
       next: (response) => {
-        this.users = response.users || [];
-        this.totalItems = response.count || 0;
-        this.applyFilters();
-        this.isLoading = false;
+        // Update the signal with API data
+        this.usersSignal.set(response.users || []);
       },
       error: (err) => {
-        this.error = 'Failed to load users';
-        this.isLoading = false;
-        console.error(err);
+        this.error = err.message || 'Failed to load users';
+        console.error('Failed to load users:', err);
       }
     });
   }
@@ -130,57 +165,18 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     this.isLoadingStats = true;
 
     this.adminUsersService.getStats().pipe(
-      takeUntil(this.destroy$)
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isLoadingStats = false;
+      })
     ).subscribe({
       next: (response) => {
         this.stats = response;
-        this.isLoadingStats = false;
       },
       error: (err) => {
         console.error('Failed to load stats:', err);
-        this.isLoadingStats = false;
       }
     });
-  }
-
-  /**
-   * Apply filters to users list
-   */
-  private applyFilters(): void {
-    let filtered = [...this.users];
-
-    // Apply search filter
-    if (this.searchQuery) {
-      const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(user =>
-        user.firstName.toLowerCase().includes(query) ||
-        user.lastName.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        user.employeeId.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply status filter
-    if (this.currentFilters.status) {
-      filtered = filtered.filter(user =>
-        (this.currentFilters.status === 'active' && user.isActive) ||
-        (this.currentFilters.status === 'inactive' && !user.isActive)
-      );
-    }
-
-    // Apply role filter
-    if (this.currentFilters.role) {
-      filtered = filtered.filter(user =>
-        user.roles.includes(this.currentFilters.role!)
-      );
-    }
-
-    // Apply balance filters (would need points data)
-    // This would be enhanced when we have full user details with points
-
-    this.filteredUsers = filtered;
-    this.totalItems = this.filteredUsers.length;
-    this.currentPage = 1;
   }
 
   /**
@@ -191,11 +187,11 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle search changes
+   * Handle search changes - update signal immediately for responsiveness
    */
   onSearchChanged(query: string): void {
-    this.searchQuery = query;
-    this.applyFilters();
+    this.searchQuerySignal.set(query);
+    this.currentPage = 1;
   }
 
   /**
@@ -206,11 +202,19 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get paginated users for display
+   * Get paginated users for display - computed from filtered signal
    */
-  get paginatedUsers(): User[] {
+  get paginatedUsers(): UserListItem[] {
+    const filtered = this.filteredUsers();
     const startIndex = (this.currentPage - 1) * this.pageSize;
-    return this.filteredUsers.slice(startIndex, startIndex + this.pageSize);
+    return filtered.slice(startIndex, startIndex + this.pageSize);
+  }
+
+  /**
+   * Handle row double-click to open drawer
+   */
+  onRowDoubleClicked(user: UserListItem): void {
+    this.openDrawer(user.id);
   }
 
   /**
@@ -222,16 +226,10 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         this.openDrawer(action.userId);
         break;
       case 'edit':
-        // TODO: Implement edit functionality
-        console.log('Edit user:', action.userId);
-        break;
-      case 'points':
-        // TODO: Implement adjust points modal
-        console.log('Adjust points for user:', action.userId);
+        this.openDrawerForEdit(action.userId);
         break;
       case 'transactions':
-        // TODO: Implement view transactions
-        console.log('View transactions for user:', action.userId);
+        this.openDrawerForTransactions(action.userId);
         break;
       case 'reset-password':
         this.resetUserPassword(action.userId);
@@ -254,6 +252,34 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Open drawer in edit mode for a user
+   */
+  openDrawerForEdit(userId: string): void {
+    this.selectedUserId = userId;
+    this.isDrawerOpen = true;
+    // Small delay to let drawer open then trigger edit mode
+    setTimeout(() => {
+      if (this.drawerComponent) {
+        this.drawerComponent.enterEditMode();
+      }
+    }, 100);
+  }
+
+  /**
+   * Open drawer on transaction tab
+   */
+  openDrawerForTransactions(userId: string): void {
+    this.selectedUserId = userId;
+    this.isDrawerOpen = true;
+    // Small delay to let drawer open then switch to activity tab
+    setTimeout(() => {
+      if (this.drawerComponent) {
+        this.drawerComponent.activeTab = 'activity';
+      }
+    }, 100);
+  }
+
+  /**
    * Close user detail drawer
    */
   closeDrawer(): void {
@@ -266,10 +292,6 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   onDrawerAction(action: DrawerAction): void {
     switch (action.type) {
-      case 'adjust-points':
-        // TODO: Open adjust points modal
-        console.log('Adjust points for user:', this.selectedUserId);
-        break;
       case 'assign-roles':
         // TODO: Open assign roles modal
         console.log('Assign roles for user:', this.selectedUserId);
@@ -278,6 +300,14 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         if (this.selectedUserId) {
           this.deactivateUser(this.selectedUserId);
         }
+        break;
+      case 'edit':
+        // Edit is handled in drawer component
+        break;
+      case 'user-updated':
+        // Refresh users list after user was edited
+        this.loadUsers();
+        this.showSuccess('User updated successfully!');
         break;
     }
   }
@@ -294,34 +324,57 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   closeAddUserModal(): void {
     this.isAddUserModalOpen = false;
+    if (this.addUserModalComponent) {
+      this.addUserModalComponent.closeModal();
+    }
   }
 
   /**
-   * Handle user creation
+   * Handle user creation - aligned with backend InviteUserRequest
    */
-  onUserCreated(request: CreateUserRequest): void {
-    this.isLoading = true;
-    this.error = null;
-
+  onUserCreated(request: InviteUserRequest): void {
     this.adminUsersService.createUser(request).pipe(
-      takeUntil(this.destroy$)
+      takeUntil(this.destroy$),
+      finalize(() => {
+        if (this.addUserModalComponent) {
+          this.addUserModalComponent.setSubmitting(false);
+        }
+      })
     ).subscribe({
       next: (response) => {
-        this.successMessage = 'User created successfully!';
+        this.showSuccess('User created successfully!');
         this.closeAddUserModal();
         this.loadUsers();
         this.loadStats();
-
-        // Clear success message after 3 seconds
-        setTimeout(() => {
-          this.successMessage = null;
-        }, 3000);
       },
       error: (err) => {
-        this.error = err.message || 'Failed to create user';
-        this.isLoading = false;
+        const errorMessage = err.message || 'Failed to create user';
+        if (this.addUserModalComponent) {
+          this.addUserModalComponent.setError(errorMessage);
+        }
+        console.error('Create user error:', err);
       }
     });
+  }
+
+  /**
+   * Show success message with auto-dismiss
+   */
+  private showSuccess(message: string): void {
+    this.successMessage = message;
+    setTimeout(() => {
+      this.successMessage = null;
+    }, 3000);
+  }
+
+  /**
+   * Show error message with auto-dismiss
+   */
+  private showError(message: string): void {
+    this.error = message;
+    setTimeout(() => {
+      this.error = null;
+    }, 5000);
   }
 
   /**
@@ -331,41 +384,35 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     if (confirm('Send password reset email to this user?')) {
       // TODO: Implement password reset API call
       console.log('Resetting password for user:', userId);
-      this.successMessage = 'Password reset email sent!';
-      setTimeout(() => {
-        this.successMessage = null;
-      }, 3000);
+      this.showSuccess('Password reset email sent!');
     }
   }
 
   /**
    * Toggle user active/inactive status
    */
-  private toggleUserStatus(user: User): void {
+  private toggleUserStatus(user: UserListItem): void {
     const action = user.isActive ? 'deactivate' : 'activate';
     if (confirm(`Are you sure you want to ${action} this user?`)) {
-      this.isLoading = true;
-
       const request$ = user.isActive
         ? this.adminUsersService.deactivateUser(user.id)
         : this.adminUsersService.activateUser(user.id);
 
       request$.pipe(
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoading = false;
+        })
       ).subscribe({
         next: () => {
-          this.successMessage = `User ${action}d successfully!`;
+          this.showSuccess(`User ${action}d successfully!`);
           this.loadUsers();
           if (this.isDrawerOpen) {
             this.closeDrawer();
           }
-          setTimeout(() => {
-            this.successMessage = null;
-          }, 3000);
         },
         error: (err) => {
-          this.error = `Failed to ${action} user`;
-          this.isLoading = false;
+          this.showError(`Failed to ${action} user`);
         }
       });
     }
@@ -376,22 +423,19 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   private deactivateUser(userId: string): void {
     if (confirm('Are you sure you want to deactivate this user?')) {
-      this.isLoading = true;
-
       this.adminUsersService.deactivateUser(userId).pipe(
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoading = false;
+        })
       ).subscribe({
         next: () => {
-          this.successMessage = 'User deactivated successfully!';
+          this.showSuccess('User deactivated successfully!');
           this.closeDrawer();
           this.loadUsers();
-          setTimeout(() => {
-            this.successMessage = null;
-          }, 3000);
         },
         error: (err) => {
-          this.error = 'Failed to deactivate user';
-          this.isLoading = false;
+          this.showError('Failed to deactivate user');
         }
       });
     }
@@ -402,44 +446,26 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   private deleteUser(userId: string): void {
     if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      this.isLoading = true;
-
       this.adminUsersService.deleteUser(userId).pipe(
-        takeUntil(this.destroy$)
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoading = false;
+        })
       ).subscribe({
         next: () => {
-          this.successMessage = 'User deleted successfully!';
+          this.showSuccess('User deleted successfully!');
           this.loadUsers();
-          setTimeout(() => {
-            this.successMessage = null;
-          }, 3000);
         },
         error: (err) => {
-          this.error = 'Failed to delete user';
-          this.isLoading = false;
+          this.showError('Failed to delete user');
         }
       });
     }
   }
 
   /**
-   * Export users to CSV
-   */
-  exportToCSV(): void {
-    // TODO: Implement CSV export
-    console.log('Exporting users to CSV');
-  }
-
-  /**
-   * Import users from CSV
-   */
-  importFromCSV(): void {
-    // TODO: Implement CSV import
-    console.log('Importing users from CSV');
-  }
-
-  /**
-   * GROUP MANAGEMENT METHODS
+   * GROUP MANAGEMENT METHODS (Placeholder - Not MVP)
+   * Groups feature is disabled in current MVP
    */
 
   /**
@@ -452,38 +478,19 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle create group click
+   * Handle create group click (placeholder)
    */
   onCreateGroupClick(): void {
-    const groupName = prompt('Enter new group name:');
-    if (groupName && groupName.trim()) {
-      this.isLoading = true;
-      this.groupsService.createGroup({ name: groupName.trim() })
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: () => {
-            this.successMessage = 'Group created successfully!';
-            this.isLoading = false;
-            // Reload groups in the group list component
-            // (component will reload when service emits new data)
-            setTimeout(() => {
-              this.successMessage = null;
-            }, 3000);
-          },
-          error: (err) => {
-            this.error = 'Failed to create group';
-            this.isLoading = false;
-          }
-        });
-    }
+    // Groups not implemented in MVP
+    this.showError('Groups feature coming soon');
   }
 
   /**
-   * Handle add members to group click
+   * Handle add members to group click (placeholder)
    */
   onAddGroupMembersClick(groupId: string): void {
-    this.selectedGroupId = groupId;
-    this.isAddGroupMembersModalOpen = true;
+    // Groups not implemented in MVP
+    this.showError('Groups feature coming soon');
   }
 
   /**
@@ -494,15 +501,11 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle members added to group
+   * Handle members added to group (placeholder)
    */
   onGroupMembersAdded(userIds: string[]): void {
-    this.successMessage = `${userIds.length} member(s) added to group successfully!`;
+    this.showSuccess(`${userIds.length} member(s) added to group successfully!`);
     this.closeAddGroupMembersModal();
-    // Group details will reload automatically via onGroupSelected
-    setTimeout(() => {
-      this.successMessage = null;
-    }, 3000);
   }
 
   /**

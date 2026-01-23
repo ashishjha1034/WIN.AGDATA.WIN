@@ -22,6 +22,9 @@ public static class SeedData
             // Seed Admin User
             await SeedAdminUserAsync(context);
 
+            // Seed Test Employee Users
+            await SeedTestEmployeeUsersAsync(context);
+
             // Seed Product Categories
             await SeedProductCategoriesAsync(context);
 
@@ -30,6 +33,9 @@ public static class SeedData
 
             // Seed Sample Events
             await SeedSampleEventsAsync(context);
+
+            // Seed Events with Participants for testing
+            await SeedEventsWithParticipantsAsync(context);
 
             // Seed Sample Transactions
             await SeedSampleTransactionsAsync(context);
@@ -115,6 +121,58 @@ public static class SeedData
         }
     }
 
+    private static async Task SeedTestEmployeeUsersAsync(ApplicationDbContext context)
+    {
+        var testEmployees = new[]
+        {
+            ("EMP001", "john.doe@agdata.com", "John", "Doe"),
+            ("EMP002", "jane.smith@agdata.com", "Jane", "Smith"),
+            ("EMP003", "mike.johnson@agdata.com", "Mike", "Johnson"),
+            ("EMP004", "sarah.williams@agdata.com", "Sarah", "Williams")
+        };
+
+        var employeeRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Employee");
+        if (employeeRole == null)
+        {
+            Console.WriteLine("✗ Employee role not found");
+            return;
+        }
+
+        foreach (var (empId, empEmail, firstName, lastName) in testEmployees)
+        {
+            var userExists = await context.Users.AnyAsync(u => u.Email.Value == empEmail);
+
+            if (!userExists)
+            {
+                try
+                {
+                    var email = EmailAddress.Create(empEmail);
+                    var user = new User(
+                        employeeId: empId,
+                        email: email,
+                        firstName: firstName,
+                        lastName: lastName,
+                        password: "Test@123456"
+                    );
+                    // Ensure MustChangePassword is false so token will have pwdChanged="true"
+                    // This is the default, but being explicit for clarity
+
+                    context.Users.Add(user);
+                    await context.SaveChangesAsync();
+
+                    user.AssignRole(employeeRole, Guid.Empty);
+                    await context.SaveChangesAsync();
+
+                    Console.WriteLine($"✓ Created test employee user: {empEmail}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"✗ Test employee user creation failed for {empEmail}: {ex.Message}");
+                }
+            }
+        }
+    }
+
     private static async Task SeedProductCategoriesAsync(ApplicationDbContext context)
     {
         var categories = new[]
@@ -191,9 +249,9 @@ public static class SeedData
         {
             var evt = new Event(name, desc, date, points, location);
             if (status == EventStatus.Active)
-                evt.Start();
+                evt.Activate(adminUser.Id);
             else if (status == EventStatus.Completed)
-                evt.Complete();
+                evt.CompleteEvent(adminUser.Id);
             context.Events.Add(evt);
             Console.WriteLine($"✓ Seeded event: {name}");
         }
@@ -262,5 +320,96 @@ public static class SeedData
         }
 
         await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedEventsWithParticipantsAsync(ApplicationDbContext context)
+    {
+        // Check if we already have test events with participants
+        var testEvent = await context.Events.FirstOrDefaultAsync(e => e.Name == "Test Event - Q1 Sales Summit");
+        if (testEvent != null && context.EventParticipants.Count(p => p.EventId == testEvent.Id) > 0)
+            return; // Already seeded
+
+        var employees = await context.Users
+            .Where(u => u.EmployeeId.StartsWith("EMP"))
+            .ToListAsync();
+
+        if (employees.Count < 12)
+        {
+            // Create more test employees if needed
+            var employeeRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Employee");
+            if (employeeRole != null)
+            {
+                for (int i = employees.Count + 1; i <= 25; i++)
+                {
+                    var empEmail = $"employee{i:D2}@agdata.com";
+                    var exists = await context.Users.AnyAsync(u => u.Email.Value == empEmail);
+                    if (!exists)
+                    {
+                        var email = EmailAddress.Create(empEmail);
+                        var user = new User(
+                            employeeId: $"EMP{i:D3}",
+                            email: email,
+                            firstName: $"Employee{i}",
+                            lastName: "TestUser",
+                            password: "Test@123456"
+                        );
+                        context.Users.Add(user);
+                        user.AssignRole(employeeRole, Guid.Empty);
+                        employees.Add(user);
+                    }
+                }
+                await context.SaveChangesAsync();
+            }
+        }
+
+        // Create 2 new events with participants
+        var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Email.Value == "admin@agdata.com");
+        if (adminUser == null || employees.Count < 12)
+            return;
+
+        var eventsToCreate = new[]
+        {
+            ("Test Event - Q1 Sales Summit", "Quarterly sales and achievements recognition", DateTime.UtcNow.AddDays(45), "Grand Ballroom", 5000),
+            ("Test Event - Innovation Challenge 2026", "Annual innovation competition and awards", DateTime.UtcNow.AddDays(60), "Convention Center", 7500)
+        };
+
+        foreach (var (eventName, eventDesc, eventDate, eventLocation, eventPoints) in eventsToCreate)
+        {
+            var eventExists = await context.Events.AnyAsync(e => e.Name == eventName);
+            if (eventExists)
+                continue;
+
+            var @event = new Event(eventName, eventDesc, eventDate, eventPoints, eventLocation);
+            @event.Activate(adminUser.Id); // Activate the event so we can award points
+            context.Events.Add(@event);
+            await context.SaveChangesAsync();
+
+            // Add 10-12 random participants
+            var participantCount = new Random().Next(10, 13);
+            var selectedEmployees = employees.OrderBy(x => Guid.NewGuid()).Take(participantCount).ToList();
+
+            foreach (var employee in selectedEmployees)
+            {
+                var participant = new EventParticipant(@event.Id, employee.Id);
+                context.EventParticipants.Add(participant);
+
+                // Randomly check in some participants
+                if (new Random().Next(0, 2) == 0)
+                {
+                    participant.MarkCheckedIn();
+                }
+
+                // Randomly award points to some checked-in participants
+                if (participant.AttendanceStatus == AttendanceStatus.Attended && new Random().Next(0, 2) == 0)
+                {
+                    var pointsToAward = new Random().Next(100, 500);
+                    var rank = new Random().Next(0, 4); // 0 means no rank
+                    participant.AwardPoints(pointsToAward, rank > 0 ? rank : null, adminUser.Id);
+                }
+            }
+
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Seeded event '{eventName}' with {participantCount} participants");
+        }
     }
 }

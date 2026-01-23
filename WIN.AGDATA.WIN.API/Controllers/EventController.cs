@@ -110,6 +110,62 @@ public class EventController : ControllerBase
     }
 
     /// <summary>
+    /// Get event participants
+    /// </summary>
+    /// <remarks>
+    /// Retrieve list of all participants for a specific event.
+    /// Admin only. Returns participant details including attendance status and awarded points.
+    /// </remarks>
+    /// <param name="id">Event ID</param>
+    /// <returns>List of participants</returns>
+    /// <response code="200">Participants retrieved successfully</response>
+    /// <response code="404">Event not found</response>
+    [HttpGet("{id:guid}/participants")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Get event participants", Description = "Admin only. List all participants for an event.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetEventParticipants(Guid id)
+    {
+        try
+        {
+            var @event = await _eventRepository.GetByIdWithParticipantsAsync(id);
+
+            if (@event == null)
+                return NotFound(new { message = "Event not found", eventId = id });
+
+            var participantDtos = @event.Participants.Select(p => new EventParticipantDto
+            {
+                Id = p.Id,
+                UserId = p.UserId,
+                Name = p.User != null ? $"{p.User.FirstName} {p.User.LastName}" : "Unknown",
+                Email = p.User?.Email?.Value ?? "",
+                EmployeeId = p.User?.EmployeeId ?? "",
+                AttendanceStatus = p.AttendanceStatus.ToString(),
+                PointsAwarded = p.PointsAwarded,
+                EventRank = p.EventRank,
+                RegisteredAt = p.RegisteredAt,
+                CheckedInAt = p.CheckedInAt,
+                AwardedAt = p.AwardedAt,
+                AwardedBy = p.AwardedBy
+            }).OrderBy(p => p.Name).ToList();
+
+            return Ok(new
+            {
+                eventId = id,
+                eventName = @event.Name,
+                total = participantDtos.Count,
+                data = participantDtos
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve participants", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Create new event
     /// </summary>
     /// <remarks>
@@ -469,6 +525,132 @@ public class EventController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Failed to check in participant", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update participant attendance status
+    /// </summary>
+    /// <remarks>
+    /// Admin-only. Toggle attendance status between Registered and Checked-In.
+    /// 
+    /// **Rules:**
+    /// - Event must be in Active status for check-in
+    /// - Participant must be registered for the event
+    /// - Cannot change status if participant has been awarded points
+    /// </remarks>
+    /// <param name="id">Event ID</param>
+    /// <param name="participantId">Participant's user ID</param>
+    /// <param name="request">New attendance status</param>
+    /// <returns>Success message</returns>
+    /// <response code="200">Status updated</response>
+    /// <response code="400">Invalid operation or participant already awarded</response>
+    /// <response code="403">Forbidden - admin only</response>
+    [HttpPatch("{id:guid}/participants/{participantId:guid}/status")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Update attendance status", Description = "Admin only. Toggle participant attendance status.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> UpdateParticipantStatus(Guid id, Guid participantId, [FromBody] UpdateAttendanceRequest request)
+    {
+        try
+        {
+            var @event = await _eventRepository.GetByIdWithParticipantsAsync(id);
+            if (@event == null)
+                return NotFound(new { message = "Event not found", eventId = id });
+
+            var participant = @event.Participants.FirstOrDefault(p => p.UserId == participantId);
+            if (participant == null)
+                return NotFound(new { message = "Participant not found", eventId = id, participantId });
+
+            // Validate - cannot change status if points awarded
+            if (participant.PointsAwarded > 0)
+                return BadRequest(new { message = "Cannot change status for participant who has been awarded points", eventId = id, participantId });
+
+            // Toggle or set status based on request
+            if (request.Status?.ToLower() == "attended" || request.Status?.ToLower() == "checked-in")
+            {
+                if (@event.Status.ToString() != "Active")
+                    return BadRequest(new { message = "Event must be Active to check-in participants", eventId = id, currentStatus = @event.Status.ToString() });
+                
+                participant.MarkCheckedIn();
+            }
+            else if (request.Status?.ToLower() == "registered")
+            {
+                // Use reflection to set back to Registered (or create a method in domain)
+                // For MVP, we'll just validate they can't undo if awarded
+                return BadRequest(new { message = "Cannot revert checked-in status in MVP. Use delete instead if needed." });
+            }
+
+            await _eventRepository.UpdateAsync(@event);
+
+            return Ok(new { 
+                message = "Participant status updated successfully", 
+                eventId = id, 
+                participantId = participantId,
+                newStatus = participant.AttendanceStatus.ToString()
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to update participant status", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove participant from event
+    /// </summary>
+    /// <remarks>
+    /// Admin-only. Removes a participant from the event.
+    /// 
+    /// **Rules:**
+    /// - Cannot remove participant who has been awarded points
+    /// - Works for events in any status except Completed
+    /// </remarks>
+    /// <param name="id">Event ID</param>
+    /// <param name="participantId">Participant's user ID</param>
+    /// <returns>Success message</returns>
+    /// <response code="200">Participant removed</response>
+    /// <response code="400">Cannot remove - participant has been awarded or event completed</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">Participant not found</response>
+    [HttpDelete("{id:guid}/participants/{participantId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Remove participant", Description = "Admin only. Remove participant from event.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> RemoveParticipant(Guid id, Guid participantId)
+    {
+        try
+        {
+            var @event = await _eventRepository.GetByIdWithParticipantsAsync(id);
+            if (@event == null)
+                return NotFound(new { message = "Event not found", eventId = id });
+
+            if (@event.Status.ToString() == "Completed")
+                return BadRequest(new { message = "Cannot remove participants from completed events", eventId = id });
+
+            var participant = @event.Participants.FirstOrDefault(p => p.UserId == participantId);
+            if (participant == null)
+                return NotFound(new { message = "Participant not found in this event", eventId = id, participantId });
+
+            // Validate - cannot remove if points awarded
+            if (participant.PointsAwarded > 0)
+                return BadRequest(new { message = "Cannot remove participant who has been awarded points", eventId = id, participantId });
+
+            @event.RemoveParticipant(participantId);
+            await _eventRepository.UpdateAsync(@event);
+
+            return Ok(new { message = "Participant removed successfully", eventId = id, participantId = participantId });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to remove participant", error = ex.Message });
         }
     }
 

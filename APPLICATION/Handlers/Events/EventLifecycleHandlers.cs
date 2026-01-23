@@ -71,6 +71,19 @@ public class CompleteEventHandler : IRequestHandler<CompleteEventCommand>
 
         try
         {
+            // Validate that 100% of points have been awarded before completing
+            if (@event.TotalPointsPool.HasValue && @event.TotalPointsPool.Value > 0)
+            {
+                if (@event.DistributedPoints < @event.TotalPointsPool.Value)
+                {
+                    var awardedPercent = (@event.DistributedPoints * 100m / @event.TotalPointsPool.Value);
+                    throw new DomainException(
+                        $"Cannot mark event as Completed until 100% of points are awarded. " +
+                        $"Currently {Math.Round(awardedPercent, 2)}% awarded " +
+                        $"({@event.DistributedPoints}/{@event.TotalPointsPool.Value} points).");
+                }
+            }
+
             @event.CompleteEvent(currentUserId);
             await _unitOfWork.SaveChangesAsync(ct);
         }

@@ -2,60 +2,327 @@
   <app-user-sidebar></app-user-sidebar>
 
   <div class="user-page-main">
-    <div class="page-header">
-      <div class="search-container">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="11" cy="11" r="8"></circle>
-          <path d="m21 21-4.35-4.35"></path>
-        </svg>
-        <input type="text" class="search-input" placeholder="Search..." [(ngModel)]="searchQuery" />
+    <!-- Header -->
+    <header class="page-header">
+      <div class="header-left">
+        <button class="menu-toggle" aria-label="Toggle menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <h1 class="header-title">Transactions</h1>
       </div>
 
       <div class="header-right">
-        <div class="user-menu">
-          <span class="user-label">Employee</span>
-          <div class="user-avatar-small">
-            {{ currentUser?.firstName?.charAt(0) || '' }}{{ currentUser?.lastName?.charAt(0) || '' }}
-          </div>
+        <span class="welcome-text">Welcome, {{ currentUser?.firstName || 'User' }}</span>
+        <div class="user-avatar" [title]="currentUser?.firstName + ' ' + currentUser?.lastName">
+          {{ currentUser?.firstName?.charAt(0) || '' }}{{ currentUser?.lastName?.charAt(0) || '' }}
         </div>
-        <button class="logout-btn" (click)="logout()">Logout</button>
+        <button class="avatar-dropdown-btn" aria-label="User menu">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
       </div>
-    </div>
+    </header>
 
-    <div class="page-content">
-      <h1 class="page-title">Transactions</h1>
-
-      <div *ngIf="isLoading" class="loading-indicator">
+    <!-- Main Content -->
+    <main class="page-content">
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-container">
         <div class="spinner"></div>
         <p>Loading transactions...</p>
       </div>
 
-      <div class="transactions-table" *ngIf="!isLoading && transactions.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>Type</th>
-              <th>Points</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let transaction of transactions">
-              <td>{{ transaction.description || transaction.type }}</td>
-              <td>{{ transaction.type }}</td>
-              <td [ngClass]="getTransactionClass(transaction.points)">
-                {{ transaction.points >= 0 ? '+' : '' }}{{ transaction.points }}
-              </td>
-              <td>{{ transaction.createdAt | date: 'MMM d, yyyy' }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div *ngIf="!isLoading" class="transactions-container">
+        <!-- Balance & Filters Row -->
+        <div class="top-controls">
+          <!-- Current Balance Badge -->
+          <div class="balance-badge">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="balance-icon">
+              <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            </svg>
+            <span class="balance-label">Current Balance</span>
+            <span class="balance-value">{{ stats?.currentBalance | number }} pts</span>
+          </div>
+
+          <!-- Date Range Picker -->
+          <div class="date-range-picker">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="calendar-icon">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2"/>
+              <line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/>
+              <line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/>
+              <line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/>
+            </svg>
+            <input 
+              type="date" 
+              class="date-input" 
+              [(ngModel)]="filters.startDate"
+              (change)="onDateChange()"
+              placeholder="From"
+            />
+            <span class="date-separator">-</span>
+            <input 
+              type="date" 
+              class="date-input" 
+              [(ngModel)]="filters.endDate"
+              (change)="onDateChange()"
+              placeholder="To"
+            />
+          </div>
+
+          <!-- Search Input -->
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="search-icon">
+              <circle cx="11" cy="11" r="8" stroke-width="2"/>
+              <path d="m21 21-4.35-4.35" stroke-width="2"/>
+            </svg>
+            <input 
+              type="text" 
+              class="search-input" 
+              placeholder="Search transactions"
+              [(ngModel)]="filters.searchQuery"
+              (input)="onSearchChange()"
+            />
+          </div>
+        </div>
+
+        <!-- Filter Tabs Row -->
+        <div class="filter-row">
+          <div class="filter-tabs">
+            <button 
+              class="filter-tab" 
+              [class.active]="filters.type === 'all'"
+              (click)="setTypeFilter('all')"
+            >
+              All
+            </button>
+            <button 
+              class="filter-tab" 
+              [class.active]="filters.type === 'earned'"
+              (click)="setTypeFilter('earned')"
+            >
+              Earned
+            </button>
+            <button 
+              class="filter-tab" 
+              [class.active]="filters.type === 'redeemed'"
+              (click)="setTypeFilter('redeemed')"
+            >
+              Redeemed
+            </button>
+            <button class="filter-tab dates-btn">
+              Dates
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                <path d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
+          </div>
+
+          <button 
+            class="reset-filters-btn"
+            [disabled]="!hasFiltersApplied"
+            (click)="resetFilters()"
+          >
+            Reset Filters
+          </button>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="table-container">
+          <table class="transactions-table">
+            <thead>
+              <tr>
+                <th class="col-date">Date</th>
+                <th class="col-description">Description</th>
+                <th class="col-type">Type</th>
+                <th class="col-points">Points</th>
+                <th class="col-balance">Balance After</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                *ngFor="let transaction of paginatedTransactions"
+                class="transaction-row"
+                (click)="openTransactionDetail(transaction)"
+              >
+                <td class="col-date">
+                  {{ transaction.timestamp | date: 'MMM d, yyyy' }}
+                </td>
+                <td class="col-description">
+                  <div class="description-cell">
+                    <span class="source-icon" [ngClass]="getSourceClass(transaction.source)">
+                      {{ getSourceIcon(transaction.source) }}
+                    </span>
+                    <span class="description-text">{{ transaction.description }}</span>
+                  </div>
+                </td>
+                <td class="col-type">
+                  <span class="type-badge" [ngClass]="getTypeBadgeClass(transaction.type)">
+                    {{ getTypeLabel(transaction.type) }}
+                  </span>
+                </td>
+                <td class="col-points" [ngClass]="getTransactionClass(transaction.points)">
+                  {{ formatPoints(transaction.points) }}
+                </td>
+                <td class="col-balance">
+                  {{ transaction.balanceAfter | number }} pts
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Empty State -->
+          <div *ngIf="filteredTransactions.length === 0" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="empty-icon">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-width="2"/>
+            </svg>
+            <p class="empty-title">No transactions found</p>
+            <p class="empty-subtitle" *ngIf="hasFiltersApplied">Try adjusting your filters</p>
+            <p class="empty-subtitle" *ngIf="!hasFiltersApplied">Your transaction history will appear here</p>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-row" *ngIf="filteredTransactions.length > 0">
+          <div class="pagination-info">
+            Showing {{ showingFrom }}–{{ showingTo }} of <strong>{{ totalTransactions }}</strong> transactions
+          </div>
+
+          <div class="pagination-controls">
+            <div class="rows-per-page">
+              <span>Rows per page:</span>
+              <select 
+                [(ngModel)]="pageSize" 
+                (change)="onPageSizeChange()"
+                class="page-size-select"
+              >
+                <option *ngFor="let size of pageSizeOptions" [value]="size">{{ size }}</option>
+              </select>
+            </div>
+
+            <div class="page-navigation">
+              <button 
+                class="nav-btn" 
+                [disabled]="currentPage === 1"
+                (click)="previousPage()"
+                aria-label="Previous page"
+              >
+                &lt;
+              </button>
+
+              <div class="page-numbers">
+                <button 
+                  *ngFor="let page of visiblePages"
+                  class="page-btn"
+                  [class.active]="page === currentPage"
+                  [class.ellipsis]="page === '...'"
+                  [disabled]="page === '...'"
+                  (click)="goToPage(page)"
+                >
+                  {{ page }}
+                </button>
+              </div>
+
+              <button 
+                class="nav-btn" 
+                [disabled]="currentPage === totalPages"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Transaction Detail Drawer -->
+  <div 
+    class="drawer-overlay" 
+    [class.open]="isDrawerOpen"
+    (click)="onOverlayClick($event)"
+  >
+    <aside class="transaction-drawer" [class.open]="isDrawerOpen" *ngIf="selectedTransaction">
+      <div class="drawer-header">
+        <h2 class="drawer-title">Transaction Details</h2>
+        <button class="drawer-close" (click)="closeDrawer()" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
-      <div *ngIf="!isLoading && transactions.length === 0" class="empty-state">
-        <p>No transactions yet</p>
+      <div class="drawer-content">
+        <!-- Transaction Title -->
+        <div class="detail-section title-section">
+          <span class="source-badge" [ngClass]="getSourceClass(selectedTransaction.source)">
+            {{ getSourceIcon(selectedTransaction.source) }} {{ selectedTransaction.source }}
+          </span>
+          <h3 class="transaction-title">{{ selectedTransaction.description }}</h3>
+        </div>
+
+        <!-- Points Change -->
+        <div class="detail-section points-section">
+          <div class="points-change" [ngClass]="getTransactionClass(selectedTransaction.points)">
+            <span class="points-label">Points {{ selectedTransaction.points >= 0 ? 'Earned' : 'Spent' }}</span>
+            <span class="points-amount">{{ formatPoints(selectedTransaction.points) }}</span>
+          </div>
+          <div class="balance-change">
+            <div class="balance-item">
+              <span class="balance-label">Balance Before</span>
+              <span class="balance-value">{{ (selectedTransaction.balanceAfter - selectedTransaction.points) | number }} pts</span>
+            </div>
+            <svg viewBox="0 0 24 24" fill="currentColor" class="arrow-icon">
+              <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+            </svg>
+            <div class="balance-item">
+              <span class="balance-label">Balance After</span>
+              <span class="balance-value">{{ selectedTransaction.balanceAfter | number }} pts</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Details Grid -->
+        <div class="detail-section info-grid">
+          <div class="info-item">
+            <span class="info-label">Date & Time</span>
+            <span class="info-value">{{ formatFullDate(selectedTransaction.timestamp) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Transaction Type</span>
+            <span class="info-value">
+              <span class="type-badge" [ngClass]="getTypeBadgeClass(selectedTransaction.type)">
+                {{ getTypeLabel(selectedTransaction.type) }}
+              </span>
+            </span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Source</span>
+            <span class="info-value">{{ selectedTransaction.source }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Processed By</span>
+            <span class="info-value">{{ getProcessedByLabel(selectedTransaction.processedBy) }}</span>
+          </div>
+        </div>
+
+        <!-- Full Description -->
+        <div class="detail-section">
+          <span class="info-label">Description</span>
+          <p class="full-description">{{ selectedTransaction.description }}</p>
+        </div>
+
+        <!-- Transaction ID -->
+        <div class="detail-section footer-section">
+          <span class="transaction-id">Transaction ID: {{ selectedTransaction.id }}</span>
+        </div>
       </div>
-    </div>
+    </aside>
   </div>
 </div>

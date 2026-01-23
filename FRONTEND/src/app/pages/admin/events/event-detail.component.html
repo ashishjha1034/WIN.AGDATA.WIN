@@ -28,6 +28,7 @@
       <span 
         class="status-badge"
         [style.backgroundColor]="getStatusColor(event?.status || '')"
+        [style.color]="'#FFFFFF'"
       >
         {{ event?.status }}
       </span>
@@ -35,7 +36,7 @@
 
     <div class="header-info">
       <div class="info-item">
-        <span class="label">Event Date</span>
+        <span class="label">Event Start Date</span>
         <span class="value">{{ formatDate(event?.eventDate || '') }}</span>
       </div>
       <div class="divider"></div>
@@ -46,24 +47,34 @@
     </div>
 
     <div class="header-actions">
-      <button class="btn btn-secondary" (click)="editEvent()" *ngIf="event?.status === 'Draft'">
+      <!-- Edit only for Upcoming events -->
+      <button class="btn btn-secondary" (click)="editEvent()" *ngIf="event?.status === 'Upcoming'">
         ✏️ Edit Event
       </button>
+      <!-- Activate (Go Live) button for Upcoming events -->
       <button 
-        class="btn btn-danger" 
+        class="btn btn-primary" 
+        (click)="activateEvent()"
+        *ngIf="event?.status === 'Upcoming' && isAdmin()"
+      >
+        ▶️ Activate (Go Live)
+      </button>
+      <!-- Complete button for Live events -->
+      <button 
+        class="btn btn-secondary" 
         (click)="completeEvent()"
-        *ngIf="event?.status === 'Active' && isAdmin()"
+        *ngIf="event?.status === 'Live' && isAdmin()"
       >
         ✓ Complete Event
       </button>
+      <!-- Cancel button for Upcoming and Live events -->
       <button 
         class="btn btn-danger" 
         (click)="cancelEvent()"
-        *ngIf="(event?.status === 'Draft' || event?.status === 'Active' || event?.status === 'Upcoming') && isAdmin()"
+        *ngIf="(event?.status === 'Upcoming' || event?.status === 'Live') && isAdmin()"
       >
         ✕ Cancel Event
       </button>
-      <button class="btn-more" title="More actions">⋮</button>
     </div>
   </div>
 
@@ -101,17 +112,49 @@
 
       <!-- Participants Tab -->
       <div class="tab-pane" [class.active]="activeTab === 'participants'">
-        <app-event-detail-participants [eventId]="eventId" [event]="event"></app-event-detail-participants>
+        <app-event-detail-participants #participantsTab [eventId]="eventId" [event]="event" (participantsChanged)="onParticipantsChanged()"></app-event-detail-participants>
       </div>
 
       <!-- Points & Rewards Tab -->
       <div class="tab-pane" [class.active]="activeTab === 'points'">
-        <app-event-detail-points [eventId]="eventId" [event]="event"></app-event-detail-points>
+        <app-event-detail-points #pointsTab [eventId]="eventId" [event]="event" (pointsAwarded)="onPointsAwarded()"></app-event-detail-points>
       </div>
     </div>
   </div>
 
-  <!-- Confirmation Modals -->
+  <!-- Activate Confirmation Modal -->
+  <div class="modal" *ngIf="showConfirmActivate" (click)="showConfirmActivate = false">
+    <div class="modal-content modal-info" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>▶️ Activate Event?</h3>
+        <button class="modal-close" (click)="showConfirmActivate = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>You're about to activate this event and set it to <strong>Live</strong>.</p>
+        <div class="confirmation-summary" *ngIf="event">
+          <div class="summary-row">
+            <span class="label">Event Name:</span>
+            <span class="value">{{ event.name }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Current Status:</span>
+            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ event.status }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Participants:</span>
+            <span class="value">{{ event.participantCount }}</span>
+          </div>
+        </div>
+        <p class="info-text">ℹ️ Once activated, registration will close and check-in will become available.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" (click)="showConfirmActivate = false">Cancel</button>
+        <button class="btn btn-primary" (click)="confirmActivateEvent()">Yes, Activate Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Complete Confirmation Modal -->
   <div class="modal" *ngIf="showConfirmComplete" (click)="showConfirmComplete = false">
     <div class="modal-content modal-warning" (click)="$event.stopPropagation()">
       <div class="modal-header">
@@ -127,7 +170,7 @@
           </div>
           <div class="summary-row">
             <span class="label">Current Status:</span>
-            <span class="value status-badge" [ngClass]="'status-' + event.status">{{ event.status }}</span>
+            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ event.status }}</span>
           </div>
           <div class="summary-row">
             <span class="label">Participants:</span>
@@ -143,6 +186,7 @@
     </div>
   </div>
 
+  <!-- Cancel Confirmation Modal -->
   <div class="modal" *ngIf="showConfirmCancel" (click)="showConfirmCancel = false">
     <div class="modal-content modal-danger" (click)="$event.stopPropagation()">
       <div class="modal-header">
@@ -158,7 +202,7 @@
           </div>
           <div class="summary-row">
             <span class="label">Current Status:</span>
-            <span class="value status-badge" [ngClass]="'status-' + event.status">{{ event.status }}</span>
+            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ getStatusLabel(event.status) }}</span>
           </div>
           <div class="summary-row">
             <span class="label">Participants Registered:</span>

@@ -1,10 +1,10 @@
-import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { EventService } from '../../../../services/event.service';
-import { EventDetail, EventParticipant, AttendanceStatus } from '../../../../models/event.models';
+import { EventDetail, EventParticipant } from '../../../../models/event.models';
 
 @Component({
   selector: 'app-event-detail-participants',
@@ -14,25 +14,27 @@ import { EventDetail, EventParticipant, AttendanceStatus } from '../../../../mod
   imports: [CommonModule, FormsModule]
 })
 export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnChanges {
-  // expose Math to template
+  // Expose Math to template
   public Math = Math;
+  
   @Input() eventId: string = '';
   @Input() event: EventDetail | null = null;
+  @Output() participantsChanged = new EventEmitter<void>();
 
   participants: EventParticipant[] = [];
   filteredParticipants: EventParticipant[] = [];
   isLoading = false;
   searchText = '';
-  selectedAttendanceStatus: AttendanceStatus | 'All' = 'All';
+  statusFilter: 'All' | 'Registered' | 'Checked-In' = 'All';
+  showFilterDropdown = false;
   currentPage = 1;
   pageSize = 10;
+  errorMessage = '';
+  successMessage = '';
 
-  attendanceStatusOptions: Array<{ value: AttendanceStatus | 'All'; label: string }> = [
-    { value: 'All', label: 'All' },
-    { value: 'Registered', label: 'Registered' },
-    { value: 'Checked-In', label: 'Checked-In' },
-    { value: 'Attended', label: 'Attended' }
-  ];
+  // For toggle operations
+  togglingParticipantId: string | null = null;
+  deletingParticipantId: string | null = null;
 
   private destroy$ = new Subject<void>();
 
@@ -46,9 +48,6 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
     if (changes['eventId'] && changes['eventId'].currentValue) {
       this.loadParticipants();
     }
-    if (changes['event'] && changes['event'].currentValue) {
-      this.applyFilters();
-    }
   }
 
   ngOnDestroy(): void {
@@ -60,6 +59,8 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
     if (!this.eventId) return;
     
     this.isLoading = true;
+    this.errorMessage = '';
+    
     this.eventService.getEventParticipants(this.eventId)
       .pipe(
         takeUntil(this.destroy$),
@@ -67,12 +68,13 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
       )
       .subscribe({
         next: (data) => {
-          console.log('[Participants] Loaded:', data);
+          console.log('[Participants] Loaded:', data.length);
           this.participants = data;
           this.applyFilters();
         },
         error: (error) => {
           console.error('[Participants] Error loading:', error);
+          this.errorMessage = 'Failed to load participant data';
         }
       });
   }
@@ -80,29 +82,29 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
   applyFilters(): void {
     let filtered = [...this.participants];
 
-    if (this.selectedAttendanceStatus !== 'All') {
-      filtered = filtered.filter(p => p.attendanceStatus === this.selectedAttendanceStatus);
+    // Filter by status
+    if (this.statusFilter === 'Registered') {
+      filtered = filtered.filter(p => p.attendanceStatus === 'Registered');
+    } else if (this.statusFilter === 'Checked-In') {
+      filtered = filtered.filter(p => p.attendanceStatus === 'Attended');
     }
 
+    // Filter by search text
     if (this.searchText) {
       const search = this.searchText.toLowerCase();
       filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(search) ||
-        p.employeeId.toLowerCase().includes(search) ||
-        p.email.toLowerCase().includes(search)
+        p.name?.toLowerCase().includes(search) ||
+        p.employeeId?.toLowerCase().includes(search) ||
+        p.email?.toLowerCase().includes(search)
       );
     }
 
-    this.filteredParticipants = filtered.slice(
-      (this.currentPage - 1) * this.pageSize,
-      this.currentPage * this.pageSize
-    );
-  }
-
-  onStatusFilterChange(status: AttendanceStatus | 'All'): void {
-    this.selectedAttendanceStatus = status;
-    this.currentPage = 1;
-    this.applyFilters();
+    this.filteredParticipants = filtered;
+    
+    // Reset page if needed
+    if (this.currentPage > this.getTotalPages()) {
+      this.currentPage = 1;
+    }
   }
 
   onSearch(text: string): void {
@@ -111,67 +113,152 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
     this.applyFilters();
   }
 
-  checkInParticipant(participantId: string): void {
-    if (!this.eventId) return;
+  onFilterChange(filter: 'All' | 'Registered' | 'Checked-In'): void {
+    this.statusFilter = filter;
+    this.showFilterDropdown = false;
+    this.currentPage = 1;
+    this.applyFilters();
+  }
+
+  toggleFilterDropdown(): void {
+    this.showFilterDropdown = !this.showFilterDropdown;
+  }
+
+  closeFilterDropdown(): void {
+    this.showFilterDropdown = false;
+  }
+
+  /**
+   * Toggle attendance status for a participant (check-in)
+   */
+  toggleAttendance(participant: EventParticipant): void {
+    if (!this.eventId || !this.canToggleStatus(participant)) return;
     
-    this.eventService.checkInParticipant(this.eventId, participantId)
-      .pipe(takeUntil(this.destroy$))
+    // If registered, check them in
+    if (participant.attendanceStatus === 'Registered') {
+      this.checkInParticipant(participant);
+    }
+  }
+
+  checkInParticipant(participant: EventParticipant): void {
+    this.togglingParticipantId = participant.userId;
+    this.errorMessage = '';
+    
+    this.eventService.checkInParticipant(this.eventId, participant.userId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.togglingParticipantId = null))
+      )
       .subscribe({
         next: () => {
           console.log('[Participants] Check-in successful');
-          this.loadParticipants();
+          participant.attendanceStatus = 'Attended';
+          participant.checkedInAt = new Date().toISOString();
+          this.successMessage = `${participant.name} checked in successfully`;
+          this.applyFilters();
+          this.participantsChanged.emit();
+          setTimeout(() => this.successMessage = '', 3000);
         },
         error: (error) => {
           console.error('[Participants] Check-in error:', error);
+          this.errorMessage = error?.error?.message || 'Failed to check in participant';
         }
       });
   }
 
-  removeParticipant(participantId: string): void {
-    if (!this.eventId) return;
-    if (!confirm('Are you sure you want to remove this participant?')) return;
+  /**
+   * Delete participant from event
+   */
+  deleteParticipant(participant: EventParticipant): void {
+    if (!this.eventId || !this.canDelete(participant)) return;
     
-    this.eventService.removeParticipant(this.eventId, participantId)
-      .pipe(takeUntil(this.destroy$))
+    if (!confirm(`Remove ${participant.name} from this event?`)) return;
+    
+    this.deletingParticipantId = participant.userId;
+    this.errorMessage = '';
+    
+    this.eventService.removeParticipant(this.eventId, participant.userId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.deletingParticipantId = null))
+      )
       .subscribe({
         next: () => {
-          console.log('[Participants] Participant removed');
-          this.loadParticipants();
+          console.log('[Participants] Removed successfully');
+          this.participants = this.participants.filter(p => p.userId !== participant.userId);
+          this.applyFilters();
+          this.successMessage = `${participant.name} removed from event`;
+          this.participantsChanged.emit();
+          setTimeout(() => this.successMessage = '', 3000);
         },
         error: (error) => {
-          console.error('[Participants] Error removing:', error);
+          console.error('[Participants] Remove error:', error);
+          this.errorMessage = error?.error?.message || 'Failed to remove participant';
         }
       });
   }
 
-  bulkCheckIn(): void {
-    if (!this.eventId) return;
-    const registeredOnly = this.participants.filter(p => p.attendanceStatus === 'Registered');
-    if (registeredOnly.length === 0) {
-      alert('No registered participants to check in');
-      return;
-    }
-    if (!confirm(`Check in ${registeredOnly.length} participants?`)) return;
-    
-    registeredOnly.forEach(p => {
-      this.eventService.updateParticipantStatus(this.eventId, p.userId, 'Checked-In')
-        .pipe(takeUntil(this.destroy$))
-        .subscribe();
-    });
-    
-    setTimeout(() => this.loadParticipants(), 500);
+  /**
+   * Can toggle status? Only for Live events and non-awarded participants
+   */
+  canToggleStatus(participant: EventParticipant): boolean {
+    // Event must be Live
+    if (this.event?.status !== 'Live') return false;
+    // Cannot toggle if points awarded
+    if (participant.pointsAwarded && participant.pointsAwarded > 0) return false;
+    // Can only toggle from Registered to Checked-In
+    return participant.attendanceStatus === 'Registered';
+  }
+
+  /**
+   * Can delete participant? Only if not awarded points
+   */
+  canDelete(participant: EventParticipant): boolean {
+    // Cannot delete from completed events
+    if (this.event?.status === 'Completed') return false;
+    // Cannot delete if points awarded
+    return !(participant.pointsAwarded && participant.pointsAwarded > 0);
+  }
+
+  /**
+   * Get display status
+   */
+  getDisplayStatus(status: string): string {
+    return status === 'Attended' ? 'Checked-In' : status;
+  }
+
+  /**
+   * Is checked in?
+   */
+  isCheckedIn(participant: EventParticipant): boolean {
+    return participant.attendanceStatus === 'Attended';
+  }
+
+  /**
+   * Get paginated participants
+   */
+  getPaginatedParticipants(): EventParticipant[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredParticipants.slice(start, start + this.pageSize);
   }
 
   getTotalPages(): number {
-    return Math.ceil(this.participants.length / this.pageSize);
+    return Math.ceil(this.filteredParticipants.length / this.pageSize) || 1;
   }
 
-  getParticipantCount(): { total: number; registered: number; checkedIn: number; attended: number } {
-    return {
-      total: this.participants.length,
-      registered: this.participants.filter(p => p.attendanceStatus === 'Registered').length,
-      checkedIn: this.participants.filter(p => p.attendanceStatus === 'Checked-In').length,
-      attended: this.participants.filter(p => p.attendanceStatus === 'Attended').length
-    };
+  getRegisteredCount(): number {
+    return this.participants.filter(p => p.attendanceStatus === 'Registered').length;
+  }
+
+  getCheckedInCount(): number {
+    return this.participants.filter(p => p.attendanceStatus === 'Attended').length;
+  }
+
+  dismissError(): void {
+    this.errorMessage = '';
+  }
+
+  dismissSuccess(): void {
+    this.successMessage = '';
   }
 }

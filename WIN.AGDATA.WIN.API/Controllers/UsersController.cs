@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Users;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Transactions;
+using AutoMapper;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -17,11 +19,22 @@ public class UsersController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransactionRepository _transactionRepository;
+    private readonly IMapper _mapper;
 
-    public UsersController(IUserRepository userRepository, ICurrentUserService currentUserService)
+    public UsersController(
+        IUserRepository userRepository,
+        ICurrentUserService currentUserService,
+        IUnitOfWork unitOfWork,
+        ITransactionRepository transactionRepository,
+        IMapper mapper)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _unitOfWork = unitOfWork;
+        _transactionRepository = transactionRepository;
+        _mapper = mapper;
     }
 
     /// <summary>
@@ -155,8 +168,24 @@ public class UsersController : ControllerBase
             if (user == null)
                 return NotFound(new { message = "User not found" });
 
+            // Update basic profile info
             user.UpdateProfile(request.FirstName, request.LastName);
+
+            // Admin can update email and employeeId
+            if (isAdmin)
+            {
+                if (!string.IsNullOrWhiteSpace(request.Email) && request.Email != user.Email.Value)
+                {
+                    user.UpdateEmail(request.Email);
+                }
+                if (!string.IsNullOrWhiteSpace(request.EmployeeId) && request.EmployeeId != user.EmployeeId)
+                {
+                    user.UpdateEmployeeId(request.EmployeeId);
+                }
+            }
+
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             return Ok(new { message = "User profile updated successfully", userId = id });
         }
@@ -245,6 +274,7 @@ public class UsersController : ControllerBase
 
             user.Deactivate("User deactivated by admin");
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             return Ok(new { message = "User deactivated successfully", userId = id });
         }
@@ -283,6 +313,7 @@ public class UsersController : ControllerBase
 
             user.Activate();
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             return Ok(new { message = "User activated successfully", userId = id });
         }
@@ -290,6 +321,119 @@ public class UsersController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Failed to activate user", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get user transaction history
+    /// </summary>
+    /// <remarks>
+    /// Retrieve paginated transaction history for a specific user.
+    /// Regular users can only view their own transactions.
+    /// Admins can view any user's transactions.
+    /// </remarks>
+    /// <param name="id">User ID</param>
+    /// <param name="pageNumber">Page number (default: 1)</param>
+    /// <param name="pageSize">Page size (default: 50, max: 100)</param>
+    /// <returns>Paginated transaction list</returns>
+    /// <response code="200">Transactions retrieved successfully</response>
+    /// <response code="403">Forbidden - cannot view other user's data</response>
+    /// <response code="404">User not found</response>
+    [HttpGet("{id:guid}/transactions")]
+    [SwaggerOperation(Summary = "Get user transactions", Description = "Retrieve user's transaction history")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetUserTransactions(
+        Guid id,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        try
+        {
+            var currentUserId = _currentUserService.GetCurrentUserId();
+            var isAdmin = _currentUserService.IsAdmin();
+
+            if (id != currentUserId && !isAdmin)
+                return Forbid("You can only view your own transactions");
+
+            // Validate pagination
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 50;
+            if (pageSize > 100) pageSize = 100;
+
+            var user = await _userRepository.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "User not found" });
+
+            var (transactions, totalCount) = await _transactionRepository
+                .GetPagedByUserIdAsync(id, pageNumber, pageSize);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var transactionDtos = _mapper.Map<List<TransactionDto>>(transactions);
+
+            return Ok(new
+            {
+                data = transactionDtos,
+                pagination = new
+                {
+                    currentPage = pageNumber,
+                    pageSize = pageSize,
+                    totalCount = totalCount,
+                    totalPages = totalPages,
+                    hasNextPage = pageNumber < totalPages,
+                    hasPreviousPage = pageNumber > 1
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve transactions", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete user account
+    /// </summary>
+    /// <remarks>
+    /// Permanently delete a user account. Admin only operation.
+    /// WARNING: This action is irreversible and will delete all user data.
+    /// </remarks>
+    /// <param name="id">User ID to delete</param>
+    /// <returns>Confirmation message</returns>
+    /// <response code="200">User deleted successfully</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">User not found</response>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [SwaggerOperation(Summary = "Delete user", Description = "Permanently remove user account (admin only)")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> DeleteUser(Guid id)
+    {
+        try
+        {
+            var user = await _userRepository.GetByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "User not found" });
+
+            // Prevent deleting yourself
+            var currentUserId = _currentUserService.GetCurrentUserId();
+            if (id == currentUserId)
+                return BadRequest(new { message = "You cannot delete your own account" });
+
+            await _userRepository.DeleteAsync(id);
+            await _unitOfWork.SaveChangesAsync();
+
+            return Ok(new { message = "User deleted successfully", userId = id });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to delete user", error = ex.Message });
         }
     }
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject, throwError, TimeoutError } from 'rxjs';
-import { map, tap, catchError, timeout } from 'rxjs/operators';
+import { Observable, BehaviorSubject, throwError, TimeoutError, forkJoin } from 'rxjs';
+import { map, tap, catchError, timeout, switchMap } from 'rxjs/operators';
 import { API_CONFIG } from '../config/api.config';
 import {
   Event,
@@ -9,16 +9,14 @@ import {
   EventParticipant,
   EventFilter,
   EventKPI,
-  EventListResponse,
-  EventDetailResponse,
-  ParticipantsResponse,
-  PointsAwardResponse,
-  PointsAward,
   BulkAwardRequest,
+  BulkAwardResponse,
   RankAwardRequest,
   CreateEventRequest,
   UpdateEventRequest,
-  AttendanceStatus
+  AttendanceStatus,
+  PoolStatus,
+  getRemainingPoints
 } from '../models/event.models';
 
 @Injectable({
@@ -46,36 +44,47 @@ export class EventService {
    * BACKEND: GET /api/event
    */
   getEvents(filter?: EventFilter): Observable<Event[]> {
-    let url = `${this.EVENT_API_URL}`;
-    
-    // Add query parameters if filter is provided
-    if (filter) {
-      const params = new URLSearchParams();
-      if (filter.status) {
-        params.append('status', filter.status);
-      }
-      if (filter.searchText) {
-        params.append('search', filter.searchText);
-      }
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-    }
+    const url = `${this.EVENT_API_URL}`;
     
     console.log('[EventService] Fetching events from:', url, 'with filter:', filter);
 
     return this.http.get<any>(url).pipe(
-      timeout(15000), // 15 second timeout
+      timeout(15000),
       tap(response => {
         console.log('[EventService] Raw response received:', response);
-        const events = Array.isArray(response) ? response : response.data || [];
-        console.log('[EventService] Events extracted:', events);
-        console.log('[EventService] Events count:', events.length);
+        let events = Array.isArray(response) ? response : response.data || [];
+        
+        // Client-side filtering by status
+        if (filter?.status) {
+          events = events.filter((e: Event) => e.status === filter.status);
+        }
+        
+        // Client-side search filtering
+        if (filter?.searchText) {
+          const search = filter.searchText.toLowerCase();
+          events = events.filter((e: Event) => 
+            e.name.toLowerCase().includes(search) ||
+            e.description?.toLowerCase().includes(search)
+          );
+        }
+        
+        console.log('[EventService] Events after filter:', events.length);
         this.eventListSubject$.next(events);
       }),
       map(response => {
-        const events = Array.isArray(response) ? response : response.data || [];
-        console.log('[EventService] Mapping response, returning:', events);
+        let events = Array.isArray(response) ? response : response.data || [];
+        
+        if (filter?.status) {
+          events = events.filter((e: Event) => e.status === filter.status);
+        }
+        if (filter?.searchText) {
+          const search = filter.searchText.toLowerCase();
+          events = events.filter((e: Event) => 
+            e.name.toLowerCase().includes(search) ||
+            e.description?.toLowerCase().includes(search)
+          );
+        }
+        
         return events;
       }),
       catchError(error => {
@@ -98,13 +107,26 @@ export class EventService {
     console.log('[EventService] Fetching event detail from:', url);
 
     return this.http.get<any>(url).pipe(
-      timeout(15000), // 15 second timeout
+      timeout(15000),
       tap(response => {
         const event = response.data || response;
-        console.log('[EventService] Event detail loaded:', event);
-        this.eventDetailSubject$.next(event);
+        // Add computed counts from participants if available
+        const enrichedEvent: EventDetail = {
+          ...event,
+          registeredCount: response.participantCount || event.participantCount || 0,
+          checkedInCount: 0 // Will be computed from participants
+        };
+        console.log('[EventService] Event detail loaded:', enrichedEvent);
+        this.eventDetailSubject$.next(enrichedEvent);
       }),
-      map(response => response.data || response),
+      map(response => {
+        const event = response.data || response;
+        return {
+          ...event,
+          registeredCount: response.participantCount || event.participantCount || 0,
+          checkedInCount: 0
+        } as EventDetail;
+      }),
       catchError(error => {
         console.error('[EventService] Error fetching event detail:', error);
         if (error instanceof TimeoutError) {
@@ -116,64 +138,102 @@ export class EventService {
   }
 
   /**
-   * Get participants for a specific event (from event detail)
-   * Note: Not yet available in current event detail model
+   * Get participants for an event
+   * BACKEND: GET /api/event/{eventId}/participants
    */
-  getEventParticipants(
-    eventId: string,
-    filters?: { attendanceStatus?: AttendanceStatus; searchText?: string }
-  ): Observable<EventParticipant[]> {
-    const error = new Error('Get participants endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+  getEventParticipants(eventId: string): Observable<EventParticipant[]> {
+    const url = `${this.EVENT_API_URL}/${eventId}/participants`;
+    console.log('[EventService] Fetching participants from:', url);
+
+    return this.http.get<any>(url).pipe(
+      timeout(15000),
+      tap(response => {
+        console.log('[EventService] Participants loaded:', response);
+        const participants = response.data || [];
+        this.participantsSubject$.next(participants);
+      }),
+      map(response => response.data || []),
+      catchError(error => {
+        console.error('[EventService] Error fetching participants:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Update participant attendance status
+   * BACKEND: PATCH /api/event/{eventId}/participants/{participantId}/status
+   */
+  updateParticipantStatus(eventId: string, participantId: string, status: string): Observable<any> {
+    const url = `${this.EVENT_API_URL}/${eventId}/participants/${participantId}/status`;
+    console.log('[EventService] Updating participant status:', participantId, status);
+
+    return this.http.patch<any>(url, { status }).pipe(
+      tap(response => {
+        console.log('[EventService] Participant status updated:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error updating participant status:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Remove participant from event
+   * BACKEND: DELETE /api/event/{eventId}/participants/{participantId}
+   */
+  removeParticipant(eventId: string, participantId: string): Observable<any> {
+    const url = `${this.EVENT_API_URL}/${eventId}/participants/${participantId}`;
+    console.log('[EventService] Removing participant:', participantId);
+
+    return this.http.delete<any>(url).pipe(
+      tap(response => {
+        console.log('[EventService] Participant removed:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error removing participant:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Get pool status for an event
+   * BACKEND: GET /api/event/{eventId}/pool-status
+   */
+  getPoolStatus(eventId: string): Observable<PoolStatus> {
+    const url = `${this.EVENT_API_URL}/${eventId}/pool-status`;
+    console.log('[EventService] Fetching pool status from:', url);
+
+    return this.http.get<PoolStatus>(url).pipe(
+      timeout(15000),
+      tap(response => {
+        console.log('[EventService] Pool status loaded:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error fetching pool status:', error);
+        throw error;
+      })
+    );
   }
 
   /**
    * Compute KPI from event list (client-side calculation)
-   * No backend endpoint required
    */
   computeKPIFromEvents(events: Event[]): EventKPI {
     const kpi: EventKPI = {
       totalEvents: events.length,
-      activeEvents: events.filter(e => e.status === 'Active').length,
+      liveEvents: events.filter(e => e.status === 'Live').length,
       upcomingEvents: events.filter(e => e.status === 'Upcoming').length,
       completedEvents: events.filter(e => e.status === 'Completed').length,
-      totalParticipants: 0,
-      totalPointsAllocated: 0
+      cancelledEvents: events.filter(e => e.status === 'Cancelled').length,
+      totalParticipants: events.reduce((sum, e) => sum + (e.participantCount || 0), 0),
+      totalPointsAllocated: events.reduce((sum, e) => sum + (e.totalPointsPool || 0), 0)
     };
     console.log('[EventService] KPI computed:', kpi);
     this.kpiSubject$.next(kpi);
     return kpi;
-  }
-
-  /**
-   * Award points to all attended participants
-   * BACKEND: Not yet implemented
-   */
-  bulkAwardPoints(eventId: string): Observable<any> {
-    const error = new Error('Bulk award endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
-  }
-
-  /**
-   * Award points by rank
-   * BACKEND: Not yet implemented
-   */
-  awardPointsByRank(eventId: string, request: RankAwardRequest): Observable<any> {
-    const error = new Error('Rank award endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
-  }
-
-  /**
-   * Get awarded points for an event
-   * BACKEND: Not yet implemented
-   */
-  getAwardedPoints(eventId: string): Observable<PointsAward[]> {
-    const error = new Error('Get awarded points endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
   }
 
   /**
@@ -198,66 +258,168 @@ export class EventService {
 
   /**
    * Update an event
-   * BACKEND: Not yet implemented
+   * BACKEND: PUT /api/event/{id}
    */
   updateEvent(eventId: string, request: UpdateEventRequest): Observable<Event> {
-    const error = new Error('Update event endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+    const url = `${this.EVENT_API_URL}/${eventId}`;
+    console.log('[EventService] Updating event:', eventId, request);
+
+    return this.http.put<any>(url, request).pipe(
+      tap(response => {
+        console.log('[EventService] Event updated:', response);
+      }),
+      map(response => response.data || response),
+      catchError(error => {
+        console.error('[EventService] Error updating event:', error);
+        throw error;
+      })
+    );
   }
 
   /**
-   * Update participant attendance status
-   * BACKEND: Not yet implemented
+   * Activate an event (Upcoming → Live)
+   * BACKEND: POST /api/event/{id}/activate
    */
-  updateParticipantStatus(
-    eventId: string,
-    participantId: string,
-    status: AttendanceStatus
-  ): Observable<any> {
-    const error = new Error('Update participant status endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+  activateEvent(eventId: string): Observable<any> {
+    const url = `${this.EVENT_API_URL}/${eventId}/activate`;
+    console.log('[EventService] Activating event:', eventId);
+
+    return this.http.post<any>(url, {}).pipe(
+      tap(response => {
+        console.log('[EventService] Event activated:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error activating event:', error);
+        throw error;
+      })
+    );
   }
 
   /**
-   * Remove a participant from an event
-   * BACKEND: Not yet implemented
-   */
-  removeParticipant(eventId: string, participantId: string): Observable<any> {
-    const error = new Error('Remove participant endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
-  }
-
-  /**
-   * Complete an event
-   * BACKEND: Not yet implemented
+   * Complete an event (Live → Completed)
+   * BACKEND: POST /api/event/{id}/complete
    */
   completeEvent(eventId: string): Observable<any> {
-    const error = new Error('Complete event endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+    const url = `${this.EVENT_API_URL}/${eventId}/complete`;
+    console.log('[EventService] Completing event:', eventId);
+
+    return this.http.post<any>(url, {}).pipe(
+      tap(response => {
+        console.log('[EventService] Event completed:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error completing event:', error);
+        throw error;
+      })
+    );
   }
 
   /**
    * Cancel an event
-   * BACKEND: Not yet implemented
+   * BACKEND: POST /api/event/{id}/cancel
    */
   cancelEvent(eventId: string): Observable<any> {
-    const error = new Error('Cancel event endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+    const url = `${this.EVENT_API_URL}/${eventId}/cancel`;
+    console.log('[EventService] Cancelling event:', eventId);
+
+    return this.http.post<any>(url, {}).pipe(
+      tap(response => {
+        console.log('[EventService] Event cancelled:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error cancelling event:', error);
+        throw error;
+      })
+    );
   }
 
   /**
-   * Check in a participant
-   * BACKEND: Not yet implemented
+   * Check in a single participant
+   * BACKEND: POST /api/event/{eventId}/check-in/{participantId}
    */
   checkInParticipant(eventId: string, participantId: string): Observable<any> {
-    const error = new Error('Check-in endpoint not implemented on backend');
-    console.error('[EventService]', error.message);
-    return throwError(() => error);
+    const url = `${this.EVENT_API_URL}/${eventId}/check-in/${participantId}`;
+    console.log('[EventService] Checking in participant:', participantId);
+
+    return this.http.post<any>(url, {}).pipe(
+      tap(response => {
+        console.log('[EventService] Participant checked in:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error checking in participant:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Bulk check-in all registered participants
+   * Calls check-in endpoint for each registered participant
+   */
+  bulkCheckIn(eventId: string, participantIds: string[]): Observable<any> {
+    console.log('[EventService] Bulk checking in participants:', participantIds.length);
+    
+    if (participantIds.length === 0) {
+      return throwError(() => new Error('No participants to check in'));
+    }
+
+    // Create array of check-in observables
+    const checkInRequests = participantIds.map(id => 
+      this.checkInParticipant(eventId, id).pipe(
+        catchError(err => {
+          console.warn(`[EventService] Failed to check in ${id}:`, err);
+          return throwError(() => err);
+        })
+      )
+    );
+
+    return forkJoin(checkInRequests).pipe(
+      tap(results => {
+        console.log('[EventService] Bulk check-in completed:', results.length);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error in bulk check-in:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Award points to a single participant
+   * BACKEND: POST /api/event/{eventId}/award-points/{participantId}
+   */
+  awardPoints(eventId: string, participantId: string, request: RankAwardRequest): Observable<any> {
+    const url = `${this.EVENT_API_URL}/${eventId}/award-points/${participantId}`;
+    console.log('[EventService] Awarding points:', participantId, request);
+
+    return this.http.post<any>(url, request).pipe(
+      tap(response => {
+        console.log('[EventService] Points awarded:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error awarding points:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Bulk award points to multiple participants
+   * BACKEND: POST /api/event/{eventId}/bulk-award-points
+   */
+  bulkAwardPoints(eventId: string, request: BulkAwardRequest): Observable<BulkAwardResponse> {
+    const url = `${this.EVENT_API_URL}/${eventId}/bulk-award-points`;
+    console.log('[EventService] Bulk awarding points:', request);
+
+    return this.http.post<BulkAwardResponse>(url, request).pipe(
+      tap(response => {
+        console.log('[EventService] Bulk award completed:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error in bulk award:', error);
+        throw error;
+      })
+    );
   }
 
   /**

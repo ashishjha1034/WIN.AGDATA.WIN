@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { takeUntil, finalize } from 'rxjs/operators';
+import { takeUntil, finalize, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { EventService } from '../../../services/event.service';
 import { Event, EventStatus, EventFilter, EventKPI } from '../../../models/event.models';
 import { AuthService } from '../../../services/auth.service';
@@ -20,14 +20,14 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   // Expose global Math to templates to avoid AOT/runtime undefined
   public Math = Math;
   // Data
-  events: Event[] = [];
+  allEvents: Event[] = [];  // All events for KPI calculation (unfiltered)
+  events: Event[] = [];     // Events filtered by status tab
   filteredEvents: Event[] = [];
   kpi: EventKPI | null = null;
   currentUser: any;
 
   // UI State
   isLoading = false;
-  selectedRows = new Set<string>();
   searchText = '';
   activeStatusTab: EventStatus | 'All' = 'All';
   currentPage = 1;
@@ -38,13 +38,16 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   showErrorAlert = false;
   hasLoadError = false;
 
-  // Filters
+  // Search debounce
+  private searchSubject$ = new Subject<string>();
+
+  // Status tabs - aligned with backend statuses
   statusOptions: Array<{ value: EventStatus | 'All'; label: string }> = [
     { value: 'All', label: 'All' },
-    { value: 'Active', label: 'Active' },
     { value: 'Upcoming', label: 'Upcoming' },
+    { value: 'Live', label: 'Live' },
     { value: 'Completed', label: 'Completed' },
-    { value: 'Draft', label: 'Draft' }
+    { value: 'Cancelled', label: 'Canceled' }
   ];
 
   private destroy$ = new Subject<void>();
@@ -61,6 +64,17 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCurrentUser();
     this.loadEvents();
+    
+    // Setup search debounce
+    this.searchSubject$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(searchText => {
+      this.searchText = searchText;
+      this.currentPage = 1;
+      this.loadEvents();
+    });
   }
 
   ngOnDestroy(): void {
@@ -81,29 +95,21 @@ export class EventManagementComponent implements OnInit, OnDestroy {
 
   /**
    * Load events with current filters
+   * KPIs are computed from ALL events, tabs filter display only
    */
   loadEvents(): void {
     this.isLoading = true;
     this.errorMessage = '';
     this.showErrorAlert = false;
-    
-    const filter: EventFilter = {};
 
-    if (this.activeStatusTab !== 'All') {
-      filter.status = this.activeStatusTab;
-    }
-    if (this.searchText) {
-      filter.searchText = this.searchText;
-    }
+    console.log('[EventMgmt] Loading all events');
 
-    console.log('[EventMgmt] Loading events with filter:', filter);
-
-    this.eventService.getEvents(filter)
+    // Always fetch all events first for KPI calculation
+    this.eventService.getEvents({})
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
           console.log('[EventMgmt] Loading finished - finalize entered');
-          // Defer clearing loading state to ensure any in-flight UI updates finish
           setTimeout(() => {
             this.isLoading = false;
             console.log('[EventMgmt] isLoading set to false (deferred)');
@@ -114,28 +120,21 @@ export class EventManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (data) => {
           console.log('[EventMgmt] Events loaded successfully, received data:', data);
-          console.log('[EventMgmt] Data type:', typeof data, 'Is array?', Array.isArray(data));
-          console.log('[EventMgmt] Data length:', data ? data.length : 'null/undefined');
           const extracted: any = Array.isArray(data) ? data : ((data as any)?.data || []);
-          this.events = extracted;
-          console.log('[EventMgmt] this.events assigned. Length:', this.events.length);
+          this.allEvents = extracted;
+          
+          // Compute KPI from ALL events (not filtered)
+          this.kpi = this.eventService.computeKPIFromEvents(this.allEvents);
+          console.log('[EventMgmt] KPI computed from all events:', this.kpi);
+          
+          // Apply tab filter for display
+          this.applyStatusFilter();
           this.hasLoadError = false;
-          // Compute KPI from loaded events
-          this.kpi = this.eventService.computeKPIFromEvents(this.events);
-          console.log('[EventMgmt] KPI computed:', this.kpi);
-          this.applyPagination();
-          // Defensive: if events present but pagination produced empty list, reapply
-          if (this.events.length > 0 && this.filteredEvents.length === 0) {
-            console.warn('[EventMgmt] filteredEvents empty despite events present — reapplying pagination');
-            this.applyPagination();
-          }
-          console.log('[EventMgmt] Pagination applied. filteredEvents length:', this.filteredEvents.length);
-          // Trigger change detection to update template
           this.cdr.detectChanges();
-          console.log('[EventMgmt] Change detection triggered');
         },
         error: (error) => {
           console.error('[EventMgmt] Error loading events:', error);
+          this.allEvents = [];
           this.events = [];
           this.filteredEvents = [];
           this.hasLoadError = true;
@@ -144,6 +143,31 @@ export class EventManagementComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         }
       });
+  }
+
+  /**
+   * Apply status tab filter to events for display
+   */
+  applyStatusFilter(): void {
+    let filtered = [...this.allEvents];
+    
+    // Filter by status tab
+    if (this.activeStatusTab !== 'All') {
+      filtered = filtered.filter(e => e.status === this.activeStatusTab);
+    }
+    
+    // Filter by search text
+    if (this.searchText) {
+      const search = this.searchText.toLowerCase();
+      filtered = filtered.filter(e => 
+        e.name.toLowerCase().includes(search) ||
+        e.description?.toLowerCase().includes(search)
+      );
+    }
+    
+    this.events = filtered;
+    console.log('[EventMgmt] Filtered events:', this.events.length);
+    this.applyPagination();
   }
 
   /**
@@ -163,55 +187,21 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Filter by status tab
+   * Filter by status tab (no reload, just filter)
    */
   onStatusTabChange(status: EventStatus | 'All'): void {
     this.activeStatusTab = status;
     this.currentPage = 1;
-    this.selectedRows.clear();
-    this.loadEvents();
+    this.applyStatusFilter();
   }
 
   /**
-   * Handle search
+   * Handle search with debounce
    */
   onSearch(text: string): void {
     this.searchText = text;
     this.currentPage = 1;
-    this.selectedRows.clear();
-    this.loadEvents();
-  }
-
-  /**
-   * Toggle row selection
-   */
-  toggleRowSelection(eventId: string, event?: Event): void {
-    if (this.selectedRows.has(eventId)) {
-      this.selectedRows.delete(eventId);
-    } else {
-      this.selectedRows.add(eventId);
-    }
-  }
-
-  /**
-   * Toggle all rows
-   */
-  toggleAllRows(): void {
-    if (this.selectedRows.size === this.filteredEvents.length) {
-      this.selectedRows.clear();
-    } else {
-      this.filteredEvents.forEach(e => this.selectedRows.add(e.id));
-    }
-  }
-
-  /**
-   * Check if all rows are selected
-   */
-  isAllSelected(): boolean {
-    return (
-      this.filteredEvents.length > 0 &&
-      this.filteredEvents.every(e => this.selectedRows.has(e.id))
-    );
+    this.applyStatusFilter();
   }
 
   /**
@@ -229,55 +219,31 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Export events to CSV
-   */
-  exportEvents(): void {
-    console.log('[EventMgmt] Exporting events...');
-    // Implementation would generate CSV and download
-    // For now, just log the action
-    alert('Export feature coming soon!');
-  }
-
-  /**
-   * Bulk action - would be implemented based on selection
-   */
-  onBulkAction(action: string): void {
-    console.log('[EventMgmt] Bulk action:', action, 'Selected:', Array.from(this.selectedRows));
-    alert(`Bulk ${action} on ${this.selectedRows.size} events - Coming soon!`);
-  }
-
-  /**
-   * Get status badge color
+   * Get status badge background color - updated per spec
    */
   getStatusColor(status: EventStatus): string {
     const colors: Record<EventStatus, string> = {
-      'Draft': '#6B7280',
-      'Active': '#10B981',
-      'Upcoming': '#3B82F6',
-      'Completed': '#8B5CF6',
-      'Cancelled': '#EF4444'
+      'Live': '#16A34A',       // Green
+      'Upcoming': '#F59E0B',   // Amber/Orange
+      'Completed': '#EC4899',  // Pink
+      'Cancelled': '#EF4444'   // Red
     };
     return colors[status] || '#6B7280';
   }
 
   /**
-   * Get status text color
+   * Get status text color for contrast
    */
   getStatusTextColor(status: EventStatus): string {
-    const colors: Record<EventStatus, string> = {
-      'Draft': '#374151',
-      'Active': '#065F46',
-      'Upcoming': '#1E3A8A',
-      'Completed': '#5B21B6',
-      'Cancelled': '#7F1D1D'
-    };
-    return colors[status] || '#374151';
+    // All status badges use white text for high contrast
+    return '#FFFFFF';
   }
 
   /**
    * Format date
    */
   formatDate(date: string): string {
+    if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -290,7 +256,6 @@ export class EventManagementComponent implements OnInit, OnDestroy {
    */
   onPageChange(newPage: number): void {
     this.currentPage = newPage;
-    this.selectedRows.clear();
     this.applyPagination();
   }
 

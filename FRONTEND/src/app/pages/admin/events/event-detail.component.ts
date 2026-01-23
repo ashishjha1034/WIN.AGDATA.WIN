@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -36,6 +36,13 @@ type ActiveTab = 'overview' | 'participants' | 'points';
   ]
 })
 export class EventDetailComponent implements OnInit, OnDestroy {
+  // Public properties for template access
+  public Math = Math;
+
+  // Template references
+  @ViewChild('participantsTab') participantsTab: EventDetailParticipantsComponent | undefined;
+  @ViewChild('pointsTab') pointsTab: EventDetailPointsComponent | undefined;
+
   // Data
   event: EventDetail | null = null;
   participants: EventParticipant[] = [];
@@ -46,6 +53,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   isLoading = false;
   activeTab: ActiveTab = 'overview';
   eventId: string = '';
+  showConfirmActivate = false;
   showConfirmComplete = false;
   showConfirmCancel = false;
   errorMessage = '';
@@ -57,8 +65,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     private eventService: EventService,
     private authService: AuthService,
     private router: Router,
-    private route: ActivatedRoute
-    ,
+    private route: ActivatedRoute,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -160,7 +167,42 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Complete event
+   * Activate event (Upcoming → Live)
+   */
+  activateEvent(): void {
+    if (!this.event) return;
+    this.showConfirmActivate = true;
+  }
+
+  /**
+   * Confirm activate event
+   */
+  confirmActivateEvent(): void {
+    if (!this.event) return;
+    
+    this.isLoading = true;
+    this.eventService.activateEvent(this.eventId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.isLoading = false))
+      )
+      .subscribe({
+        next: () => {
+          console.log('[EventDetail] Event activated');
+          this.showConfirmActivate = false;
+          this.loadEventDetail();
+        },
+        error: (error) => {
+          console.error('[EventDetail] Error activating event:', error);
+          this.errorMessage = error?.error?.message || 'Failed to activate event';
+          this.showErrorAlert = true;
+          this.showConfirmActivate = false;
+        }
+      });
+  }
+
+  /**
+   * Complete event (Live → Completed)
    */
   completeEvent(): void {
     if (!this.event) return;
@@ -187,6 +229,9 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('[EventDetail] Error completing event:', error);
+          this.errorMessage = error?.error?.message || 'Failed to complete event';
+          this.showErrorAlert = true;
+          this.showConfirmComplete = false;
         }
       });
   }
@@ -219,28 +264,41 @@ export class EventDetailComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('[EventDetail] Error cancelling event:', error);
+          this.errorMessage = error?.error?.message || 'Failed to cancel event';
+          this.showErrorAlert = true;
+          this.showConfirmCancel = false;
         }
       });
   }
 
   /**
-   * Get status badge color
+   * Get status badge color - aligned with spec
    */
   getStatusColor(status: string): string {
     const colors: Record<string, string> = {
-      'Draft': '#6B7280',
-      'Active': '#10B981',
-      'Upcoming': '#3B82F6',
-      'Completed': '#8B5CF6',
-      'Cancelled': '#EF4444'
+      'Active': '#16A34A',     // Green (was 'Live')
+      'Draft': '#F59E0B',      // Amber/Orange (was 'Upcoming')
+      'Completed': '#EC4899',  // Pink
+      'Cancelled': '#EF4444'   // Red
     };
     return colors[status] || '#6B7280';
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      'Draft': 'Upcoming',
+      'Active': 'Live',
+      'Completed': 'Completed',
+      'Cancelled': 'Cancelled'
+    };
+    return labels[status] || status;
   }
 
   /**
    * Format date
    */
   formatDate(date: string): string {
+    if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -252,6 +310,7 @@ export class EventDetailComponent implements OnInit, OnDestroy {
    * Format datetime
    */
   formatDateTime(date: string): string {
+    if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -266,5 +325,25 @@ export class EventDetailComponent implements OnInit, OnDestroy {
    */
   isAdmin(): boolean {
     return this.currentUser?.roles?.includes('Admin') || false;
+  }
+
+  /**
+   * When participants are changed, refresh points data
+   */
+  onParticipantsChanged(): void {
+    console.log('[EventDetail] Participants changed, refreshing points data');
+    if (this.pointsTab) {
+      this.pointsTab.loadData();
+    }
+  }
+
+  /**
+   * When points are awarded, refresh participant data
+   */
+  onPointsAwarded(): void {
+    console.log('[EventDetail] Points awarded, refreshing participant data');
+    if (this.participantsTab) {
+      this.participantsTab.loadParticipants();
+    }
   }
 }

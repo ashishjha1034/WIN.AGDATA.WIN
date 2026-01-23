@@ -15,4 +15,5 @@ public interface IUserRepository
     Task<IReadOnlyList<User>> GetActiveUsersAsync();
     void Add(User user);
     Task UpdateAsync(User user);
+    Task DeleteAsync(Guid id);
 }

@@ -1,240 +1,297 @@
-<div class="points-content" *ngIf="event && canAwardPoints()">
-  <!-- Points Pool (Read-Only) -->
-  <div class="card points-pool-card">
-    <h3 class="card-title">🪙 Event Points Pool</h3>
+<div class="points-content">
+  <!-- Messages -->
+  <div *ngIf="errorMessage" class="alert alert-danger">
+    <span>{{ errorMessage }}</span>
+    <button type="button" class="alert-close" (click)="dismissError()">✕</button>
+  </div>
+  <div *ngIf="successMessage" class="alert alert-success">
+    <span>{{ successMessage }}</span>
+    <button type="button" class="alert-close" (click)="dismissSuccess()">✕</button>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading points data...</p>
+  </div>
+
+  <!-- Main Content -->
+  <div *ngIf="!isLoading && event">
     
-    <div class="pool-info-grid">
-      <div class="pool-item">
-        <span class="label">Points per Participant</span>
-        <span class="value">{{ event.pointsPerParticipant | number }}</span>
+    <!-- 1. Points Overview Section -->
+    <div class="card points-overview-card">
+      <h3 class="card-title">🪙 Points Overview</h3>
+      
+      <div class="points-stats">
+        <div class="stat-item">
+          <span class="stat-label">Total Points Pool</span>
+          <span class="stat-value">
+            <ng-container *ngIf="!isPoolUnlimited()">{{ (getTotalPool() || 0) | number }}</ng-container>
+            <ng-container *ngIf="isPoolUnlimited()">Unlimited</ng-container>
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Distributed</span>
+          <span class="stat-value distributed">{{ getDistributedPoints() | number }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Remaining</span>
+          <span class="stat-value remaining">
+            <ng-container *ngIf="!isPoolUnlimited()">{{ getRemainingPoints() | number }}</ng-container>
+            <ng-container *ngIf="isPoolUnlimited()">∞</ng-container>
+          </span>
+        </div>
       </div>
-      <div class="pool-item">
-        <span class="label">Total Points Pool</span>
-        <span class="value">{{ event.totalPointsPool | number }}</span>
-      </div>
-      <div class="pool-item">
-        <span class="label">Distributed</span>
-        <span class="value">{{ event.pointsDistributed | number }}</span>
-      </div>
-      <div class="pool-item">
-        <span class="label">Remaining</span>
-        <span class="value remaining">{{ event.pointsRemaining | number }}</span>
-      </div>
-    </div>
 
-    <div class="progress-section">
-      <div class="progress-bar">
-        <div 
-          class="progress-fill"
-          [style.width.%]="getDistributionPercentage()"
-        ></div>
-      </div>
-      <div class="progress-labels">
-        <span class="progress-label">Distributed</span>
-        <span class="progress-percentage">{{ getDistributionPercentage() }}%</span>
-        <span class="progress-label">Remaining</span>
-      </div>
-    </div>
-
-    <div class="info-text">
-      <span class="info-icon">ℹ️</span>
-      Points configuration is locked once event is Active
-    </div>
-  </div>
-
-  <!-- Bulk Award Points -->
-  <div class="card bulk-award-card" *ngIf="event.status === 'Active' || event.status === 'Completed'">
-    <h3 class="card-title">🧺 Bulk Award Points</h3>
-    <p class="section-description">Award the same points to all participants marked as Attended.</p>
-
-    <div class="award-info">
-      <div class="info-item">
-        <span class="label">Attended Participants</span>
-        <span class="value">47</span>
-      </div>
-      <div class="info-item">
-        <span class="label">Points per Participant</span>
-        <span class="value">{{ event.pointsPerParticipant | number }}</span>
-      </div>
-      <div class="info-item">
-        <span class="label">Total Points to be Issued</span>
-        <span class="value highlight">23,500 pts</span>
+      <!-- Distribution Bar -->
+      <div class="distribution-bar-container" *ngIf="!isPoolUnlimited()">
+        <div class="distribution-bar">
+          <div class="distribution-fill" [style.width.%]="getDistributionPercentage()"></div>
+        </div>
+        <div class="distribution-info">
+          <span>{{ getDistributionPercentage() }}% distributed</span>
+        </div>
       </div>
     </div>
 
-    <div class="warning-box">
-      <span class="warning-icon">⚠️</span>
-      <span class="warning-text">This will award points to all participants marked as Attended.</span>
+    <!-- Locked State -->
+    <div class="card locked-card" *ngIf="!canAwardPoints()">
+      <div class="locked-content">
+        <span class="locked-icon">🔒</span>
+        <h4>Points Award Locked</h4>
+        <p>Event must be <strong>Live</strong> to award points.</p>
+        <p class="current-status">Current status: <strong>{{ event.status }}</strong></p>
+      </div>
     </div>
 
-    <button 
-      class="btn btn-primary btn-large"
-      (click)="bulkAwardPoints()"
-      [disabled]="isBulkAwardDisabled() || isBulkAwarding"
-      [title]="isBulkAwardDisabled() ? getBulkAwardDisabledReason() : 'Award points to all attended participants'"
-    >
-      {{ isBulkAwarding ? '⏳ Awarding...' : '✓ Award Points to All Attendees' }}
-    </button>
-  </div>
-
-  <!-- Rank-Based Award -->
-  <div class="card rank-award-card">
-    <h3 class="card-title">🏆 Award Points by Rank</h3>
-    <p class="section-description">Assign specific rank-based rewards to individual participants.</p>
-
-    <div *ngIf="!showRankForm" class="rank-collapsed">
-      <button 
-        class="btn btn-secondary"
-        (click)="showRankForm = true"
-      >
-        + Add Rank Award
-      </button>
-    </div>
-
-    <div *ngIf="showRankForm" class="rank-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Find Participant</label>
-          <div class="participant-search">
+    <!-- Award Sections (only when Live) -->
+    <ng-container *ngIf="canAwardPoints()">
+      
+      <!-- 2. Bulk Points Awarding Section -->
+      <div class="card bulk-award-card">
+        <h3 class="card-title">🧺 Bulk Points Awarding</h3>
+        
+        <!-- Bulk Amount Input -->
+        <div class="bulk-amount-section">
+          <label class="input-label">Enter Bulk Amount</label>
+          <div class="amount-input-group">
             <input 
-              type="text" 
-              placeholder="Search name or employee ID..."
-              (input)="onParticipantSearch($event.target.value)"
-              (focus)="showParticipantDropdown = filteredParticipants.length > 0"
-              class="search-input"
+              type="number" 
+              class="form-input amount-input"
+              [(ngModel)]="bulkAwardAmount"
+              placeholder="Enter total points to distribute"
+              min="1"
+              [max]="isPoolUnlimited() ? undefined : getRemainingPoints()"
             />
-            <div class="dropdown" *ngIf="showParticipantDropdown && filteredParticipants.length > 0">
-              <div 
-                *ngFor="let p of filteredParticipants"
-                class="dropdown-item"
-                (click)="selectParticipant(p)"
-              >
-                <span class="name">{{ p.name }}</span>
-                <span class="employee-id">{{ p.employeeId }}</span>
-              </div>
+            <span class="remaining-hint" *ngIf="!isPoolUnlimited()">
+              Max: {{ getRemainingPoints() | number }}
+            </span>
+          </div>
+          <div class="validation-error" *ngIf="bulkAwardAmount > 0 && !isPoolUnlimited() && bulkAwardAmount > getRemainingPoints()">
+            Amount exceeds remaining points
+          </div>
+        </div>
+
+        <!-- Participants Selection -->
+        <div class="participants-selection">
+          <div class="selection-header">
+            <span class="selection-title">Select Participants</span>
+            <div class="selection-search">
+              <input 
+                type="text" 
+                class="form-input search-input"
+                [(ngModel)]="bulkSearchText"
+                placeholder="Search by name, email, or employee ID..."
+              />
+              <span class="search-icon">🔍</span>
             </div>
           </div>
-          <div *ngIf="selectedParticipantName" class="selected-value">
-            ✓ Selected: {{ selectedParticipantName }}
+
+          <div class="selection-table-container">
+            <table class="selection-table">
+              <thead>
+                <tr>
+                  <th class="col-checkbox">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        [checked]="selectAll"
+                        (change)="toggleSelectAll()"
+                      />
+                      <span class="checkmark"></span>
+                    </label>
+                  </th>
+                  <th class="col-name">Name</th>
+                  <th class="col-employee-id">Employee ID</th>
+                  <th class="col-email">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let p of getFilteredEligibleParticipants()" [class.selected]="isSelected(p.userId)">
+                  <td class="col-checkbox">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        [checked]="isSelected(p.userId)"
+                        (change)="toggleParticipantSelection(p.userId)"
+                      />
+                      <span class="checkmark"></span>
+                    </label>
+                  </td>
+                  <td class="col-name">{{ p.name }}</td>
+                  <td class="col-employee-id">{{ p.employeeId }}</td>
+                  <td class="col-email">{{ p.email }}</td>
+                </tr>
+                <tr *ngIf="getFilteredEligibleParticipants().length === 0">
+                  <td colspan="4" class="empty-message">No eligible participants found</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Rank</label>
-          <select [(ngModel)]="selectedRank" class="form-select">
-            <option *ngFor="let rank of rankOptions" [value]="rank.value">
-              {{ rank.label }}
-            </option>
-          </select>
+        <!-- Bulk Summary -->
+        <div class="bulk-summary" *ngIf="getSelectedCount() > 0 && bulkAwardAmount > 0">
+          <div class="summary-info">
+            <span class="summary-item">
+              <strong>{{ getSelectedCount() }}</strong> participants selected
+            </span>
+            <span class="summary-divider">→</span>
+            <span class="summary-item highlight">
+              <strong>{{ getPointsPerParticipant() | number }}</strong> points each
+            </span>
+          </div>
         </div>
 
-        <div class="form-group" *ngIf="selectedRank === 'Custom'">
-          <label class="form-label">Points</label>
-          <input 
-            type="number" 
-            [(ngModel)]="customPoints"
-            placeholder="Enter points"
-            class="form-input"
-            min="0"
-          />
-        </div>
-
-        <div class="form-group points-display">
-          <label class="form-label">Points to Award</label>
-          <div class="points-value">{{ getPointsForCurrentRank() | number }}</div>
+        <div class="bulk-actions">
+          <button 
+            class="btn btn-primary"
+            (click)="submitBulkAward()"
+            [disabled]="!canSubmitBulkAward() || isBulkAwarding"
+          >
+            {{ isBulkAwarding ? '⏳ Awarding...' : '🎁 Award Points' }}
+          </button>
         </div>
       </div>
 
-      <div class="form-actions">
-        <button 
-          class="btn btn-secondary"
-          (click)="resetRankForm()"
-          [disabled]="isRankAwarding"
-        >
-          Cancel
-        </button>
-        <button 
-          class="btn btn-primary"
-          (click)="submitRankAward()"
-          [disabled]="isRankAwardDisabled() || isRankAwarding"
-          [title]="isRankAwardDisabled() ? getRankAwardDisabledReason() : 'Award points to selected participant'"
-        >
-          {{ isRankAwarding ? '⏳ Awarding...' : '🎁 Assign & Award' }}
-        </button>
+      <!-- 3. Award by Rank Section -->
+      <div class="card rank-award-card">
+        <h3 class="card-title">🏆 Award by Rank</h3>
+        
+        <!-- No Eligible Participants Message -->
+        <div class="no-eligible-message" *ngIf="getEligibleRankParticipants().length === 0">
+          <p>ℹ️ No eligible participants available for rank awards.</p>
+          <p class="small-text">Eligible participants are those who: are registered/checked-in AND have not yet received points.</p>
+        </div>
+
+        <div class="rank-form" *ngIf="getEligibleRankParticipants().length > 0">
+          <!-- Participant Search -->
+          <div class="form-group">
+            <label class="input-label">Find Participant</label>
+            <div class="participant-search">
+              <input 
+                type="text" 
+                class="form-input"
+                placeholder="Search by name, email, or employee ID..."
+                [value]="rankSearchText"
+                (input)="onRankParticipantSearch($any($event.target).value)"
+                (focus)="showRankDropdown = filteredRankParticipants.length > 0"
+              />
+              <div class="search-dropdown" *ngIf="showRankDropdown && filteredRankParticipants.length > 0">
+                <div 
+                  *ngFor="let p of filteredRankParticipants"
+                  class="dropdown-item"
+                  (click)="selectRankParticipant(p)"
+                >
+                  <span class="item-name">{{ p.name }}</span>
+                  <span class="item-details">{{ p.employeeId }} • {{ p.email }}</span>
+                </div>
+              </div>
+            </div>
+            <div *ngIf="selectedRankParticipant" class="selected-participant">
+              <span class="participant-badge">
+                ✓ {{ selectedRankParticipant.name }} ({{ selectedRankParticipant.employeeId }})
+              </span>
+              <button class="btn-clear" (click)="clearRankSelection()">✕</button>
+            </div>
+          </div>
+
+          <!-- Rank & Points Inputs -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="input-label">Rank</label>
+              <input 
+                type="number" 
+                class="form-input"
+                [(ngModel)]="rankValue"
+                placeholder="e.g., 1, 2, 3"
+                min="1"
+              />
+            </div>
+            <div class="form-group">
+              <label class="input-label">Points</label>
+              <input 
+                type="number" 
+                class="form-input"
+                [(ngModel)]="rankPoints"
+                placeholder="Enter points"
+                min="1"
+                [max]="isPoolUnlimited() ? undefined : getRemainingPoints()"
+              />
+            </div>
+          </div>
+
+          <div class="validation-error" *ngIf="rankPoints > 0 && !isPoolUnlimited() && rankPoints > getRemainingPoints()">
+            Amount exceeds remaining points ({{ getRemainingPoints() | number }} available)
+          </div>
+
+          <div class="validation-error" *ngIf="rankValue && isRankAlreadyUsed(rankValue)">
+            ❌ Rank #{{ rankValue }} has already been assigned. Please choose a different rank.
+          </div>
+
+          <div class="rank-actions">
+            <button 
+              class="btn btn-primary"
+              (click)="submitRankAward()"
+              [disabled]="!canSubmitRankAward() || isRankAwarding"
+            >
+              {{ isRankAwarding ? '⏳ Awarding...' : '🎁 Assign & Award' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- 4. Rank History Section -->
+    <div class="card history-card" *ngIf="getAwardedParticipants().length > 0">
+      <h3 class="card-title">📋 Rank History</h3>
+      
+      <div class="history-table-container">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-name">Participant Name</th>
+              <th class="col-employee-id">Employee ID</th>
+              <th class="col-points">Points Allotted</th>
+              <th class="col-time">Assigned Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of getAwardedParticipants()">
+              <td class="col-rank">
+                <span class="rank-badge" *ngIf="p.eventRank">#{{ p.eventRank }}</span>
+                <span *ngIf="!p.eventRank">—</span>
+              </td>
+              <td class="col-name">{{ p.name }}</td>
+              <td class="col-employee-id">{{ p.employeeId }}</td>
+              <td class="col-points">{{ p.pointsAwarded | number }}</td>
+              <td class="col-time">{{ formatDate(p.awardedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <div *ngIf="awardedPoints.length > 0" class="awarded-results">
-      <h4 class="results-title">Awarded Results</h4>
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>Name</th>
-            <th>Employee ID</th>
-            <th>Points Awarded</th>
-            <th>Awarded At</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let award of awardedPoints" class="result-row">
-            <td class="rank-cell">
-              <span class="rank-badge">{{ award.rank }}</span>
-            </td>
-            <td>{{ award.name }}</td>
-            <td>{{ award.employeeId }}</td>
-            <td class="points-cell">{{ award.pointsAwarded | number }} pts</td>
-            <td class="date-cell">{{ award.awardedAt }}</td>
-            <td class="action-cell">
-              <button class="btn-edit">Edit</button>
-              <button class="btn-revoke">Revoke</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="rule-text">
-        <span class="rule-icon">ℹ️</span>
-        <span>Rank-based awards override bulk awards for ranked participants.</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Event Locked State -->
-<div class="points-content" *ngIf="event && !canAwardPoints()">
-  <div class="card locked-card">
-    <h3 class="card-title">🔒 Points Management Locked</h3>
-    <p class="locked-message">
-      Points can only be awarded when the event is <strong>Active</strong> or <strong>Completed</strong>.
-    </p>
-    <p class="locked-subtext">Current status: <strong>{{ event.status }}</strong></p>
-  </div>
-</div>
-
-<!-- Confirmation Modal -->
-<div class="modal" *ngIf="showBulkConfirmation" (click)="showBulkConfirmation = false">
-  <div class="modal-content" (click)="$event.stopPropagation()">
-    <h3>Confirm Bulk Award</h3>
-    <div class="modal-info">
-      <div class="info-row">
-        <span class="label">Number of Participants</span>
-        <span class="value">47</span>
-      </div>
-      <div class="info-row">
-        <span class="label">Total Points</span>
-        <span class="value highlight">23,500 pts</span>
-      </div>
-    </div>
-    <p class="confirmation-text">
-      This will award points to all participants marked as Attended. This action cannot be undone.
-    </p>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" (click)="showBulkConfirmation = false">Cancel</button>
-      <button class="btn btn-primary" (click)="confirmBulkAward()" [disabled]="isBulkAwarding">
-        {{ isBulkAwarding ? '⏳ Processing...' : 'Confirm' }}
-      </button>
-    </div>
   </div>
 </div>

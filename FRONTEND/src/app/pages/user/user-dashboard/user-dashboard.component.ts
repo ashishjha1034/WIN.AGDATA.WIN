@@ -34,7 +34,8 @@ export class UserDashboardComponent implements OnInit, OnDestroy {
   redemptionCounts: RedemptionStatusCounts = {
     pending: 0,
     approved: 0,
-    delivered: 0
+    delivered: 0,
+    rejected: 0
   };
 
   searchQuery = '';

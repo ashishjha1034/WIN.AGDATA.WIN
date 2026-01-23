@@ -9,9 +9,16 @@ public class EventRepository : Repository<Event>, IEventRepository
 {
     public EventRepository(ApplicationDbContext context) : base(context) { }
 
+    public override async Task<IReadOnlyList<Event>> GetAllAsync() =>
+        await _context.Events
+            .Include(e => e.Participants)
+            .OrderByDescending(e => e.EventDate)
+            .ToListAsync();
+
     public async Task<Event?> GetByIdWithParticipantsAsync(Guid id) =>
         await _context.Events
             .Include(e => e.Participants)
+                .ThenInclude(p => p.User)
             .FirstOrDefaultAsync(e => e.Id == id);
 
     public async Task<IReadOnlyList<Event>> GetRecentEventsAsync(int count = 5) =>
@@ -46,5 +53,6 @@ public class EventRepository : Repository<Event>, IEventRepository
     public async Task UpdateAsync(Event @event)
     {
         _dbSet.Update(@event);
+        await _context.SaveChangesAsync();
     }
 }

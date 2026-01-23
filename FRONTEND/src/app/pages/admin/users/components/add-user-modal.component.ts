@@ -1,7 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { CreateUserRequest } from '../../../../models/user.models';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { InviteUserRequest } from '../../../../models/user.models';
 import { Subject } from 'rxjs';
 
 @Component({
@@ -79,27 +79,19 @@ import { Subject } from 'rxjs';
           </div>
         </div>
 
-        <!-- ROLE & ACCESS Section -->
+        <!-- ROLE & ACCESS Section - Note: Backend assigns Employee role by default -->
         <div class="form-section">
-          <h3 class="section-title">ROLE & ACCESS</h3>
+          <h3 class="section-title">ROLE & ACCESS <span class="optional">(optional)</span></h3>
+          <span class="help-text info-text">Note: New users are assigned 'Employee' role by default. Roles can be modified after creation by an Admin.</span>
           <div class="role-selection">
             <div class="role-option">
               <input
                 type="radio"
-                id="role-user"
-                value="User"
+                id="role-employee"
+                value="Employee"
                 formControlName="role"
               />
-              <label for="role-user">User</label>
-            </div>
-            <div class="role-option">
-              <input
-                type="radio"
-                id="role-manager"
-                value="Manager"
-                formControlName="role"
-              />
-              <label for="role-manager">Manager</label>
+              <label for="role-employee">Employee</label>
             </div>
             <div class="role-option">
               <input
@@ -113,55 +105,13 @@ import { Subject } from 'rxjs';
           </div>
         </div>
 
-        <!-- ASSIGN TO GROUP Section -->
-        <div class="form-section">
-          <h3 class="section-title">ASSIGN TO GROUP <span class="optional">(optional)</span></h3>
-          <select formControlName="groupId" class="form-input" disabled>
-            <option value="">Select a group...</option>
-            <option>Groups can be assigned after creation</option>
+        <!-- ASSIGN TO GROUP Section - NOT MVP -->
+        <div class="form-section disabled-section">
+          <h3 class="section-title">ASSIGN TO GROUP <span class="optional">(coming soon)</span></h3>
+          <select class="form-input" disabled>
+            <option value="">Groups feature coming soon...</option>
           </select>
-          <span class="help-text">Groups can be assigned after user creation if backend is not ready</span>
-        </div>
-
-        <!-- INITIAL ACCOUNT STATE Section -->
-        <div class="form-section">
-          <h3 class="section-title">INITIAL ACCOUNT STATE</h3>
-
-          <div class="form-group">
-            <label>Account Status</label>
-            <div class="status-options">
-              <div class="status-option">
-                <input
-                  type="radio"
-                  id="status-active"
-                  value="true"
-                  formControlName="isActive"
-                />
-                <label for="status-active">Active</label>
-              </div>
-              <div class="status-option">
-                <input
-                  type="radio"
-                  id="status-inactive"
-                  value="false"
-                  formControlName="isActive"
-                />
-                <label for="status-inactive">Inactive</label>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Initial Points <span class="optional">(optional)</span></label>
-            <input
-              type="number"
-              formControlName="initialPoints"
-              placeholder="0"
-              min="0"
-              class="form-input"
-            />
-            <span class="help-text">Optional. Can also be adjusted later.</span>
-          </div>
+          <span class="help-text">Group assignment will be available in a future release.</span>
         </div>
 
         <!-- SECURITY & ONBOARDING Section -->
@@ -183,26 +133,19 @@ import { Subject } from 'rxjs';
           </div>
 
           <div class="form-group" *ngIf="!form.get('sendPasswordEmail')?.value">
-            <label>Temporary Password</label>
+            <label>Temporary Password <span class="required">*</span></label>
             <input
               type="password"
               formControlName="temporaryPassword"
-              placeholder="Enter temporary password"
+              placeholder="Enter temporary password (min 8 chars)"
               class="form-input"
+              [class.error]="isFieldInvalid('temporaryPassword')"
             />
-            <span class="help-text">The user will be prompted to change this on first login.</span>
+            <span class="help-text">Min 8 characters. The user must change this on first login.</span>
+            <span class="error-message" *ngIf="isFieldInvalid('temporaryPassword')">
+              Password is required (min 8 characters)
+            </span>
           </div>
-        </div>
-
-        <!-- ADMIN NOTES Section -->
-        <div class="form-section">
-          <h3 class="section-title">ADMIN NOTES <span class="optional">(optional)</span></h3>
-          <textarea
-            formControlName="adminNotes"
-            placeholder="Any additional notes about this user (for audit trail)..."
-            class="form-textarea"
-            rows="3"
-          ></textarea>
         </div>
 
         <!-- Error Message -->
@@ -231,7 +174,7 @@ import { Subject } from 'rxjs';
           type="submit"
           class="btn-create"
           (click)="onSubmit()"
-          [disabled]="!form.valid || isSubmitting"
+          [disabled]="!isFormValid || isSubmitting"
         >
           {{ isSubmitting ? 'Creating...' : 'Create User' }}
         </button>
@@ -545,11 +488,24 @@ import { Subject } from 'rxjs';
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    .disabled-section {
+      opacity: 0.6;
+    }
+
+    .info-text {
+      display: block;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #f0f9ff;
+      border-radius: 4px;
+      border-left: 3px solid #3b82f6;
+    }
   `]
 })
 export class AddUserModalComponent implements OnDestroy {
   @Input() isOpen = false;
-  @Output() userCreated = new EventEmitter<CreateUserRequest>();
+  @Output() userCreated = new EventEmitter<InviteUserRequest>();
   @Output() closed = new EventEmitter<void>();
 
   form: FormGroup;
@@ -560,18 +516,25 @@ export class AddUserModalComponent implements OnDestroy {
 
   constructor(private fb: FormBuilder) {
     this.form = this.fb.group({
-      firstName: ['', Validators.required],
-      lastName: ['', Validators.required],
-      employeeId: ['', Validators.required],
+      firstName: ['', [Validators.required, Validators.minLength(2)]],
+      lastName: ['', [Validators.required, Validators.minLength(2)]],
+      employeeId: ['', [Validators.required, Validators.minLength(3)]],
       email: ['', [Validators.required, Validators.email]],
-      role: ['User', Validators.required],
-      groupId: [''],
-      isActive: [true],
-      initialPoints: [''],
-      sendPasswordEmail: [true],
-      temporaryPassword: [''],
-      adminNotes: ['']
-    });
+      role: ['Employee'],
+      sendPasswordEmail: [false],
+      temporaryPassword: ['', [Validators.minLength(8)]]
+    }, { validators: this.passwordValidator });
+  }
+
+  // Custom validator: require password if not sending email
+  passwordValidator(group: FormGroup): ValidationErrors | null {
+    const sendEmail = group.get('sendPasswordEmail')?.value;
+    const password = group.get('temporaryPassword')?.value;
+    
+    if (!sendEmail && (!password || password.length < 8)) {
+      return { passwordRequired: true };
+    }
+    return null;
   }
 
   isFieldInvalid(fieldName: string): boolean {
@@ -579,19 +542,46 @@ export class AddUserModalComponent implements OnDestroy {
     return !!(field && field.invalid && (field.dirty || field.touched));
   }
 
+  get isFormValid(): boolean {
+    if (!this.form.valid) return false;
+    
+    // Additional check for password requirement
+    const sendEmail = this.form.get('sendPasswordEmail')?.value;
+    const password = this.form.get('temporaryPassword')?.value;
+    if (!sendEmail && (!password || password.length < 8)) {
+      return false;
+    }
+    return true;
+  }
+
   closeModal(): void {
     this.form.reset({
-      role: 'User',
-      isActive: true,
-      sendPasswordEmail: true
+      role: 'Employee',
+      sendPasswordEmail: false,
+      temporaryPassword: ''
     });
     this.error = null;
     this.isSubmitting = false;
     this.closed.emit();
   }
 
+  setError(message: string): void {
+    this.error = message;
+    this.isSubmitting = false;
+  }
+
+  setSubmitting(submitting: boolean): void {
+    this.isSubmitting = submitting;
+  }
+
   onSubmit(): void {
-    if (!this.form.valid) {
+    // Mark all fields as touched for validation display
+    Object.keys(this.form.controls).forEach(key => {
+      this.form.get(key)?.markAsTouched();
+    });
+
+    if (!this.isFormValid) {
+      this.error = 'Please fill in all required fields correctly.';
       return;
     }
 
@@ -599,18 +589,17 @@ export class AddUserModalComponent implements OnDestroy {
     this.error = null;
 
     const formValue = this.form.value;
-    const request: CreateUserRequest = {
-      firstName: formValue.firstName,
-      lastName: formValue.lastName,
-      employeeId: formValue.employeeId,
-      email: formValue.email,
-      roles: [formValue.role],
-      groupId: formValue.groupId || undefined,
-      isActive: formValue.isActive,
-      initialPoints: formValue.initialPoints ? parseInt(formValue.initialPoints) : undefined,
-      sendPasswordEmail: formValue.sendPasswordEmail,
-      temporaryPassword: formValue.temporaryPassword || undefined,
-      adminNotes: formValue.adminNotes || undefined
+    
+    // Build request matching backend InviteUserRequest exactly
+    const request: InviteUserRequest = {
+      employeeId: formValue.employeeId.trim(),
+      email: formValue.email.trim().toLowerCase(),
+      firstName: formValue.firstName.trim(),
+      lastName: formValue.lastName.trim(),
+      // Only include roles if Admin is selected, otherwise let backend assign default
+      roles: formValue.role === 'Admin' ? ['Admin'] : undefined,
+      generateTempPassword: formValue.sendPasswordEmail,
+      temporaryPassword: formValue.sendPasswordEmail ? undefined : formValue.temporaryPassword
     };
 
     this.userCreated.emit(request);

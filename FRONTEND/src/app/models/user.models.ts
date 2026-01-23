@@ -1,7 +1,16 @@
 /**
  * User-related models and interfaces
+ * Aligned with backend API contracts
  */
 
+// Matches the nested points object from API
+export interface UserPoints {
+  current: number;
+  earned: number;
+  redeemed: number;
+}
+
+// Base user from API response - matches backend UserDto
 export interface User {
   id: string;
   email: string;
@@ -10,83 +19,81 @@ export interface User {
   employeeId: string;
   roles: string[];
   isActive: boolean;
-  lastActive?: string;
+  mustChangePassword?: boolean;
+  currentBalance?: number;
+  totalEarned?: number;
+  totalRedeemed?: number;
+  // Points from nested API response (admin/users endpoint)
+  points?: UserPoints;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface UserWithDetails extends User {
+// User with full details from GET /admin/users/{id}
+export interface UserWithDetails {
+  user: User;
   points: UserPoints;
   transactionCount: number;
 }
 
-export interface UserPoints {
-  current: number;
-  earned: number;
-  redeemed: number;
-}
-
-export interface UserStats {
+// Stats from GET /admin/stats
+export interface StatsDto {
   totalUsers: number;
-  activeUsers: number;
-  totalPoints: number;
+  totalPointsEarned: number;
+  totalPointsRedeemed: number;
   pendingRedemptions: number;
 }
 
-export interface AdjustPointsRequest {
-  userId: string;
-  amount: number;
-  reason: string;
-}
-
-export interface CreateUserRequest {
-  firstName: string;
-  lastName: string;
+// Request to invite/create a user - matches backend InviteUserRequest
+export interface InviteUserRequest {
   employeeId: string;
   email: string;
-  roles: string[];
-  groupId?: string;
-  isActive: boolean;
-  initialPoints?: number;
-  sendPasswordEmail: boolean;
+  firstName: string;
+  lastName: string;
+  roles?: string[];
+  generateTempPassword?: boolean;
   temporaryPassword?: string;
-  adminNotes?: string;
 }
 
 export interface UpdateUserRequest {
   firstName?: string;
   lastName?: string;
   email?: string;
-  roles?: string[];
+  employeeId?: string | null;
 }
 
-export interface ActivateUserRequest {
-  userId: string;
-}
-
-export interface DeactivateUserRequest {
-  userId: string;
-}
-
-export interface DeleteUserRequest {
-  userId: string;
-}
-
+// Response from GET /admin/users
 export interface UserListResponse {
   count: number;
-  users: User[];
-  activeOnly?: boolean;
+  activeOnly: boolean;
+  users: UserListItem[];
 }
 
+// Individual user item from list response
+export interface UserListItem {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  employeeId: string;
+  isActive: boolean;
+  points: UserPoints;
+  roles: string[];
+}
+
+// Response from GET /admin/users/{id}
 export interface UserDetailsResponse {
-  user: UserWithDetails;
-}
-
-export interface StatsDto {
-  totalUsers: number;
-  totalPointsEarned: number;
-  totalPointsRedeemed: number;
-  pendingRedemptions: number;
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    employeeId: string;
+    isActive: boolean;
+    roles: string[];
+  };
+  points: UserPoints;
+  transactionCount: number;
 }
 
 export interface PaginationOptions {
@@ -102,11 +109,4 @@ export interface UserFilterCriteria {
   role?: string;
   balanceMin?: number;
   balanceMax?: number;
-}
-
-export interface UserTableRow extends User {
-  balance: number;
-  earned: number;
-  redeemed: number;
-  lastActive?: string;
 }

@@ -320,4 +320,23 @@ public class Event : AuditableEntity<Guid>
 
         participant.MarkCheckedIn();
     }
+
+    /// <summary>
+    /// Removes a participant from the event by their user ID.
+    /// </summary>
+    /// <param name="userId">The user ID to remove</param>
+    /// <exception cref="DomainException">Thrown if participant not found or has been awarded points</exception>
+    public void RemoveParticipant(Guid userId)
+    {
+        if (Status == EventStatus.Completed)
+            throw new DomainException("Cannot remove participants from completed events.");
+
+        var participant = _participants.FirstOrDefault(p => p.UserId == userId)
+            ?? throw new DomainException($"User {userId} is not registered for this event.");
+
+        if (participant.PointsAwarded > 0)
+            throw new DomainException("Cannot remove participant who has been awarded points.");
+
+        _participants.Remove(participant);
+    }
 }

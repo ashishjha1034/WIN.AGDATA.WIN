@@ -103,7 +103,7 @@ export class EventCreateComponent implements OnInit, OnDestroy {
       location: this.form.value.location || undefined,
       maxParticipants: this.form.value.maxParticipants || undefined,
       totalPointsPool: this.form.value.totalPoints,
-      registrationEndDate: this.form.value.registrationEndDate
+      registrationEndDateUtc: this.form.value.registrationEndDate
     };
 
     console.log('[EventCreate] Submitting form:', request);

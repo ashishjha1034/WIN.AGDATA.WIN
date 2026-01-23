@@ -107,4 +107,20 @@ public class User : AuditableEntity<Guid>, IActivatable
         LastName = lastName;
     }
 
+    public void UpdateEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            throw new InvalidOperationException("Email cannot be empty");
+
+        Email = EmailAddress.Create(email);
+    }
+
+    public void UpdateEmployeeId(string employeeId)
+    {
+        if (string.IsNullOrWhiteSpace(employeeId))
+            throw new InvalidOperationException("Employee ID cannot be empty");
+
+        EmployeeId = employeeId;
+    }
+
 }

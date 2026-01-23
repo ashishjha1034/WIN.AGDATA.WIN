@@ -23,12 +23,6 @@
         <button class="btn-primary" (click)="openAddUserModal()">
           + Add User
         </button>
-        <button class="btn-secondary" (click)="importFromCSV()">
-          Import CSV
-        </button>
-        <button class="btn-secondary" (click)="exportToCSV()">
-          Export CSV
-        </button>
       </div>
     </div>
 
@@ -100,6 +94,7 @@
         [totalItems]="totalItems"
         (actionTriggered)="onTableAction($event)"
         (pageChanged)="onPageChanged($event)"
+        (rowDoubleClicked)="onRowDoubleClicked($event)"
       ></app-user-table>
     </div>
 

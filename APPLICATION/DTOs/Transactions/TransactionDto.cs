@@ -7,4 +7,8 @@ public class TransactionDto
     public string Type { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public Guid? SourceId { get; set; }
+    public int BalanceAfter { get; set; }
+    public Guid? ProcessedBy { get; set; }
 }

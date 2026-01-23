@@ -56,4 +56,13 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         _dbSet.Update(user);
     }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        var user = await GetByIdAsync(id);
+        if (user != null)
+        {
+            _dbSet.Remove(user);
+        }
+    }
 }

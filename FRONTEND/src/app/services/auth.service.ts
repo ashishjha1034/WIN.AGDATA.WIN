@@ -48,10 +48,20 @@ export class AuthService {
     return this.http.post<LoginResponse>(loginUrl, credentials).pipe(
       tap(response => {
         console.log('Login successful:', response);
+        console.log('Storing token:', response.token?.substring(0, 50) + '...');
+        
         this.storeToken(response.token);
         this.storeRefreshToken(response.refreshToken);
         this.storeUser(response.user);
         this.updateAuthState(response.user);
+        
+        // Verify token was stored
+        const storedToken = localStorage.getItem(this.tokenKey);
+        console.log('Token stored successfully:', !!storedToken);
+        if (storedToken) {
+          console.log('Stored token preview:', storedToken.substring(0, 50) + '...');
+        }
+        
         this.loadingSubject.next(false);
       }),
       catchError((error: HttpErrorResponse) => {
@@ -144,7 +154,56 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return localStorage.getItem(this.tokenKey);
+    const token = localStorage.getItem(this.tokenKey);
+    
+    if (token) {
+      // Check if token is expired, but don't logout automatically
+      // Let the interceptor handle 401 responses instead
+      try {
+        const payload = this.decodeToken(token);
+        if (payload && payload.exp) {
+          const expirationDate = new Date(payload.exp * 1000);
+          const now = new Date();
+          const timeToExpiry = expirationDate.getTime() - now.getTime();
+          const minutesToExpiry = Math.floor(timeToExpiry / 1000 / 60);
+          
+          console.log('[AuthService] Token expiration:', expirationDate);
+          console.log('[AuthService] Current time:', now);
+          console.log('[AuthService] Minutes to expiry:', minutesToExpiry);
+          console.log('[AuthService] Token expired:', now > expirationDate);
+          
+          // Only auto-logout if token is very expired (more than 5 minutes)
+          // This prevents premature logouts due to clock skew
+          if (timeToExpiry < -300000) { // -5 minutes
+            console.warn('[AuthService] Token has been expired for more than 5 minutes');
+            this.logout();
+            return null;
+          } else if (now > expirationDate) {
+            console.warn('[AuthService] Token is recently expired, allowing backend to handle it');
+          }
+        }
+      } catch (e) {
+        console.error('[AuthService] Error checking token expiration:', e);
+      }
+    } else {
+      console.warn('[AuthService] No token found in localStorage');
+    }
+    
+    return token;
+  }
+  
+  private decodeToken(token: string): any {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error('[AuthService] Error decoding token:', e);
+      return null;
+    }
   }
 
   getRefreshToken(): string | null {
