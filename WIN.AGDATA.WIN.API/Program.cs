@@ -218,8 +218,8 @@ else
 // =======================================================
 // Middleware Order (CRITICAL)
 // =======================================================
-app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseAuthentication();

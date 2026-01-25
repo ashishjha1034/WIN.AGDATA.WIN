@@ -1,0 +1,503 @@
+<div class="admin-layout">
+  <app-admin-sidebar></app-admin-sidebar>
+
+  <div class="transaction-management-container">
+    <!-- Success Alert -->
+    <div *ngIf="showSuccessAlert" class="alert alert-success">
+      <div class="alert-content">
+        <span class="alert-icon">✓</span>
+        <span class="alert-text">{{ successMessage }}</span>
+        <button type="button" class="alert-close" (click)="closeAlert('success')">✕</button>
+      </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div *ngIf="showErrorAlert" class="alert alert-danger">
+      <div class="alert-content">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-text-container">
+          <span class="alert-text">{{ errorMessage }}</span>
+        </div>
+        <button type="button" class="alert-close" (click)="closeAlert('error')">✕</button>
+      </div>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">Transactions / Audit</h1>
+        <p class="page-subtitle">View and manage all point transactions across the system</p>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-primary" (click)="openAdjustPointsModal()">
+          <span class="btn-icon">➕</span> Adjust Points
+        </button>
+        <button class="btn btn-secondary" (click)="exportTransactions()" [disabled]="isExporting">
+          <span class="btn-icon">📥</span> {{ isExporting ? 'Exporting...' : 'Export CSV' }}
+        </button>
+        <button class="btn-icon-only" (click)="refreshData()" title="Refresh">
+          🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+      <div class="summary-card card-earned">
+        <div class="card-icon">📈</div>
+        <div class="card-content">
+          <div class="card-value">{{ summary.totalEarned | number }}</div>
+          <div class="card-label">Total Earned</div>
+        </div>
+      </div>
+      <div class="summary-card card-redeemed">
+        <div class="card-icon">📉</div>
+        <div class="card-content">
+          <div class="card-value">{{ summary.totalRedeemed | number }}</div>
+          <div class="card-label">Total Redeemed</div>
+        </div>
+      </div>
+      <div class="summary-card card-net">
+        <div class="card-icon">💰</div>
+        <div class="card-content">
+          <div class="card-value">{{ summary.netPoints | number }}</div>
+          <div class="card-label">Net Points</div>
+        </div>
+      </div>
+      <div class="summary-card card-count">
+        <div class="card-icon">📊</div>
+        <div class="card-content">
+          <div class="card-value">{{ summary.transactionCount | number }}</div>
+          <div class="card-label">Total Transactions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart Section -->
+    <div class="chart-section" *ngIf="showChart && chartData.length > 0">
+      <div class="chart-header">
+        <h3 class="chart-title">Monthly Points Trend</h3>
+        <button class="btn-text" (click)="toggleChart()">Hide</button>
+      </div>
+      <div class="chart-container">
+        <div class="chart-bars">
+          <div class="chart-bar-group" *ngFor="let data of chartData">
+            <div class="bar-container">
+              <div class="bar bar-earned" 
+                   [style.height.%]="getBarHeight(data.pointsEarned)"
+                   [title]="'Earned: ' + (data.pointsEarned | number)">
+              </div>
+              <div class="bar bar-redeemed" 
+                   [style.height.%]="getBarHeight(data.pointsRedeemed)"
+                   [title]="'Redeemed: ' + (data.pointsRedeemed | number)">
+              </div>
+            </div>
+            <div class="bar-label">{{ data.monthName?.substring(0, 3) }}</div>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-color earned"></span> Earned</span>
+          <span class="legend-item"><span class="legend-color redeemed"></span> Redeemed</span>
+        </div>
+      </div>
+    </div>
+
+    <button *ngIf="!showChart && chartData.length > 0" class="btn-text show-chart-btn" (click)="toggleChart()">
+      📊 Show Monthly Chart
+    </button>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+      <div class="filters-row">
+        <!-- Search -->
+        <div class="search-container">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="text" 
+            class="search-input"
+            placeholder="Search by user, description..."
+            [(ngModel)]="searchText"
+            (input)="onSearchInput()"
+          />
+          <button *ngIf="searchText" class="clear-search" (click)="clearSearch()">✕</button>
+        </div>
+
+        <!-- Quick Filters -->
+        <div class="quick-filters">
+          <select 
+            class="filter-select"
+            [(ngModel)]="selectedType"
+            (change)="onTypeFilterChange()"
+          >
+            <option *ngFor="let opt of typeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+          </select>
+
+          <select 
+            class="filter-select"
+            [(ngModel)]="selectedSource"
+            (change)="onSourceFilterChange()"
+          >
+            <option *ngFor="let opt of sourceOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+          </select>
+
+          <button class="btn-filter" (click)="toggleFiltersPanel()">
+            <span class="btn-icon">⚙️</span> More Filters
+          </button>
+
+          <button 
+            *ngIf="hasFiltersApplied" 
+            class="btn-clear-filters"
+            (click)="clearFilters()"
+          >
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <!-- Advanced Filters Panel -->
+      <div class="advanced-filters" *ngIf="showFiltersPanel">
+        <div class="filter-group">
+          <label class="filter-label">User</label>
+          <select 
+            class="filter-select full-width"
+            [(ngModel)]="selectedUserId"
+            (change)="onUserFilterChange()"
+          >
+            <option [ngValue]="null">All Users</option>
+            <option *ngFor="let user of userOptions" [ngValue]="user.id">
+              {{ user.name }} ({{ user.employeeId }})
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Start Date</label>
+          <input 
+            type="date" 
+            class="filter-input"
+            [(ngModel)]="startDate"
+            (change)="onDateFilterChange()"
+          />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">End Date</label>
+          <input 
+            type="date" 
+            class="filter-input"
+            [(ngModel)]="endDate"
+            (change)="onDateFilterChange()"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="table-container">
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading transactions...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isLoading && transactions.length === 0" class="empty-state">
+        <div class="empty-icon">📭</div>
+        <h3 class="empty-title">No transactions found</h3>
+        <p class="empty-description">
+          <ng-container *ngIf="hasFiltersApplied">
+            No transactions match your filters. Try adjusting your search criteria.
+          </ng-container>
+          <ng-container *ngIf="!hasFiltersApplied">
+            There are no transactions in the system yet.
+          </ng-container>
+        </p>
+      </div>
+
+      <!-- Table -->
+      <table class="transactions-table" *ngIf="!isLoading && transactions.length > 0">
+        <thead>
+          <tr>
+            <th class="col-date sortable" (click)="sortBy('Timestamp')">
+              Date/Time {{ getSortIcon('Timestamp') }}
+            </th>
+            <th class="col-user sortable" (click)="sortBy('User')">
+              User {{ getSortIcon('User') }}
+            </th>
+            <th class="col-type sortable" (click)="sortBy('Type')">
+              Type {{ getSortIcon('Type') }}
+            </th>
+            <th class="col-points sortable" (click)="sortBy('Points')">
+              Points {{ getSortIcon('Points') }}
+            </th>
+            <th class="col-balance">Balance After</th>
+            <th class="col-source sortable" (click)="sortBy('Source')">
+              Source {{ getSortIcon('Source') }}
+            </th>
+            <th class="col-description">Description</th>
+            <th class="col-processed">Processed By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            *ngFor="let transaction of transactions"
+            class="table-row"
+            (click)="openDetails(transaction)"
+          >
+            <td class="col-date">
+              <div class="date-cell">
+                <span class="date-value">{{ formatDate(transaction.timestamp) }}</span>
+                <span class="time-value">{{ formatTime(transaction.timestamp) }}</span>
+              </div>
+            </td>
+            <td class="col-user">
+              <div class="user-cell">
+                <div class="user-avatar">{{ getUserInitials(transaction.userName) }}</div>
+                <div class="user-info">
+                  <div class="user-name">{{ transaction.userName }}</div>
+                  <div class="user-email">{{ transaction.employeeId || transaction.userEmail }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="col-type">
+              <span class="type-badge" [ngClass]="getTypeClass(transaction.type)">
+                {{ getTypeLabel(transaction.type) }}
+              </span>
+            </td>
+            <td class="col-points" [ngClass]="getPointsClass(transaction.amount)">
+              {{ formatPoints(transaction.amount) }}
+            </td>
+            <td class="col-balance">
+              {{ transaction.balanceAfter | number }}
+            </td>
+            <td class="col-source">
+              <span class="source-badge" [ngClass]="getSourceClass(transaction.source)">
+                {{ getSourceIcon(transaction.source) }} {{ transaction.source }}
+              </span>
+            </td>
+            <td class="col-description">
+              <span class="description-text" [title]="transaction.description">
+                {{ transaction.description | slice:0:40 }}{{ transaction.description.length > 40 ? '...' : '' }}
+              </span>
+            </td>
+            <td class="col-processed">
+              <span class="processed-by">{{ transaction.processedByName || 'System' }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="!isLoading && transactions.length > 0">
+      <div class="pagination-info">
+        Showing {{ showingFrom }} to {{ showingTo }} of {{ totalCount }} transactions
+      </div>
+      <div class="pagination-controls">
+        <div class="page-size-selector">
+          <span>Rows:</span>
+          <select [(ngModel)]="pageSize" (change)="onPageSizeChange()">
+            <option *ngFor="let size of pageSizeOptions" [value]="size">{{ size }}</option>
+          </select>
+        </div>
+        <div class="page-navigation">
+          <button 
+            class="btn-page btn-prev"
+            [disabled]="currentPage === 1"
+            (click)="changePage(currentPage - 1)"
+          >
+            ‹
+          </button>
+
+          <ng-container *ngFor="let page of visiblePages">
+            <button 
+              *ngIf="page !== '...'"
+              class="btn-page"
+              [class.active]="currentPage === page"
+              (click)="changePage(+page)"
+            >
+              {{ page }}
+            </button>
+            <span *ngIf="page === '...'" class="page-ellipsis">...</span>
+          </ng-container>
+
+          <button 
+            class="btn-page btn-next"
+            [disabled]="currentPage === totalPages"
+            (click)="changePage(currentPage + 1)"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Details Drawer -->
+  <div class="drawer-overlay" *ngIf="showDetailsDrawer" (click)="closeDetails()"></div>
+  <div class="details-drawer" [class.open]="showDetailsDrawer">
+    <div class="drawer-container" *ngIf="selectedTransaction">
+      <!-- Drawer Header -->
+      <div class="drawer-header">
+        <div class="drawer-title-section">
+          <h3 class="drawer-title">Transaction Details</h3>
+          <div class="drawer-subtitle">
+            <span class="transaction-id">{{ selectedTransaction.id.substring(0, 13).toUpperCase() }}</span>
+          </div>
+        </div>
+        <button class="btn-close-drawer" (click)="closeDetails()">✕</button>
+      </div>
+
+      <!-- Drawer Content -->
+      <div class="drawer-content">
+        <!-- Transaction Type & Points -->
+        <div class="detail-card highlight-card">
+          <div class="points-display" [ngClass]="getPointsClass(selectedTransaction.amount)">
+            <span class="points-amount">{{ formatPoints(selectedTransaction.amount) }}</span>
+            <span class="points-label">Points</span>
+          </div>
+          <div class="type-display">
+            <span class="type-badge large" [ngClass]="getTypeClass(selectedTransaction.type)">
+              {{ getTypeLabel(selectedTransaction.type) }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Balance Change -->
+        <div class="detail-card">
+          <h4 class="card-title">Balance Change</h4>
+          <div class="balance-flow">
+            <div class="balance-item">
+              <span class="balance-label">Before</span>
+              <span class="balance-value">{{ getBalanceBefore(selectedTransaction) | number }}</span>
+            </div>
+            <div class="balance-arrow">→</div>
+            <div class="balance-item">
+              <span class="balance-label">After</span>
+              <span class="balance-value">{{ selectedTransaction.balanceAfter | number }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Info -->
+        <div class="detail-card">
+          <h4 class="card-title">User</h4>
+          <div class="user-detail">
+            <div class="user-avatar large">{{ getUserInitials(selectedTransaction.userName) }}</div>
+            <div class="user-info-detail">
+              <div class="user-name-large">{{ selectedTransaction.userName }}</div>
+              <div class="user-meta">{{ selectedTransaction.userEmail }}</div>
+              <div class="user-meta" *ngIf="selectedTransaction.employeeId">
+                Employee ID: {{ selectedTransaction.employeeId }}
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline" (click)="openAdjustPointsModal(selectedTransaction)">
+            Adjust Points
+          </button>
+        </div>
+
+        <!-- Transaction Details -->
+        <div class="detail-card">
+          <h4 class="card-title">Details</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Date & Time</span>
+              <span class="detail-value">{{ formatDateTime(selectedTransaction.timestamp) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Source</span>
+              <span class="detail-value">
+                <span class="source-badge" [ngClass]="getSourceClass(selectedTransaction.source)">
+                  {{ getSourceIcon(selectedTransaction.source) }} {{ selectedTransaction.source }}
+                </span>
+              </span>
+            </div>
+            <div class="detail-item" *ngIf="selectedTransaction.sourceId">
+              <span class="detail-label">Source ID</span>
+              <span class="detail-value monospace">{{ selectedTransaction.sourceId }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Processed By</span>
+              <span class="detail-value">{{ selectedTransaction.processedByName || 'System' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="detail-card">
+          <h4 class="card-title">Description</h4>
+          <p class="description-full">{{ selectedTransaction.description }}</p>
+        </div>
+
+        <!-- Transaction ID -->
+        <div class="detail-card footer-card">
+          <span class="transaction-id-full">Transaction ID: {{ selectedTransaction.id }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Adjust Points Modal -->
+  <div class="modal-overlay" *ngIf="showAdjustPointsModal" (click)="closeAdjustPointsModal()"></div>
+  <div class="modal-container" *ngIf="showAdjustPointsModal">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">Adjust User Points</h3>
+        <button class="btn-close-modal" (click)="closeAdjustPointsModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- User Selection -->
+        <div class="form-group">
+          <label class="form-label">Select User *</label>
+          <select 
+            class="form-select"
+            [(ngModel)]="adjustPointsForm.userId"
+            (change)="onAdjustUserChange()"
+            [disabled]="!!selectedTransaction"
+          >
+            <option value="">-- Select User --</option>
+            <option *ngFor="let user of userOptions" [value]="user.id">
+              {{ user.name }} ({{ user.employeeId }})
+            </option>
+          </select>
+        </div>
+
+        <!-- Amount -->
+        <div class="form-group">
+          <label class="form-label">Points Amount *</label>
+          <input 
+            type="number" 
+            class="form-input"
+            [(ngModel)]="adjustPointsForm.amount"
+            placeholder="Enter amount (positive to add, negative to deduct)"
+          />
+          <small class="form-hint">Use positive values to add points, negative to deduct</small>
+        </div>
+
+        <!-- Reason -->
+        <div class="form-group">
+          <label class="form-label">Reason *</label>
+          <textarea 
+            class="form-textarea"
+            [(ngModel)]="adjustPointsForm.reason"
+            placeholder="Provide a reason for this adjustment (required)"
+            rows="3"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAdjustPointsModal()">Cancel</button>
+        <button 
+          class="btn btn-primary" 
+          (click)="submitAdjustPoints()"
+          [disabled]="isSubmitting || !adjustPointsForm.userId || !adjustPointsForm.reason.trim()"
+        >
+          {{ isSubmitting ? 'Processing...' : 'Adjust Points' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

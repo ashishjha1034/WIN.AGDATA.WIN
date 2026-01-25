@@ -12,6 +12,7 @@ import { EventEditComponent } from './pages/admin/events/event-edit.component';
 import { ProductManagementComponent } from './pages/admin/products/product-management.component';
 import { ProductDetailComponent } from './pages/admin/products/product-detail.component';
 import { RedemptionManagementComponent } from './pages/admin/redemptions/redemption-management.component';
+import { TransactionManagementComponent } from './pages/admin/transactions/transaction-management.component';
 import { EmployeeDashboardComponent } from './pages/employee-dashboard/employee-dashboard.component';
 import { UserDashboardComponent } from './pages/user/user-dashboard/user-dashboard.component';
 import { UserEventsComponent } from './pages/user/events/user-events.component';
@@ -90,6 +91,12 @@ export const appRoutes: Routes = [
   {
     path: 'admin/redemptions',
     component: RedemptionManagementComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['Admin'] }
+  },
+  {
+    path: 'admin/transactions',
+    component: TransactionManagementComponent,
     canActivate: [AuthGuard],
     data: { roles: ['Admin'] }
   },

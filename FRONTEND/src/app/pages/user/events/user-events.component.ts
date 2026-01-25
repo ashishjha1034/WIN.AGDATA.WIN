@@ -375,6 +375,16 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     }
   }
 
+  getStatusLabel(status: EventStatus): string {
+    switch (status) {
+      case 'Live': return 'Live';
+      case 'Upcoming': return 'Upcoming';
+      case 'Completed': return 'Completed';
+      case 'Cancelled': return 'Cancelled';
+      default: return status;
+    }
+  }
+
   getEventCardClass(event: Event): string {
     let classes = 'event-card';
     
