@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, switchMap, finalize } from 'rxjs/operators';
 import { ProductsService } from '../../../services/products.service';
-import { ProductDetail, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus } from '../../../models/product.models';
+import { ProductDetail, ProductCategory, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 
 @Component({
@@ -16,27 +16,34 @@ import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-s
   imports: [CommonModule, FormsModule, AdminSidebarComponent]
 })
 export class ProductDetailComponent implements OnInit, OnDestroy {
-  // Expose Math for template usage
+  // Expose Math and RedemptionStatus for template usage
   public Math = Math;
+  public RedemptionStatus = RedemptionStatus;
   
   product: ProductDetail | null = null;
+  categories: ProductCategory[] = [];
   isLoading = false;
   hasError = false;
   errorMessage = '';
   activeTab: 'info' | 'stock' | 'redemptions' = 'info';
-  showAuditTrail = false;
   
   // Redemptions data
   redemptions: ProductRedemption[] = [];
   filteredRedemptions: ProductRedemption[] = [];
   redemptionsLoading = false;
   activeRedemptionFilter: RedemptionStatus | 'all' = 'all';
+
+  // Computed property for total redemptions count
+  get totalRedemptions(): number {
+    return this.redemptions.length;
+  }
   
   // Edit form data
   editForm: UpdateProductRequest = {};
   stockAdjustment: UpdateStockRequest = {
     amount: 0,
-    operation: 'adjust'
+    operation: 'adjust',
+    reason: ''
   };
 
   private destroy$ = new Subject<void>();
@@ -49,6 +56,9 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Load categories for dropdown
+    this.loadCategories();
+    
     // Subscribe to route params changes to reload on navigation
     this.route.paramMap.pipe(
       takeUntil(this.destroy$),
@@ -100,6 +110,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           this.product = product;
           this.hasError = false;
           this.initEditForm();
+          // Load redemptions immediately to show accurate count in header
+          this.loadRedemptions();
           this.cdr.detectChanges();
         },
         error: (error) => {
@@ -108,6 +120,20 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           this.errorMessage = `Failed to load product: ${error?.message || 'Unknown error'}`;
           this.product = null;
           this.cdr.detectChanges();
+        }
+      });
+  }
+
+  loadCategories(): void {
+    this.productsService.getCategories()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (categories) => {
+          this.categories = categories;
+          console.log('[ProductDetail] Categories loaded:', categories);
+        },
+        error: (error) => {
+          console.error('[ProductDetail] Error loading categories:', error);
         }
       });
   }
@@ -165,10 +191,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     if (this.activeRedemptionFilter === 'all') {
       this.filteredRedemptions = [...this.redemptions];
     } else {
+      // Filter by numeric status (enum value IS the numeric value)
       this.filteredRedemptions = this.redemptions.filter(
         r => r.status === this.activeRedemptionFilter
       );
     }
+    console.log('[ProductDetail] Filtered redemptions:', this.filteredRedemptions.length, 'filter:', this.activeRedemptionFilter);
   }
 
   setRedemptionFilter(status: RedemptionStatus | 'all'): void {
@@ -180,6 +208,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     if (status === 'all') {
       return this.redemptions.length;
     }
+    // Enum value IS the numeric value
     return this.redemptions.filter(r => r.status === status).length;
   }
 
@@ -187,13 +216,14 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     if (this.filteredRedemptions.length === 0) return;
 
     // Create CSV content
-    const headers = ['User', 'Quantity', 'Points Spent', 'Status', 'Date'];
+    const headers = ['User', 'Email', 'Quantity', 'Points Spent', 'Status', 'Request Date'];
     const rows = this.filteredRedemptions.map(r => [
       r.userName,
+      r.userEmail,
       r.quantity.toString(),
       r.pointsSpent.toString(),
-      r.status,
-      new Date(r.createdAt).toLocaleDateString()
+      r.statusText,
+      new Date(r.requestDate).toLocaleDateString()
     ]);
 
     const csvContent = [
@@ -270,15 +300,85 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   deactivateProduct(): void {
     if (this.product && confirm(`Are you sure you want to deactivate "${this.product.name}"?`)) {
-      // TODO: Implement deactivate
-      console.log('Deactivate product');
+      this.isLoading = true;
+      this.productsService.deactivateProduct(this.product.id)
+        .pipe(
+          takeUntil(this.destroy$),
+          finalize(() => {
+            setTimeout(() => {
+              this.isLoading = false;
+              this.cdr.detectChanges();
+            }, 0);
+          })
+        )
+        .subscribe({
+          next: () => {
+            // Update the product status locally to reflect the change
+            if (this.product) {
+              this.product.isActive = false;
+            }
+            alert('Product deactivated successfully');
+          },
+          error: (error) => {
+            console.error('Error deactivating product:', error);
+            alert('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+          }
+        });
+    }
+  }
+
+  activateProduct(): void {
+    if (this.product && confirm(`Are you sure you want to activate "${this.product.name}"?`)) {
+      this.isLoading = true;
+      this.productsService.activateProduct(this.product.id)
+        .pipe(
+          takeUntil(this.destroy$),
+          finalize(() => {
+            setTimeout(() => {
+              this.isLoading = false;
+              this.cdr.detectChanges();
+            }, 0);
+          })
+        )
+        .subscribe({
+          next: () => {
+            // Update the product status locally to reflect the change
+            if (this.product) {
+              this.product.isActive = true;
+            }
+            alert('Product activated successfully');
+          },
+          error: (error) => {
+            console.error('Error activating product:', error);
+            alert('Failed to activate product: ' + (error?.error?.message || 'Unknown error'));
+          }
+        });
     }
   }
 
   deleteProduct(): void {
     if (this.product && confirm(`Are you sure you want to DELETE "${this.product.name}"? This cannot be undone.`)) {
-      // TODO: Implement delete
-      console.log('Delete product');
+      this.isLoading = true;
+      this.productsService.deleteProduct(this.product.id)
+        .pipe(
+          takeUntil(this.destroy$),
+          finalize(() => {
+            setTimeout(() => {
+              this.isLoading = false;
+              this.cdr.detectChanges();
+            }, 0);
+          })
+        )
+        .subscribe({
+          next: () => {
+            alert('Product deleted successfully');
+            this.goBack(); // Return to products list
+          },
+          error: (error) => {
+            console.error('Error deleting product:', error);
+            alert('Failed to delete product: ' + (error?.error?.message || 'Unknown error'));
+          }
+        });
     }
   }
 }

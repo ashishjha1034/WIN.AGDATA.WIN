@@ -20,6 +20,17 @@ public class ProductPricing : Entity<Guid>
         EffectiveFrom = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Update the pricing without creating a new entity
+    /// </summary>
+    public void UpdatePricing(int newPointsCost)
+    {
+        if (newPointsCost <= 0) 
+            throw new DomainException("PointsCost must be positive");
+        
+        PointsCost = newPointsCost;
+    }
+
     // This is the property used in mapping
     public int CurrentPricing => PointsCost;
 }

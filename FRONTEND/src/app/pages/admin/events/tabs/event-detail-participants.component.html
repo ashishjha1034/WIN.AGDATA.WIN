@@ -2,13 +2,13 @@
   <!-- Success Message -->
   <div *ngIf="successMessage" class="alert alert-success">
     <span>{{ successMessage }}</span>
-    <button type="button" class="alert-close" (click)="dismissSuccess()">✕</button>
+    <button type="button" class="alert-close" (click)="dismissSuccess()"><i class="fa-solid fa-xmark"></i></button>
   </div>
 
   <!-- Error Message -->
   <div *ngIf="errorMessage" class="alert alert-danger">
     <span>{{ errorMessage }}</span>
-    <button type="button" class="alert-close" (click)="dismissError()">✕</button>
+    <button type="button" class="alert-close" (click)="dismissError()"><i class="fa-solid fa-xmark"></i></button>
   </div>
 
   <!-- Filter Bar: Search + Filter Button -->
@@ -21,12 +21,12 @@
         (input)="onSearch(searchText)"
         class="search-input"
       />
-      <span class="search-icon">🔍</span>
+      <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
     </div>
 
     <div class="filter-dropdown-container">
       <button class="btn btn-filter" (click)="toggleFilterDropdown()">
-        <span class="filter-icon">🔽</span>
+        <span class="filter-icon"><i class="fa-solid fa-filter"></i></span>
         Filter: {{ statusFilter }}
       </button>
       <div class="filter-dropdown" *ngIf="showFilterDropdown" (clickOutside)="closeFilterDropdown()">
@@ -93,7 +93,7 @@
               <span class="toggle-label">
                 {{ isCheckedIn(participant) ? 'Checked-In' : 'Registered' }}
               </span>
-              <span class="toggle-loading" *ngIf="togglingParticipantId === participant.userId">⏳</span>
+              <span class="toggle-loading" *ngIf="togglingParticipantId === participant.userId"><i class="fa-solid fa-spinner fa-spin"></i></span>
             </label>
           </td>
           <td class="col-delete">
@@ -103,8 +103,8 @@
               [disabled]="!canDelete(participant) || deletingParticipantId === participant.userId"
               title="Remove participant"
             >
-              <span *ngIf="deletingParticipantId === participant.userId">⏳</span>
-              <span *ngIf="deletingParticipantId !== participant.userId">✕</span>
+              <span *ngIf="deletingParticipantId === participant.userId"><i class="fa-solid fa-spinner fa-spin"></i></span>
+              <span *ngIf="deletingParticipantId !== participant.userId"><i class="fa-solid fa-xmark"></i></span>
             </button>
           </td>
         </tr>
@@ -123,7 +123,7 @@
         [disabled]="currentPage === 1"
         (click)="currentPage = currentPage - 1; applyFilters()"
       >
-        ◀
+        <i class="fa-solid fa-chevron-left"></i>
       </button>
       <span class="page-number">{{ currentPage }}</span>
       <button 
@@ -131,7 +131,7 @@
         [disabled]="currentPage >= getTotalPages()"
         (click)="currentPage = currentPage + 1; applyFilters()"
       >
-        ▶
+        <i class="fa-solid fa-chevron-right"></i>
       </button>
     </div>
   </div>

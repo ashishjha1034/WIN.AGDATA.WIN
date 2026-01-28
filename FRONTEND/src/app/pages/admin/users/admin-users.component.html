@@ -1,121 +1,192 @@
-<div class="admin-users-container">
+<div class="admin-users-wrapper">
   <app-admin-sidebar></app-admin-sidebar>
 
-  <div class="main-content">
-    <!-- Success Message -->
-    <div class="success-banner" *ngIf="successMessage">
-      <p>✓ {{ successMessage }}</p>
-    </div>
-
-    <!-- Error Message -->
-    <div class="error-banner" *ngIf="error">
-      <p>✕ {{ error }}</p>
-    </div>
-
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1>User Management</h1>
-        <p class="subtitle">Manage all platform users, roles, balances, and activity</p>
+  <div class="admin-users-main">
+    <!-- Header - Matches Admin Dashboard -->
+    <header class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">Users Management</h1>
       </div>
+      <div class="header-right">
+        <div class="user-info" *ngIf="currentUser">
+          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+          <span class="user-role">
+            <i class="fa-solid fa-shield-halved"></i>
+            {{ currentUser?.roles?.[0] || 'Admin' }}
+          </span>
+        </div>
+      </div>
+    </header>
 
-      <div class="header-actions">
-        <button class="btn-primary" (click)="openAddUserModal()">
-          + Add User
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Success Message -->
+      <div class="success-alert" *ngIf="successMessage" role="alert">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ successMessage }}</span>
+        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-    </div>
 
-    <!-- Tabs -->
-    <div class="tabs-container">
-      <div class="tabs">
-        <button
-          class="tab"
-          [class.active]="activeTab === 'users'"
-          (click)="activeTab = 'users'"
-        >
-          Users
-        </button>
-        <button
-          class="tab"
-          [class.active]="activeTab === 'groups'"
-          (click)="activeTab = 'groups'"
-        >
-          Groups
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="error" role="alert">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ error }}</span>
+        <button class="alert-dismiss" (click)="error = null" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-    </div>
 
-    <!-- Users Tab Content -->
-    <div *ngIf="activeTab === 'users'" class="tab-content">
-      <!-- KPI Cards Row -->
-      <div class="kpi-row" *ngIf="!isLoadingStats">
-        <app-kpi-card
-          title="Total Users"
-          [value]="stats?.totalUsers || 0"
-          icon="👥"
-          color="#4b5563"
-        ></app-kpi-card>
-
-        <app-kpi-card
-          title="Active Users"
-          [value]="stats?.totalUsers || 0"
-          icon="✓"
-          color="#10b981"
-        ></app-kpi-card>
-
-        <app-kpi-card
-          title="Total Points"
-          [value]="stats?.totalPointsEarned || 0"
-          icon="⭐"
-          color="#f59e0b"
-        ></app-kpi-card>
-
-        <app-kpi-card
-          title="Pending Redemptions"
-          [value]="stats?.pendingRedemptions || 0"
-          icon="💰"
-          color="#ef4444"
-        ></app-kpi-card>
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p>Loading users...</p>
       </div>
 
-      <!-- Filters -->
-      <app-user-filters
-        (filtersChanged)="onFiltersChanged($event)"
-        (searchChanged)="onSearchChanged($event)"
-      ></app-user-filters>
+      <ng-container *ngIf="!isLoading">
+        <!-- Top 5 Balances Chart Card -->
+        <section class="chart-section" aria-label="Top Users by Balance">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title-group">
+                <h2 class="chart-title">Top 5 Users by Current Balance</h2>
+                <p class="chart-subtitle">Users with the highest current points balance</p>
+              </div>
+            </div>
+            <div class="chart-body">
+              <div 
+                *ngIf="topUsers().length > 0"
+                echarts 
+                [options]="chartOption" 
+                class="balance-chart"
+                aria-label="Horizontal bar chart showing top 5 users by balance">
+              </div>
+              <div class="chart-empty" *ngIf="topUsers().length === 0">
+                <i class="fa-regular fa-chart-bar"></i>
+                <p>No user data available</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <!-- Users Table -->
-      <app-user-table
-        [users]="paginatedUsers"
-        [isLoading]="isLoading"
-        [currentPage]="currentPage"
-        [pageSize]="pageSize"
-        [totalItems]="totalItems"
-        (actionTriggered)="onTableAction($event)"
-        (pageChanged)="onPageChanged($event)"
-        (rowDoubleClicked)="onRowDoubleClicked($event)"
-      ></app-user-table>
-    </div>
+        <!-- Controls Card -->
+        <section class="controls-section">
+          <div class="controls-card">
+            <div class="controls-row">
+              <!-- Search -->
+              <div class="search-group">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input
+                  type="text"
+                  class="search-input"
+                  placeholder="Search users by name, email, or ID..."
+                  [(ngModel)]="searchQuery"
+                  (input)="onSearchInput()"
+                  aria-label="Search users"
+                />
+              </div>
 
-    <!-- Groups Tab Content -->
-    <div *ngIf="activeTab === 'groups'" class="tab-content groups-tab-content">
-      <div class="groups-container">
-        <!-- Group List Panel (Left) -->
-        <app-group-list
-          [selectedGroupId]="selectedGroupId"
-          (groupSelected)="onGroupSelected($event)"
-          (createGroupClick)="onCreateGroupClick()"
-        ></app-group-list>
+              <!-- Add User Button -->
+              <button class="btn-primary" (click)="openAddUserModal()">
+                <i class="fa-solid fa-plus"></i>
+                Add User
+              </button>
 
-        <!-- Group Details Panel (Right) -->
-        <app-group-details
-          [groupId]="selectedGroupId"
-          (addMembersClick)="onAddGroupMembersClick($event)"
-          (groupUpdated)="onGroupUpdated()"
-        ></app-group-details>
-      </div>
-    </div>
+              <!-- Filters Toggle -->
+              <button class="btn-filter" (click)="toggleFilters()" [class.active]="showFilters">
+                <i class="fa-solid fa-sliders"></i>
+                Filters
+                <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="showFilters"></i>
+              </button>
+            </div>
+
+            <!-- Expandable Filters Panel -->
+            <div class="filters-panel" *ngIf="showFilters">
+              <div class="filters-grid">
+                <!-- Status Filter -->
+                <div class="filter-group">
+                  <label>Status</label>
+                  <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <!-- Role Filter -->
+                <div class="filter-group">
+                  <label>Role</label>
+                  <select [(ngModel)]="roleFilter" (change)="applyFilters()">
+                    <option value="">All Roles</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Employee">Employee</option>
+                  </select>
+                </div>
+
+                <!-- Balance Range Filter -->
+                <div class="filter-group">
+                  <label>Balance Range</label>
+                  <select [(ngModel)]="balanceFilter" (change)="applyFilters()">
+                    <option value="">All Balances</option>
+                    <option value="0-1000">0 - 1,000</option>
+                    <option value="1000-5000">1,000 - 5,000</option>
+                    <option value="5000+">5,000+</option>
+                  </select>
+                </div>
+
+                <!-- Sort By -->
+                <div class="filter-group">
+                  <label>Sort By</label>
+                  <select [(ngModel)]="sortField" (change)="applyFilters()">
+                    <option value="name">Name</option>
+                    <option value="email">Email</option>
+                    <option value="balance">Balance</option>
+                    <option value="createdAt">Created Date</option>
+                  </select>
+                </div>
+
+                <!-- Sort Direction -->
+                <div class="filter-group">
+                  <label>Order</label>
+                  <select [(ngModel)]="sortDirection" (change)="applyFilters()">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="filter-group filter-actions">
+                  <button class="btn-reset" (click)="resetFilters()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results Summary -->
+            <div class="results-summary">
+              <span>{{ filteredUsers().length }} user{{ filteredUsers().length !== 1 ? 's' : '' }} found</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Users Table -->
+        <section class="table-section">
+          <app-user-table
+            [users]="paginatedUsers"
+            [isLoading]="isLoading"
+            [currentPage]="currentPage"
+            [pageSize]="pageSize"
+            [totalItems]="totalItems"
+            (actionTriggered)="onTableAction($event)"
+            (pageChanged)="onPageChanged($event)"
+            (rowClicked)="onRowClicked($event)"
+          ></app-user-table>
+        </section>
+      </ng-container>
+    </main>
   </div>
 
   <!-- User Detail Drawer -->
@@ -133,14 +204,4 @@
     (closed)="closeAddUserModal()"
     (userCreated)="onUserCreated($event)"
   ></app-add-user-modal>
-
-  <!-- Add Group Members Modal -->
-  <app-add-group-members-modal
-    [isOpen]="isAddGroupMembersModalOpen"
-    [groupId]="selectedGroupId"
-    [groupName]="selectedGroupName"
-    [currentMembers]="selectedGroupMembers"
-    (closed)="closeAddGroupMembersModal()"
-    (membersAdded)="onGroupMembersAdded($event)"
-  ></app-add-group-members-modal>
 </div>

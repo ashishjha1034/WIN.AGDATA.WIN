@@ -25,27 +25,27 @@ export class UserSidebarComponent implements OnInit, OnDestroy {
   menuItems: MenuItem[] = [
     {
       label: 'Dashboard',
-      icon: '📊',
+      icon: 'fa-solid fa-chart-line',
       path: '/user/dashboard'
     },
     {
       label: 'Events',
-      icon: '📅',
+      icon: 'fa-solid fa-calendar-days',
       path: '/user/events'
     },
     {
       label: 'Products',
-      icon: '🎁',
+      icon: 'fa-solid fa-headphones',
       path: '/user/products'
     },
     {
       label: 'Redemptions',
-      icon: '💳',
+      icon: 'fa-regular fa-circle-check',
       path: '/user/redemptions'
     },
     {
       label: 'Transactions',
-      icon: '📜',
+      icon: 'fa-solid fa-wallet',
       path: '/user/transactions'
     }
   ];

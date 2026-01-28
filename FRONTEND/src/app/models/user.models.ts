@@ -109,4 +109,5 @@ export interface UserFilterCriteria {
   role?: string;
   balanceMin?: number;
   balanceMax?: number;
+  balanceRange?: '0-1000' | '1000-5000' | '5000+';
 }

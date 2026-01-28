@@ -16,6 +16,8 @@ public class RedemptionRepository : Repository<Redemption>, IRedemptionRepositor
                 .ThenInclude(u => u.PointsAccount)
             .Include(r => r.Product)
                 .ThenInclude(p => p.Category)
+            .Include(r => r.Product)
+                .ThenInclude(p => p.Pricing)
             .FirstOrDefaultAsync(r => r.Id == id);
 
     public async Task<IReadOnlyList<Redemption>> GetByUserIdAsync(Guid userId) =>
@@ -39,6 +41,8 @@ public class RedemptionRepository : Repository<Redemption>, IRedemptionRepositor
                 .ThenInclude(u => u.PointsAccount)
             .Include(r => r.Product)
                 .ThenInclude(p => p.Category)
+            .Include(r => r.Product)
+                .ThenInclude(p => p.Pricing)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
 

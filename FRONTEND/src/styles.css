@@ -1,3 +1,5 @@
+@import url('./styles/tokens.css');
+
 * {
   margin: 0;
   padding: 0;
@@ -6,12 +8,20 @@
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: #333;
+  background: var(--ag-color-background);
+  color: var(--ag-color-text-primary);
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font: var(--ag-typo-body-01);
+  letter-spacing: 0.01em;
 }
 
-body {
-  background-color: #f5f5f5;
+a { color: var(--ag-color-icon-interactive); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--ag-color-focus);
+  outline-offset: 2px;
 }
 
 app-root {
@@ -33,4 +43,189 @@ button {
 
 input, textarea, select {
   font-family: inherit;
+}
+
+/* ========================================
+   AGDATA Typography Helpers
+   ======================================== */
+.ag-h1 { font: var(--ag-typo-h1); letter-spacing: 0; }
+.ag-h2 { font: var(--ag-typo-h2); letter-spacing: 0; }
+.ag-h3 { font: var(--ag-typo-h3); letter-spacing: 0; }
+.ag-h4 { font: var(--ag-typo-h4); letter-spacing: 0; }
+.ag-h5 { font: var(--ag-typo-h5); letter-spacing: 0; }
+.ag-h6 { font: var(--ag-typo-h6); letter-spacing: 0.01em; }
+
+.ag-body-01 { font: var(--ag-typo-body-01); letter-spacing: 0.01em; }
+.ag-body-01b { font: var(--ag-typo-body-01-bold); letter-spacing: 0.01em; }
+.ag-body-02 { font: var(--ag-typo-body-02); letter-spacing: 0.01em; }
+.ag-body-02b { font: var(--ag-typo-body-02-bold); letter-spacing: 0.01em; }
+
+.ag-btn      { font: var(--ag-typo-button); }
+.ag-label    { font: var(--ag-typo-label); color: var(--ag-color-text-secondary); }
+.ag-helper   { font: var(--ag-typo-helper-text); color: var(--ag-color-text-helper); }
+
+/* ========================================
+   AGDATA Button System
+   ======================================== */
+.ag-btn-primary {
+  background: var(--ag-button-primary);
+  color: var(--ag-color-text-on-color);
+  border: 1px solid transparent;
+  border-radius: 8px; min-height: 44px; padding: 10px 16px;
+}
+.ag-btn-primary:hover { background: var(--ag-button-primary-hover); }
+.ag-btn-primary:active { background: var(--ag-button-primary-active); }
+.ag-btn-primary:disabled {
+  background: var(--ag-button-disabled);
+  color: var(--ag-color-text-disabled);
+}
+
+.ag-btn-secondary {
+  background: var(--ag-button-secondary);
+  color: var(--ag-color-text-on-color);
+  border: 1px solid transparent;
+  border-radius: 8px; min-height: 44px; padding: 10px 16px;
+}
+.ag-btn-secondary:hover { background: var(--ag-button-secondary-hover); }
+.ag-btn-secondary:active { background: var(--ag-button-secondary-active); }
+
+.ag-btn-danger {
+  background: var(--ag-button-danger);
+  color: var(--ag-color-text-on-color);
+  border: 1px solid transparent;
+  border-radius: 8px; min-height: 44px; padding: 10px 16px;
+}
+.ag-btn-danger:hover { background: var(--ag-button-danger-hover); }
+.ag-btn-danger:active { background: var(--ag-button-danger-active); }
+
+/* ========================================
+   AGDATA Input System
+   ======================================== */
+.ag-input {
+  background: var(--ag-color-field-01);
+  border: 1px solid var(--ag-color-border-subtle);
+  color: var(--ag-color-text-primary);
+  border-radius: 6px; padding: 10px 12px;
+}
+.ag-input::placeholder { color: var(--ag-color-text-placeholder); }
+.ag-input:hover { background: var(--ag-color-field-hover); }
+.ag-input:focus {
+  border-color: var(--ag-color-border-interactive);
+  outline: 2px solid var(--ag-color-focus);
+  outline-offset: 1px;
+}
+
+/* ========================================
+   AGDATA Card Component
+   ======================================== */
+.ag-card {
+  background: var(--ag-color-layer-01);
+  border: 1px solid var(--ag-color-border-subtle);
+  border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* ========================================
+   AGDATA Tag/Badge System
+   ======================================== */
+.ag-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font: var(--ag-typo-label);
+}
+.ag-tag-success {
+  background: var(--ag-tag-green-bg);
+  color: var(--ag-tag-green-text);
+}
+.ag-tag-success:hover { background: var(--ag-tag-green-hover); }
+.ag-tag-error {
+  background: var(--ag-tag-red-bg);
+  color: var(--ag-tag-red-text);
+}
+.ag-tag-error:hover { background: var(--ag-tag-red-hover); }
+.ag-tag-info {
+  background: var(--ag-tag-blue-bg);
+  color: var(--ag-tag-blue-text);
+}
+.ag-tag-info:hover { background: var(--ag-tag-blue-hover); }
+.ag-tag-neutral {
+  background: var(--ag-tag-gray-bg);
+  color: var(--ag-tag-gray-text);
+}
+.ag-tag-neutral:hover { background: var(--ag-tag-gray-hover); }
+
+/* ========================================
+   AGDATA Alert/Banner System
+   ======================================== */
+.ag-alert {
+  padding: 12px 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ag-alert-success {
+  background: var(--ag-tag-green-bg);
+  border: 1px solid var(--ag-color-support-success);
+  color: var(--ag-tag-green-text);
+}
+.ag-alert-error {
+  background: var(--ag-tag-red-bg);
+  border: 1px solid var(--ag-color-support-error);
+  color: var(--ag-tag-red-text);
+}
+.ag-alert-warning {
+  background: rgba(241, 226, 27, 0.2);
+  border: 1px solid var(--ag-color-support-warning);
+  color: var(--ag-color-text-primary);
+}
+.ag-alert-info {
+  background: var(--ag-tag-blue-bg);
+  border: 1px solid var(--ag-color-support-info);
+  color: var(--ag-tag-blue-text);
+}
+
+/* ========================================
+   AGDATA Table System
+   ======================================== */
+.ag-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--ag-color-layer-01);
+}
+.ag-table th {
+  background: var(--ag-color-field-01);
+  color: var(--ag-color-text-primary);
+  font: var(--ag-typo-body-02-bold);
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ag-color-border-subtle);
+}
+.ag-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ag-color-border-subtle);
+  color: var(--ag-color-text-primary);
+}
+.ag-table tr:hover td {
+  background: var(--ag-color-layer-hover);
+}
+.ag-table tr.selected td {
+  background: var(--ag-color-layer-selected);
+}
+
+/* ========================================
+   AGDATA Link Styles
+   ======================================== */
+.ag-link {
+  font: var(--ag-typo-link-01);
+  color: var(--ag-color-icon-interactive);
+  text-decoration: none;
+}
+.ag-link:hover {
+  text-decoration: underline;
+}
+.ag-link-secondary {
+  font: var(--ag-typo-link-02);
+  color: var(--ag-color-text-secondary);
 }

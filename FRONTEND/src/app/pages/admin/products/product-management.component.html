@@ -1,470 +1,491 @@
-<div class="admin-layout">
+<div class="admin-products-wrapper">
   <app-admin-sidebar></app-admin-sidebar>
-  
-  <div class="product-management-container">
-    <!-- Error Alert -->
-    <div *ngIf="showErrorAlert" class="alert alert-danger">
-      <div class="alert-content">
-        <span class="alert-icon">⚠️</span>
-        <span class="alert-text">{{ errorMessage }}</span>
-        <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
-      </div>
-    </div>
 
-    <!-- Page Header -->
-    <div class="page-header">
+  <div class="admin-products-main">
+    <!-- Header - Matches Admin Users -->
+    <header class="page-header">
       <div class="header-left">
         <h1 class="page-title">Products Management</h1>
       </div>
       <div class="header-right">
-        <input 
-          type="text" 
-          placeholder="Search by product name or category..."
-          [(ngModel)]="searchText"
-          (input)="onSearch(searchText)"
-          class="search-input-header"
-        />
-        <div class="header-user-info">
-          <span class="user-label">Admin | Super Admin</span>
-          <button class="btn-logout">Logout</button>
+        <div class="user-info" *ngIf="currentUser">
+          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+          <span class="user-role">
+            <i class="fa-solid fa-shield-halved"></i>
+            {{ currentUser?.roles?.[0] || 'Admin' }}
+          </span>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- KPI Cards -->
-    <div class="kpi-strip" *ngIf="kpi || isLoading">
-      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-        <div class="kpi-icon products-icon">📦</div>
-        <div class="kpi-content">
-          <div class="kpi-label">Total Active Products</div>
-          <div class="kpi-value">{{ kpi?.totalActiveProducts || 0 }}</div>
-        </div>
-      </div>
-
-      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-        <div class="kpi-icon low-stock-icon">📊</div>
-        <div class="kpi-content">
-          <div class="kpi-label">Low Stock Products</div>
-          <div class="kpi-value">{{ kpi?.lowStockProducts || 0 }}</div>
-        </div>
-      </div>
-
-      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-        <div class="kpi-icon inactive-icon">📋</div>
-        <div class="kpi-content">
-          <div class="kpi-label">Inactive Products</div>
-          <div class="kpi-value">{{ kpi?.inactiveProducts || 0 }}</div>
-        </div>
-      </div>
-
-      <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-        <div class="kpi-icon points-icon">💰</div>
-        <div class="kpi-content">
-          <div class="kpi-label">Total Redeemable</div>
-          <div class="kpi-value">{{ kpi?.totalRedeemablePoints || 0 | number }}</div>
-          <div class="kpi-sublabel">Points</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Page Title and Controls -->
-    <div class="products-header">
-      <h2 class="section-title">Products Management</h2>
-      <div class="header-actions">
-        <button class="btn btn-filter" (click)="openFilterDrawer()" title="Filter products">
-          <span class="filter-icon">⚙️</span> Filter
-        </button>
-        <button class="btn btn-primary" (click)="openAddProductModal()" title="Add Product">
-          <span class="btn-icon">➕</span> Add Product
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Success Message -->
+      <div class="success-alert" *ngIf="successMessage" role="alert">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ successMessage }}</span>
+        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-    </div>
 
-    <!-- Products Table -->
-    <div class="table-container">
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="errorMessage" role="alert">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ errorMessage }}</span>
+        <button class="alert-dismiss" (click)="closeErrorAlert()" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
       <!-- Loading State -->
-      <div *ngIf="isLoading" class="loading-state">
-        <div class="spinner"></div>
+      <div *ngIf="isLoading" class="loading-container">
+        <div class="loading-spinner"></div>
         <p>Loading products...</p>
       </div>
 
-      <!-- Empty State -->
-      <div *ngIf="!isLoading && filteredProducts.length === 0 && !hasLoadError" class="empty-state">
-        <div class="empty-icon">📭</div>
-        <h3 class="empty-title">No products found</h3>
-        <p class="empty-description">
-          <ng-container *ngIf="searchText">
-            No products match your search criteria
-          </ng-container>
-          <ng-container *ngIf="!searchText">
-            Create your first product to get started
-          </ng-container>
-        </p>
-        <button class="btn btn-primary btn-empty-action" (click)="openAddProductModal()">
-          ➕ Add First Product
-        </button>
-      </div>
-
-      <!-- Products Table -->
-      <table class="products-table" *ngIf="!isLoading && filteredProducts.length > 0" #productsTable>
-        <thead>
-          <tr class="table-header">
-            <th class="col-product">Product</th>
-            <th class="col-category">Category</th>
-            <th class="col-points">Points Cost</th>
-            <th class="col-stock">Stock</th>
-            <th class="col-status">Status</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr 
-            *ngFor="let product of filteredProducts"
-            class="table-row"
-            [class.selected]="selectedRows.has(product.id)"
-          >
-            <td class="col-product">
-              <div class="product-cell">
-                <div class="product-image">
-                  <img [src]="product.imageUrl || 'assets/placeholder-product.png'" 
-                       [alt]="product.name"
-                       (error)="$any($event.target).src='assets/placeholder-product.png'" />
-                </div>
-                <div class="product-info">
-                  <div class="product-name">
-                    {{ product.name }}
-                  </div>
-                  <div class="product-category-sub">{{ product.categoryName }}</div>
-                </div>
+      <ng-container *ngIf="!isLoading">
+        <!-- Inventory Risk Chart Card -->
+        <section class="chart-section" aria-label="Inventory Risk & Stock Health">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title-group">
+                <h2 class="chart-title">Inventory Risk & Stock Health</h2>
+                <p class="chart-subtitle">Top 4 products with lowest stock in selected category</p>
               </div>
-            </td>
-            <td class="col-category">
-              <span class="category-badge">{{ product.categoryName }}</span>
-            </td>
-            <td class="col-points">
-              <span class="points-value">{{ product.pointsCost | number }}</span>
-            </td>
-            <td class="col-stock">
-              <span class="stock-value" [class.low-stock]="product.stockLevel < 10 && product.stockLevel > 0"
-                    [class.out-of-stock]="product.stockLevel === 0">
-                {{ product.stockLevel === 999999 ? 'Unlimited' : product.stockLevel }}
-              </span>
-            </td>
-            <td class="col-status">
-              <span class="status-badge" [ngClass]="getStatusClass(product)">
-                {{ getStatusText(product) }}
-              </span>
-            </td>
-            <td class="col-actions">
-              <button class="btn-action btn-edit" 
-                      (click)="editProduct(product.id, $event)" 
-                      title="Edit">
-                Edit
+              <!-- Category Selector -->
+              <div class="chart-category-selector">
+                <select 
+                  [(ngModel)]="selectedChartCategory" 
+                  (change)="onChartCategoryChange()"
+                  class="category-select"
+                  aria-label="Select category for chart">
+                  <option value="all">All Categories</option>
+                  <option *ngFor="let category of categories" [value]="category.id">
+                    {{ category.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-body">
+              <div 
+                *ngIf="lowStockProducts().length > 0"
+                echarts 
+                [options]="chartOption" 
+                [merge]="chartOption"
+                class="stock-chart"
+                aria-label="Horizontal bar chart showing products with lowest stock">
+              </div>
+              <div class="chart-empty" *ngIf="lowStockProducts().length === 0">
+                <i class="fa-regular fa-chart-bar"></i>
+                <p>No products found for this category</p>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <div class="legend-item">
+                <span class="legend-color healthy"></span>
+                <span class="legend-label">Healthy Stock (≥{{ lowStockThreshold }})</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-color low"></span>
+                <span class="legend-label">Low Stock (&lt;{{ lowStockThreshold }})</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Controls Card -->
+        <section class="controls-section">
+          <div class="controls-card">
+            <div class="controls-row">
+              <!-- Search -->
+              <div class="search-group">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input
+                  type="text"
+                  class="search-input"
+                  placeholder="Search products by name..."
+                  [(ngModel)]="searchText"
+                  (input)="onSearchInput()"
+                  aria-label="Search products"
+                />
+              </div>
+
+              <!-- Add Product Button -->
+              <button class="btn-primary" (click)="openAddProductModal()">
+                <i class="fa-solid fa-plus"></i>
+                Add Product
               </button>
-              <div class="dropdown-actions">
-                <button class="btn-more" 
-                        (click)="toggleDropdown(product.id, $event)"
-                        title="More actions">⋮</button>
-                <div class="dropdown-menu" [class.show]="isDropdownActive(product.id)">
-                  <button (click)="editProduct(product.id, $event)">
-                    <span class="icon">✏️</span> Edit
-                  </button>
-                  <button (click)="adjustStock(product.id, $event)">
-                    <span class="icon">📊</span> Adjust Stock
-                  </button>
-                  <button (click)="deactivateProduct(product, $event)">
-                    <span class="icon">⏸️</span> Deactivate
-                  </button>
-                  <button (click)="viewRedemptions(product.id, $event)">
-                    <span class="icon">👁️</span> View Redemptions
-                  </button>
-                  <button (click)="viewAuditTrail(product.id, $event)">
-                    <span class="icon">🕒</span> Audit Trail
+
+              <!-- Filters Toggle -->
+              <button class="btn-filter" (click)="toggleFilters()" [class.active]="showFilters">
+                <i class="fa-solid fa-sliders"></i>
+                Filters
+                <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="showFilters"></i>
+              </button>
+            </div>
+
+            <!-- Expandable Filters Panel -->
+            <div class="filters-panel" *ngIf="showFilters">
+              <div class="filters-grid">
+                <!-- Category Filter -->
+                <div class="filter-group">
+                  <label>Category</label>
+                  <select [(ngModel)]="selectedCategoryFilter" (change)="applyFilters()">
+                    <option value="">All Categories</option>
+                    <option *ngFor="let category of categories" [value]="category.id">
+                      {{ category.name }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Stock Level Filter -->
+                <div class="filter-group">
+                  <label>Stock Level</label>
+                  <select [(ngModel)]="activeFilter.stockLevel" (change)="applyFilters()">
+                    <option value="all">All Levels</option>
+                    <option value="low">Low Stock (&lt;10)</option>
+                    <option value="out">Out of Stock</option>
+                    <option value="unlimited">Unlimited</option>
+                  </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-group">
+                  <label>Status</label>
+                  <select [(ngModel)]="activeFilter.status" (change)="applyFilters()">
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <!-- Points Range Slider -->
+                <div class="filter-group range-filter">
+                  <label>Points Range</label>
+                  <div class="range-slider-container">
+                    <div class="range-values">
+                      <span>{{ activeFilter.minPoints | number }}</span>
+                      <span>{{ activeFilter.maxPoints | number }}</span>
+                    </div>
+                    <div class="range-inputs-dual">
+                      <input 
+                        type="range" 
+                        class="range-slider range-min"
+                        [min]="0" 
+                        [max]="maxPointsLimit"
+                        [step]="100"
+                        [(ngModel)]="activeFilter.minPoints"
+                        (input)="onRangeChange()"
+                      />
+                      <input 
+                        type="range" 
+                        class="range-slider range-max"
+                        [min]="0" 
+                        [max]="maxPointsLimit"
+                        [step]="100"
+                        [(ngModel)]="activeFilter.maxPoints"
+                        (input)="onRangeChange()"
+                      />
+                    </div>
+                    <div class="range-scale">
+                      <span>0</span>
+                      <span>{{ maxPointsLimit / 2 | number }}</span>
+                      <span>{{ maxPointsLimit | number }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="filter-group filter-actions">
+                  <button class="btn-reset" (click)="resetFilters()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
                   </button>
                 </div>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </div>
 
-    <!-- Pagination -->
-    <div class="pagination-container" *ngIf="!isLoading && filteredProducts.length > 0">
-      <div class="pagination-info">
-        Showing {{ (currentPage - 1) * pageSize + 1 }} to 
-        {{ Math.min(currentPage * pageSize, products.length) }} of 50 entries
-      </div>
-      <div class="pagination-controls">
-        <button 
-          class="btn-page"
-          [disabled]="currentPage === 1"
-          (click)="previousPage()"
-        >
-          Previous
-        </button>
-        <button 
-          *ngFor="let page of [1, 2, 3, 4]"
-          class="btn-page-number"
-          [class.active]="currentPage === page"
-          (click)="goToPage(page)"
-        >
-          {{ page }}
-        </button>
-        <button 
-          class="btn-page"
-          [disabled]="currentPage >= totalPages"
-          (click)="nextPage()"
-        >
-          Next
-        </button>
-      </div>
-    </div>
+            <!-- Results Summary -->
+            <div class="results-summary">
+              <span>{{ filteredProducts.length }} product{{ filteredProducts.length !== 1 ? 's' : '' }} found</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Products Table -->
+        <section class="table-section">
+          <div class="table-container">
+            <table class="products-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Points Cost</th>
+                  <th>Stock</th>
+                  <th>Status</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="filteredProducts.length === 0" class="empty-row">
+                  <td colspan="6" class="empty-message">
+                    <i class="fa-regular fa-box-open"></i>
+                    <span>No products found</span>
+                  </td>
+                </tr>
+                <tr 
+                  *ngFor="let product of paginatedProducts"
+                  class="product-row"
+                  (click)="openProductDetail(product.id)"
+                  tabindex="0"
+                  (keydown.enter)="openProductDetail(product.id)"
+                  role="button"
+                  [attr.aria-label]="'View details for ' + product.name"
+                >
+                  <td class="product-cell">
+                    <div class="product-info">
+                      <div class="product-image">
+                        <img [src]="product.imageUrl || 'assets/placeholder-product.png'" 
+                             [alt]="product.name"
+                             (error)="$any($event.target).src='assets/placeholder-product.png'" />
+                      </div>
+                      <div class="product-details">
+                        <div class="product-name">{{ product.name }}</div>
+                        <div class="product-id">ID: {{ product.id | slice:0:8 }}...</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="category-badge">{{ product.categoryName }}</span>
+                  </td>
+                  <td>
+                    <span class="points-value">{{ product.pointsCost | number }}</span>
+                  </td>
+                  <td>
+                    <span class="stock-value" 
+                          [class.low-stock]="product.stockLevel < 10 && product.stockLevel > 0"
+                          [class.out-of-stock]="product.stockLevel === 0">
+                      {{ product.stockLevel === 999999 ? 'Unlimited' : product.stockLevel }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-badge" [class.active]="product.isActive" [class.inactive]="!product.isActive">
+                      {{ product.isActive ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+                  <td class="actions-col" (click)="$event.stopPropagation()">
+                    <div class="action-menu">
+                      <button class="menu-btn" (click)="toggleDropdown(product.id, $event)" aria-label="More actions">
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                      </button>
+                      <div class="menu-dropdown" *ngIf="activeDropdown === product.id">
+                        <button (click)="openProductDetail(product.id, $event)">
+                          <i class="fa-solid fa-eye"></i> View
+                        </button>
+                        <button (click)="adjustStock(product.id, $event)">
+                          <i class="fa-solid fa-boxes-stacked"></i> Adjust Stock
+                        </button>
+                        <button (click)="viewRedemptions(product.id, $event)">
+                          <i class="fa-solid fa-receipt"></i> Redemptions
+                        </button>
+                        <div class="menu-divider"></div>
+                        <button *ngIf="product.isActive" (click)="deactivateProduct(product.id, $event)" class="deactivate">
+                          <i class="fa-solid fa-ban"></i> Deactivate
+                        </button>
+                        <button *ngIf="!product.isActive" (click)="activateProduct(product.id, $event)" class="activate">
+                          <i class="fa-solid fa-check-circle"></i> Activate
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination" *ngIf="totalPages > 1">
+              <button
+                class="page-btn"
+                [disabled]="currentPage === 1"
+                (click)="previousPage()"
+              >
+                <i class="fa-solid fa-chevron-left"></i> Previous
+              </button>
+              <div class="page-info">
+                Page {{ currentPage }} of {{ totalPages }}
+              </div>
+              <button
+                class="page-btn"
+                [disabled]="currentPage === totalPages"
+                (click)="nextPage()"
+              >
+                Next <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </main>
   </div>
-</div>
 
-<!-- Filter Drawer -->
-<div class="filter-drawer" *ngIf="showFilterDrawer" (click)="closeFilterDrawer()">
-  <div class="drawer-content" (click)="$event.stopPropagation()">
-    <div class="drawer-header">
-      <h3>Filter Products</h3>
-      <button class="close-btn" (click)="closeFilterDrawer()">✕</button>
-    </div>
-
-    <div class="drawer-body">
-      <!-- Category Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Categories</label>
-        <div class="checkbox-group">
-          <div class="checkbox-item" *ngFor="let category of categories">
-            <input 
-              type="checkbox" 
-              [id]="'cat-' + category.id"
-              [checked]="activeFilter.categoryIds.includes(category.id)"
-              (change)="onCategoryFilterChange(category.id, $event)"
-            />
-            <label [for]="'cat-' + category.id">{{ category.name }}</label>
-          </div>
-        </div>
+  <!-- Add Product Modal -->
+  <div class="modal-overlay" *ngIf="showAddProductModal" (click)="closeAddProductModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Add New Product</h3>
+        <button class="close-btn" (click)="closeAddProductModal()" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
-      <!-- Status Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Status</label>
-        <div class="radio-group">
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="status-all" 
-              name="status" 
-              value="all"
-              [checked]="activeFilter.status === 'all'"
-              (change)="activeFilter.status = 'all'"
-            />
-            <label for="status-all">All Products</label>
-          </div>
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="status-active" 
-              name="status" 
-              value="active"
-              [checked]="activeFilter.status === 'active'"
-              (change)="activeFilter.status = 'active'"
-            />
-            <label for="status-active">Active Only</label>
-          </div>
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="status-inactive" 
-              name="status" 
-              value="inactive"
-              [checked]="activeFilter.status === 'inactive'"
-              (change)="activeFilter.status = 'inactive'"
-            />
-            <label for="status-inactive">Inactive Only</label>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stock Level Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Stock Level</label>
-        <div class="radio-group">
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="stock-all" 
-              name="stock" 
-              value="all"
-              [checked]="activeFilter.stockLevel === 'all'"
-              (change)="activeFilter.stockLevel = 'all'"
-            />
-            <label for="stock-all">All Levels</label>
-          </div>
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="stock-low" 
-              name="stock" 
-              value="low"
-              [checked]="activeFilter.stockLevel === 'low'"
-              (change)="activeFilter.stockLevel = 'low'"
-            />
-            <label for="stock-low">Low Stock (< 10)</label>
-          </div>
-          <div class="radio-item">
-            <input 
-              type="radio" 
-              id="stock-out" 
-              name="stock" 
-              value="out"
-              [checked]="activeFilter.stockLevel === 'out'"
-              (change)="activeFilter.stockLevel = 'out'"
-            />
-            <label for="stock-out">Out of Stock (0)</label>
-          </div>
-        </div>
-      </div>
-
-      <!-- Points Range Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Points Range</label>
-        <div class="range-inputs">
-          <input 
-            type="number" 
-            placeholder="Min Points"
-            [(ngModel)]="activeFilter.minPoints"
-            class="range-input"
-            min="0"
-          />
-          <span class="range-separator">-</span>
-          <input 
-            type="number" 
-            placeholder="Max Points"
-            [(ngModel)]="activeFilter.maxPoints"
-            class="range-input"
-            min="0"
-          />
-        </div>
-      </div>
-    </div>
-
-    <div class="drawer-footer">
-      <button class="btn-reset" (click)="resetFilters()">Reset All</button>
-      <button class="btn-apply" (click)="applyFilters()">Apply Filters</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add Product Modal -->
-<div class="modal-overlay" *ngIf="showAddProductModal" (click)="closeAddProductModal()">
-  <div class="modal-content" (click)="$event.stopPropagation()">
-    <div class="modal-header">
-      <h3>Add New Product</h3>
-      <button class="close-btn" (click)="closeAddProductModal()">✕</button>
-    </div>
-
-    <form class="modal-form" (ngSubmit)="submitNewProduct()">
-      <div class="form-group">
-        <label for="product-name" class="form-label required">Product Name</label>
-        <input 
-          type="text" 
-          id="product-name"
-          [(ngModel)]="newProduct.name"
-          name="name"
-          class="form-input"
-          placeholder="Enter product name"
-          required
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="product-description" class="form-label">Description</label>
-        <textarea 
-          id="product-description"
-          [(ngModel)]="newProduct.description"
-          name="description"
-          class="form-textarea"
-          placeholder="Enter product description"
-          rows="3"
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label for="product-category" class="form-label required">Category</label>
-        <select 
-          id="product-category"
-          [(ngModel)]="newProduct.categoryId"
-          name="categoryId"
-          class="form-select"
-          required
-        >
-          <option value="">Select a category</option>
-          <option *ngFor="let category of categories" [value]="category.id">
-            {{ category.name }}
-          </option>
-        </select>
-      </div>
-
-      <div class="form-row">
+      <form class="modal-form" (ngSubmit)="submitNewProduct()">
         <div class="form-group">
-          <label for="product-points" class="form-label required">Points Cost</label>
+          <label for="product-name" class="form-label required">Product Name</label>
           <input 
-            type="number" 
-            id="product-points"
-            [(ngModel)]="newProduct.pointsCost"
-            name="pointsCost"
+            type="text" 
+            id="product-name"
+            [(ngModel)]="newProduct.name"
+            name="name"
             class="form-input"
-            placeholder="0"
-            min="0"
+            placeholder="Enter product name"
             required
           />
         </div>
 
         <div class="form-group">
-          <label for="product-stock" class="form-label">Initial Stock</label>
+          <label for="product-description" class="form-label">Description</label>
+          <textarea 
+            id="product-description"
+            [(ngModel)]="newProduct.description"
+            name="description"
+            class="form-textarea"
+            placeholder="Enter product description"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="product-category" class="form-label required">Category</label>
+          <div class="category-select-row">
+            <select 
+              id="product-category"
+              [(ngModel)]="newProduct.categoryId"
+              name="categoryId"
+              class="form-select"
+              required
+              [disabled]="showCategoryForm"
+            >
+              <option value="">Select a category</option>
+              <option *ngFor="let category of categories" [value]="category.id">
+                {{ category.name }}
+              </option>
+            </select>
+            <button 
+              type="button" 
+              class="btn btn-add-category" 
+              (click)="toggleCategoryForm()"
+              [title]="showCategoryForm ? 'Cancel' : 'Add New Category'"
+            >
+              <i [class]="showCategoryForm ? 'fa-solid fa-xmark' : 'fa-solid fa-plus'"></i>
+            </button>
+          </div>
+          
+          <!-- Inline Category Creation Form -->
+          <div class="inline-category-form" *ngIf="showCategoryForm">
+            <div class="form-group">
+              <label for="new-category-name" class="form-label required">New Category Name</label>
+              <input 
+                type="text" 
+                id="new-category-name"
+                [(ngModel)]="newCategoryName"
+                name="newCategoryName"
+                class="form-input"
+                placeholder="Enter category name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="new-category-description" class="form-label">Description (optional)</label>
+              <input 
+                type="text" 
+                id="new-category-description"
+                [(ngModel)]="newCategoryDescription"
+                name="newCategoryDescription"
+                class="form-input"
+                placeholder="Enter category description"
+              />
+            </div>
+            <div class="category-actions">
+              <button type="button" class="btn btn-success-sm" (click)="createNewCategory()" [disabled]="!newCategoryName?.trim() || isCreatingCategory">
+                <i class="fa-solid fa-check"></i> {{ isCreatingCategory ? 'Creating...' : 'Create Category' }}
+              </button>
+              <button type="button" class="btn btn-secondary-sm" (click)="cancelCategoryCreation()">
+                <i class="fa-solid fa-xmark"></i> Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="product-points" class="form-label required">Points Cost</label>
+            <input 
+              type="number" 
+              id="product-points"
+              [(ngModel)]="newProduct.pointsCost"
+              name="pointsCost"
+              class="form-input"
+              placeholder="0"
+              min="0"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="product-stock" class="form-label">Initial Stock</label>
+            <input 
+              type="number" 
+              id="product-stock"
+              [(ngModel)]="newProduct.initialStock"
+              name="initialStock"
+              class="form-input"
+              placeholder="0"
+              min="0"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="product-image" class="form-label">Image URL</label>
           <input 
-            type="number" 
-            id="product-stock"
-            [(ngModel)]="newProduct.initialStock"
-            name="initialStock"
+            type="text" 
+            id="product-image"
+            [(ngModel)]="newProduct.imageUrl"
+            name="imageUrl"
             class="form-input"
-            placeholder="0"
-            min="0"
+            placeholder="https://example.com/image.jpg"
           />
         </div>
-      </div>
 
-      <div class="form-group">
-        <label for="product-image" class="form-label">Image URL</label>
-        <input 
-          type="text" 
-          id="product-image"
-          [(ngModel)]="newProduct.imageUrl"
-          name="imageUrl"
-          class="form-input"
-          placeholder="https://example.com/image.jpg"
-        />
-      </div>
+        <div class="form-group-checkbox">
+          <input 
+            type="checkbox" 
+            id="product-active"
+            [(ngModel)]="newProduct.isActive"
+            name="isActive"
+          />
+          <label for="product-active">Set as Active</label>
+        </div>
 
-      <div class="form-group-checkbox">
-        <input 
-          type="checkbox" 
-          id="product-active"
-          [(ngModel)]="newProduct.isActive"
-          name="isActive"
-        />
-        <label for="product-active">Set as Active</label>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn-cancel" (click)="closeAddProductModal()">Cancel</button>
-        <button type="submit" class="btn-submit" [disabled]="isSubmitting">
-          {{ isSubmitting ? 'Creating...' : 'Create Product' }}
-        </button>
-      </div>
-    </form>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeAddProductModal()">Cancel</button>
+          <button type="submit" class="btn-submit" [disabled]="isSubmitting">
+            <i class="fa-solid fa-plus" *ngIf="!isSubmitting"></i>
+            {{ isSubmitting ? 'Creating...' : 'Create Product' }}
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>

@@ -9,6 +9,7 @@ import {
   ProductCategory,
   ProductKPI,
   CreateProductRequest,
+  CreateCategoryRequest,
   UpdateProductRequest,
   UpdateStockRequest,
   ProductListResponse,
@@ -76,6 +77,34 @@ export class ProductsService {
   }
 
   /**
+   * Get all products including inactive (admin only)
+   * BACKEND: GET /api/products/admin/all
+   */
+  getAllProductsAdmin(): Observable<Product[]> {
+    const url = `${this.PRODUCTS_API_URL}/admin/all`;
+    console.log('[ProductsService] Fetching all products (admin) from:', url);
+
+    return this.http.get<ProductListResponse>(url).pipe(
+      timeout(15000),
+      tap(response => {
+        console.log('[ProductsService] All products received:', response);
+        const products = response.data || [];
+        console.log('[ProductsService] All products count:', products.length);
+        this.productListSubject$.next(products);
+      }),
+      map(response => response.data || []),
+      catchError(error => {
+        console.error('[ProductsService] Error fetching all products:', error);
+        this.productListSubject$.next([]);
+        if (error instanceof TimeoutError) {
+          return throwError(() => new Error('Request timed out. Please check your connection and try again.'));
+        }
+        throw error;
+      })
+    );
+  }
+
+  /**
    * Get product by ID
    * BACKEND: GET /api/products/{id}
    */
@@ -116,6 +145,29 @@ export class ProductsService {
       catchError(error => {
         console.error('[ProductsService] Error fetching categories:', error);
         this.categoriesSubject$.next([]);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Create new category
+   * BACKEND: POST /api/products/categories
+   */
+  createCategory(request: CreateCategoryRequest): Observable<ProductCategory> {
+    const url = `${this.PRODUCTS_API_URL}/categories`;
+    console.log('[ProductsService] Creating category:', request);
+
+    return this.http.post<ProductCategory>(url, request).pipe(
+      timeout(10000),
+      tap(category => {
+        console.log('[ProductsService] Category created:', category);
+        // Refresh categories list
+        const currentCategories = this.categoriesSubject$.value;
+        this.categoriesSubject$.next([...currentCategories, category]);
+      }),
+      catchError(error => {
+        console.error('[ProductsService] Error creating category:', error);
         throw error;
       })
     );
@@ -192,6 +244,72 @@ export class ProductsService {
   }
 
   /**
+   * Deactivate product
+   * BACKEND: POST /api/products/{id}/deactivate
+   */
+  deactivateProduct(productId: string): Observable<any> {
+    const url = `${this.PRODUCTS_API_URL}/${productId}/deactivate`;
+    console.log('[ProductsService] Deactivating product:', productId);
+
+    return this.http.post(url, {}).pipe(
+      timeout(10000),
+      tap(response => {
+        console.log('[ProductsService] Product deactivated:', response);
+        // Refresh product lists - use getAllProductsAdmin to include inactive products
+        this.getAllProductsAdmin().subscribe();
+      }),
+      catchError(error => {
+        console.error('[ProductsService] Error deactivating product:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Activate product 
+   * BACKEND: POST /api/products/{id}/activate
+   */
+  activateProduct(productId: string): Observable<any> {
+    const url = `${this.PRODUCTS_API_URL}/${productId}/activate`;
+    console.log('[ProductsService] Activating product:', productId);
+
+    return this.http.post(url, {}).pipe(
+      timeout(10000),
+      tap(response => {
+        console.log('[ProductsService] Product activated:', response);
+        // Refresh product lists - use getAllProductsAdmin to include inactive products
+        this.getAllProductsAdmin().subscribe();
+      }),
+      catchError(error => {
+        console.error('[ProductsService] Error activating product:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Delete product
+   * BACKEND: DELETE /api/products/{id}
+   */
+  deleteProduct(productId: string): Observable<any> {
+    const url = `${this.PRODUCTS_API_URL}/${productId}`;
+    console.log('[ProductsService] Deleting product:', productId);
+
+    return this.http.delete(url).pipe(
+      timeout(10000),
+      tap(response => {
+        console.log('[ProductsService] Product deleted:', response);
+        // Refresh product lists - use getAllProductsAdmin to include inactive products
+        this.getAllProductsAdmin().subscribe();
+      }),
+      catchError(error => {
+        console.error('[ProductsService] Error deleting product:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
    * Get low stock products (Admin only)
    * BACKEND: GET /api/admin/products/low-stock?threshold={threshold}
    */
@@ -214,16 +332,44 @@ export class ProductsService {
 
   /**
    * Get redemptions for a specific product
-   * BACKEND: GET /api/redemptions/user/{userId} (filtered by product)
-   * Note: Using the redemptions endpoint and filtering by product
+   * BACKEND: GET /api/admin/redemptions (filtered by product)
    */
   getProductRedemptions(productId: string): Observable<ProductRedemption[]> {
-    // This is a placeholder - actual implementation may need a dedicated endpoint
-    // or use the user redemptions endpoint with filtering
+    const url = `${this.ADMIN_API_URL}/redemptions`;
     console.log('[ProductsService] Fetching redemptions for product:', productId);
-    
-    // For now, return empty array. Will be implemented when redemptions service is ready
-    return new BehaviorSubject<ProductRedemption[]>([]).asObservable();
+
+    return this.http.get<any>(url).pipe(
+      timeout(10000),
+      map(response => {
+        console.log('[ProductsService] All redemptions received:', response);
+        // Filter redemptions by productId and map to ProductRedemption format
+        const allRedemptions = response.items || [];
+        const productRedemptions = allRedemptions
+          .filter((r: any) => r.productId === productId)
+          .map((r: any) => ({
+            id: r.id,
+            userId: r.userId,
+            userName: r.userName,
+            userEmail: r.userEmail,
+            quantity: r.quantity,
+            pointsSpent: r.pointsSpent,
+            status: r.status,
+            statusText: this.getRedemptionStatusText(r.status),
+            requestDate: r.createdAt,
+            approvedDate: r.approvedAt,
+            deliveredDate: r.deliveredAt,
+            adminNotes: r.adminNotes || ''
+          } as ProductRedemption));
+        
+        console.log('[ProductsService] Product redemptions filtered:', productRedemptions);
+        return productRedemptions;
+      }),
+      catchError(error => {
+        console.error('[ProductsService] Error fetching product redemptions:', error);
+        // Return empty array on error to prevent UI breaking
+        return new BehaviorSubject<ProductRedemption[]>([]).asObservable();
+      })
+    );
   }
 
   /**
@@ -241,6 +387,20 @@ export class ProductsService {
       inactiveProducts: inactiveProducts.length,
       totalRedeemablePoints
     };
+  }
+
+  /**
+   * Convert redemption status enum to text
+   */
+  private getRedemptionStatusText(status: number): string {
+    switch (status) {
+      case 0: return 'Pending';
+      case 1: return 'Approved';
+      case 2: return 'Rejected';
+      case 3: return 'Delivered';
+      case 4: return 'Cancelled';
+      default: return 'Unknown';
+    }
   }
 
   /**

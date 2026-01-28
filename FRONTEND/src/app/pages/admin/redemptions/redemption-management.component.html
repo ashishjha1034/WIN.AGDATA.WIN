@@ -1,253 +1,308 @@
-<div class="admin-layout">
+<div class="admin-redemptions-wrapper">
   <app-admin-sidebar></app-admin-sidebar>
-  
-  <div class="redemption-management-container">
-    <!-- Success Alert -->
-    <div *ngIf="showSuccessAlert" class="alert alert-success">
-      <div class="alert-content">
-        <span class="alert-icon">✓</span>
-        <span class="alert-text">{{ successMessage }}</span>
-        <button type="button" class="alert-close" (click)="closeAlert('success')">✕</button>
-      </div>
-    </div>
 
-    <!-- Error Alert -->
-    <div *ngIf="showErrorAlert" class="alert alert-danger">
-      <div class="alert-content">
-        <span class="alert-icon">⚠️</span>
-        <div class="alert-text-container">
-          <span class="alert-text">{{ errorMessage }}</span>
-          <small class="alert-hint">Check browser console (F12) for detailed error information</small>
-        </div>
-        <button type="button" class="alert-close" (click)="closeAlert('error')">✕</button>
-      </div>
-    </div>
-
-    <!-- Page Header -->
-    <div class="page-header">
+  <div class="admin-redemptions-main">
+    <!-- Header - Matches Products/Users/Events -->
+    <header class="page-header">
       <div class="header-left">
-        <h1 class="page-title">Redemption Management</h1>
+        <h1 class="page-title">Redemptions Management</h1>
       </div>
       <div class="header-right">
-        <input 
-          type="text" 
-          placeholder="Search by user, product name or redemption ID..."
-          [(ngModel)]="searchText"
-          (input)="onSearch()"
-          class="search-input-header"
-        />
-        <button class="btn-refresh" (click)="refreshData()" title="Refresh">
-          <span class="refresh-icon">🔄</span>
-        </button>
-        <button class="btn-filter" (click)="toggleFilterBar()" title="Filter">
-          <span class="filter-icon">⚙️</span> Filter
-        </button>
-        <div class="header-user-info">
-          <span class="user-label">Admin | Super Admin</span>
-          <button class="btn-logout">Logout</button>
+        <div class="user-info" *ngIf="currentUser">
+          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+          <span class="user-role">
+            <i class="fa-solid fa-shield-halved"></i>
+            {{ currentUser?.roles?.[0] || 'Admin' }}
+          </span>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- Title -->
-    <div class="section-header">
-      <h2 class="section-title">Redemption Management</h2>
-      <p class="section-subtitle">Approve and fulfill reward redemptions</p>
-    </div>
-
-    <!-- Status Summary Cards -->
-    <div class="status-cards-strip">
-      <div class="status-card status-pending" 
-           [class.active]="selectedStatus === RedemptionStatus.Pending"
-           (click)="filterByStatus(RedemptionStatus.Pending)">
-        <div class="status-icon">⏳</div>
-        <div class="status-content">
-          <div class="status-label">Pending</div>
-          <div class="status-count">{{ statusCounts.pending }}</div>
-        </div>
-      </div>
-
-      <div class="status-card status-approved"
-           [class.active]="selectedStatus === RedemptionStatus.Approved"
-           (click)="filterByStatus(RedemptionStatus.Approved)">
-        <div class="status-icon">✓</div>
-        <div class="status-content">
-          <div class="status-label">Approved</div>
-          <div class="status-count">{{ statusCounts.approved }}</div>
-        </div>
-      </div>
-
-      <div class="status-card status-delivered"
-           [class.active]="selectedStatus === RedemptionStatus.Delivered"
-           (click)="filterByStatus(RedemptionStatus.Delivered)">
-        <div class="status-icon">📦</div>
-        <div class="status-content">
-          <div class="status-label">Delivered</div>
-          <div class="status-count">{{ statusCounts.delivered }}</div>
-        </div>
-      </div>
-
-      <div class="status-card status-rejected"
-           [class.active]="selectedStatus === RedemptionStatus.Rejected"
-           (click)="filterByStatus(RedemptionStatus.Rejected)">
-        <div class="status-icon">✕</div>
-        <div class="status-content">
-          <div class="status-label">Rejected</div>
-          <div class="status-count">{{ statusCounts.rejected }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Filter Bar (Collapsed by Default) -->
-    <div class="filter-bar" *ngIf="showFilterBar">
-      <div class="filter-content">
-        <button class="btn btn-secondary btn-sm" (click)="filterByStatus(null)">
-          Clear Filters
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Success Message -->
+      <div class="success-alert" *ngIf="showSuccessAlert" role="alert">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ successMessage }}</span>
+        <button class="alert-dismiss" (click)="closeAlert('success')" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-    </div>
 
-    <!-- Redemptions Table -->
-    <div class="table-container">
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="showErrorAlert" role="alert">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ errorMessage }}</span>
+        <button class="alert-dismiss" (click)="closeAlert('error')" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
       <!-- Loading State -->
-      <div *ngIf="isLoading" class="loading-state">
-        <div class="spinner"></div>
+      <div *ngIf="isLoading" class="loading-container">
+        <div class="loading-spinner"></div>
         <p>Loading redemptions...</p>
       </div>
 
-      <!-- Empty State -->
-      <div *ngIf="!isLoading && filteredRedemptions.length === 0" class="empty-state">
-        <div class="empty-icon">📭</div>
-        <h3 class="empty-title">No redemptions found</h3>
-        <p class="empty-description">
-          <ng-container *ngIf="searchText || selectedStatus !== null">
-            No redemptions match your filters
-          </ng-container>
-          <ng-container *ngIf="!searchText && selectedStatus === null">
-            No redemption requests yet
-          </ng-container>
-        </p>
-      </div>
-
-      <!-- Redemptions Table -->
-      <table class="redemptions-table" *ngIf="!isLoading && filteredRedemptions.length > 0">
-        <thead>
-          <tr class="table-header">
-            <th class="col-id">Redemption ID</th>
-            <th class="col-user">User</th>
-            <th class="col-product">Product</th>
-            <th class="col-quantity">Quantity</th>
-            <th class="col-points">Points Spent</th>
-            <th class="col-status">Status</th>
-            <th class="col-created">Created At</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr 
-            *ngFor="let redemption of paginatedRedemptions"
-            class="table-row"
-            (click)="openDetails(redemption)"
-          >
-            <td class="col-id">
-              <span class="redemption-id">{{ redemption.id.substring(0, 8).toUpperCase() }}</span>
-            </td>
-            <td class="col-user">
-              <div class="user-cell">
-                <div class="user-avatar">
-                  {{ getUserInitials(redemption.userName) }}
-                </div>
-                <div class="user-info">
-                  <div class="user-name">{{ redemption.userName }}</div>
-                  <div class="user-category">{{ redemption.productCategory }}</div>
+      <ng-container *ngIf="!isLoading">
+        <!-- Charts Section - 2 charts side by side -->
+        <section class="charts-section" aria-label="Redemption Analytics">
+          <div class="charts-grid">
+            <!-- Chart 1: Redemptions Status Pie/Donut Chart -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title-group">
+                  <h2 class="chart-title">Redemptions Status</h2>
+                  <p class="chart-subtitle">Distribution by status</p>
                 </div>
               </div>
-            </td>
-            <td class="col-product">
-              <span class="product-name">{{ redemption.productName }}</span>
-            </td>
-            <td class="col-quantity">
-              <span class="quantity-value">{{ redemption.quantity }}</span>
-            </td>
-            <td class="col-points">
-              <span class="points-value">{{ redemption.pointsSpent | number }}</span>
-            </td>
-            <td class="col-status">
-              <span class="status-pill" [ngClass]="getStatusClass(redemption.status)">
-                {{ getStatusLabel(redemption.status) }}
-              </span>
-            </td>
-            <td class="col-created">
-              <span class="date-value">{{ formatDate(redemption.createdAt) }}</span>
-            </td>
-            <td class="col-actions" (click)="$event.stopPropagation()">
-              <button 
-                *ngIf="canApprove(redemption.status)"
-                class="btn-action btn-approve" 
-                (click)="openDetails(redemption)"
-                title="Approve">
-                Approve
-              </button>
-              <button 
-                *ngIf="canReject(redemption.status)"
-                class="btn-action btn-reject" 
-                (click)="openDetails(redemption)"
-                title="Reject">
-                Reject
-              </button>
-              <button 
-                *ngIf="canDeliver(redemption.status)"
-                class="btn-action btn-deliver" 
-                (click)="openDetails(redemption)"
-                title="Mark Delivered">
-                Mark Delivered
-              </button>
-              <button 
-                *ngIf="!canApprove(redemption.status) && !canReject(redemption.status) && !canDeliver(redemption.status)"
-                class="btn-action btn-view" 
-                (click)="openDetails(redemption)"
-                title="View">
-                View
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+              <div class="chart-body">
+                <div 
+                  *ngIf="hasRedemptionStatusData()"
+                  echarts 
+                  [options]="redemptionStatusChartOption" 
+                  [merge]="redemptionStatusChartOption"
+                  class="status-chart"
+                  aria-label="Donut chart showing redemptions status distribution">
+                </div>
+                <div class="chart-empty" *ngIf="!hasRedemptionStatusData()">
+                  <i class="fa-regular fa-chart-pie"></i>
+                  <p>No redemption data available</p>
+                </div>
+              </div>
+            </div>
 
-    <!-- Pagination -->
-    <div class="pagination-container" *ngIf="!isLoading && filteredRedemptions.length > 0">
-      <div class="pagination-info">
-        Showing {{ (currentPage - 1) * pageSize + 1 }} to 
-        {{ Math.min(currentPage * pageSize, filteredRedemptions.length) }} of {{ filteredRedemptions.length }} entries
-      </div>
-      <div class="pagination-controls">
-        <button 
-          class="btn-page btn-prev"
-          [disabled]="currentPage === 1"
-          (click)="changePage(currentPage - 1)">
-          Previous
-        </button>
-        
-        <button 
-          *ngFor="let page of [].constructor(totalPages); let i = index"
-          class="btn-page"
-          [class.active]="currentPage === i + 1"
-          (click)="changePage(i + 1)">
-          {{ i + 1 }}
-        </button>
-        
-        <button 
-          class="btn-page btn-next"
-          [disabled]="currentPage === totalPages"
-          (click)="changePage(currentPage + 1)">
-          Next
-        </button>
-      </div>
-    </div>
+            <!-- Chart 2: Top 5 Products by Redemptions -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title-group">
+                  <h2 class="chart-title">Top 5 Products by Redemptions</h2>
+                  <p class="chart-subtitle">Most redeemed products</p>
+                </div>
+                <!-- Category Filter -->
+                <div class="chart-category-selector">
+                  <select 
+                    [(ngModel)]="selectedChartCategory" 
+                    (change)="onChartCategoryChange()"
+                    class="category-select"
+                    aria-label="Select category for chart">
+                    <option value="all">All Categories</option>
+                    <option *ngFor="let category of categories" [value]="category.id">
+                      {{ category.name }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <div class="chart-body">
+                <div 
+                  *ngIf="topProductsChartData().length > 0"
+                  echarts 
+                  [options]="topProductsChartOption" 
+                  [merge]="topProductsChartOption"
+                  class="products-chart"
+                  aria-label="Horizontal bar chart showing top products by redemptions">
+                </div>
+                <div class="chart-empty" *ngIf="topProductsChartData().length === 0">
+                  <i class="fa-regular fa-chart-bar"></i>
+                  <p>No product redemption data for this category</p>
+                </div>
+              </div>
+              <div class="chart-legend" *ngIf="topProductsChartData().length > 0">
+                <div class="legend-item">
+                  <span class="legend-color redemptions"></span>
+                  <span class="legend-label">Total Redemptions</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Controls Card -->
+        <section class="controls-section">
+          <div class="controls-card">
+            <div class="controls-row">
+              <!-- Search -->
+              <div class="search-group">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input
+                  type="text"
+                  class="search-input"
+                  placeholder="Search by user, product, or redemption ID..."
+                  [(ngModel)]="searchText"
+                  (input)="onSearch()"
+                  aria-label="Search redemptions"
+                />
+              </div>
+
+              <!-- Filters Toggle -->
+              <button class="btn-filter" (click)="toggleFilters()" [class.active]="showFilters">
+                <i class="fa-solid fa-sliders"></i>
+                Filters
+                <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="showFilters"></i>
+              </button>
+            </div>
+
+            <!-- Expandable Filters Panel -->
+            <div class="filters-panel" *ngIf="showFilters">
+              <div class="filters-grid">
+                <!-- Status Filter -->
+                <div class="filter-group">
+                  <label>Status</label>
+                  <select [(ngModel)]="selectedStatusFilter" (change)="onStatusFilterChange()">
+                    <option value="">All Status</option>
+                    <option value="0">Pending</option>
+                    <option value="1">Approved</option>
+                    <option value="3">Delivered</option>
+                    <option value="2">Rejected</option>
+                  </select>
+                </div>
+
+                <!-- Sort By -->
+                <div class="filter-group">
+                  <label>Sort By</label>
+                  <select [(ngModel)]="sortField" (change)="onSortChange()">
+                    <option value="date">Date</option>
+                    <option value="quantity">Quantity</option>
+                    <option value="points">Points</option>
+                  </select>
+                </div>
+
+                <!-- Order By -->
+                <div class="filter-group">
+                  <label>Order</label>
+                  <div class="order-toggle">
+                    <button 
+                      class="order-btn" 
+                      [class.active]="sortOrder === 'desc'"
+                      (click)="setSortOrder('desc')"
+                      title="Descending">
+                      <i class="fa-solid fa-arrow-down-wide-short"></i>
+                    </button>
+                    <button 
+                      class="order-btn" 
+                      [class.active]="sortOrder === 'asc'"
+                      (click)="setSortOrder('asc')"
+                      title="Ascending">
+                      <i class="fa-solid fa-arrow-up-wide-short"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="filter-group filter-actions">
+                  <button class="btn-reset" (click)="resetFilters()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results Summary -->
+            <div class="results-summary">
+              <span>{{ filteredRedemptions.length }} redemption{{ filteredRedemptions.length !== 1 ? 's' : '' }} found</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Redemptions Table -->
+        <section class="table-section">
+          <div class="table-container">
+            <table class="redemptions-table" *ngIf="filteredRedemptions.length > 0">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Product</th>
+                  <th>Quantity</th>
+                  <th>Points Spent</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr 
+                  *ngFor="let redemption of paginatedRedemptions"
+                  class="redemption-row"
+                  (click)="openDetails(redemption)"
+                  tabindex="0"
+                  (keydown.enter)="openDetails(redemption)"
+                  role="button"
+                  [attr.aria-label]="'View details for redemption by ' + redemption.userName"
+                >
+                  <td class="user-cell">
+                    <div class="user-info-cell">
+                      <div class="user-avatar">
+                        {{ getUserInitials(redemption.userName) }}
+                      </div>
+                      <div class="user-details">
+                        <div class="user-name">{{ redemption.userName }}</div>
+                        <div class="user-email">{{ redemption.userEmail }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="product-cell">
+                    <div class="product-info">
+                      <div class="product-name">{{ redemption.productName }}</div>
+                      <div class="product-category">{{ redemption.productCategory }}</div>
+                    </div>
+                  </td>
+                  <td class="quantity-cell">
+                    <span class="quantity-value">{{ redemption.quantity }}</span>
+                  </td>
+                  <td class="points-cell">
+                    <span class="points-value">{{ redemption.pointsSpent | number }}</span>
+                  </td>
+                  <td class="status-cell">
+                    <span class="status-tag" [class]="'status-' + getStatusLabel(redemption.status).toLowerCase()">
+                      {{ getStatusLabel(redemption.status) }}
+                    </span>
+                  </td>
+                  <td class="date-cell">
+                    {{ formatDate(redemption.createdAt) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Empty State -->
+            <div class="empty-state" *ngIf="filteredRedemptions.length === 0">
+              <i class="fa-regular fa-rectangle-list"></i>
+              <p>No redemptions found</p>
+              <p class="empty-subtext" *ngIf="searchText || selectedStatus !== null">
+                Try adjusting your filters
+              </p>
+              <p class="empty-subtext" *ngIf="!searchText && selectedStatus === null">
+                No redemption requests yet
+              </p>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" *ngIf="totalPages > 1">
+              <button
+                class="page-btn"
+                [disabled]="currentPage === 1"
+                (click)="changePage(currentPage - 1)"
+              >
+                <i class="fa-solid fa-chevron-left"></i> Previous
+              </button>
+              <div class="page-info">
+                Page {{ currentPage }} of {{ totalPages }}
+              </div>
+              <button
+                class="page-btn"
+                [disabled]="currentPage === totalPages"
+                (click)="changePage(currentPage + 1)"
+              >
+                Next <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </main>
   </div>
 
-  <!-- Details Drawer (Side Panel) -->
+  <!-- Details Drawer -->
   <div class="drawer-overlay" *ngIf="showDetailsDrawer" (click)="closeDetails()"></div>
   <div class="details-drawer" [class.open]="showDetailsDrawer">
     <div class="drawer-container" *ngIf="selectedRedemption && !isLoadingDetails">
@@ -255,150 +310,177 @@
       <div class="drawer-header">
         <div class="drawer-title-section">
           <h3 class="drawer-title">Redemption Details</h3>
-          <div class="drawer-subtitle">
-            <span class="redemption-id-large">{{ selectedRedemption.id.substring(0, 13).toUpperCase() }}</span>
-            <span class="status-pill" [ngClass]="getStatusClass(selectedRedemption.status)">
+          <div class="drawer-meta">
+            <span class="status-tag status-lg" [class]="'status-' + getStatusLabel(selectedRedemption.status).toLowerCase()">
               {{ getStatusLabel(selectedRedemption.status) }}
             </span>
+            <span class="created-time">
+              <i class="fa-regular fa-clock"></i>
+              {{ formatDateTime(selectedRedemption.createdAt) }}
+            </span>
           </div>
-          <div class="created-time">Created {{ formatDate(selectedRedemption.createdAt) }}</div>
         </div>
-        <button class="btn-close-drawer" (click)="closeDetails()" title="Close">✕</button>
+        <button class="btn-close-drawer" (click)="closeDetails()" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
       <!-- Drawer Content -->
       <div class="drawer-content">
-        <!-- User Snapshot -->
-        <div class="snapshot-section">
-          <div class="snapshot-header">
-            <span class="snapshot-icon">👤</span>
-            <h4 class="snapshot-title">User Snapshot</h4>
+        <!-- User Section -->
+        <div class="detail-section">
+          <div class="section-header">
+            <i class="fa-solid fa-user section-icon"></i>
+            <h4 class="section-title">User Information</h4>
           </div>
-          <div class="user-snapshot">
-            <div class="user-avatar-large">
+          <div class="user-card">
+            <div class="user-avatar-lg">
               {{ getUserInitials(selectedRedemption.userName) }}
             </div>
-            <div class="user-details">
-              <div class="user-name-large">{{ selectedRedemption.userName }}</div>
-              <div class="user-info-row">
-                <span class="info-label">Current Balance:</span>
-                <span class="info-value points">{{ selectedRedemption.userCurrentBalance | number }} Points</span>
-              </div>
-              <div class="user-info-row">
-                <span class="info-label">Total Earned:</span>
-                <span class="info-value">{{ selectedRedemption.userTotalEarned | number }} Points</span>
-              </div>
-              <div class="user-info-row">
-                <span class="info-label">Total Redeemed:</span>
-                <span class="info-value">{{ selectedRedemption.userTotalRedeemed | number }} Points</span>
-              </div>
+            <div class="user-card-details">
+              <div class="user-card-name">{{ selectedRedemption.userName }}</div>
+              <div class="user-card-email">{{ selectedRedemption.userEmail }}</div>
+            </div>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Current Balance</span>
+              <span class="info-value highlight">{{ selectedRedemption.userCurrentBalance | number }} pts</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Total Earned</span>
+              <span class="info-value">{{ selectedRedemption.userTotalEarned | number }} pts</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Total Redeemed</span>
+              <span class="info-value">{{ selectedRedemption.userTotalRedeemed | number }} pts</span>
             </div>
           </div>
         </div>
 
-        <!-- Product Snapshot -->
-        <div class="snapshot-section">
-          <div class="snapshot-header">
-            <span class="snapshot-icon">📦</span>
-            <h4 class="snapshot-title">Product Snapshot</h4>
+        <!-- Product Section -->
+        <div class="detail-section">
+          <div class="section-header">
+            <i class="fa-solid fa-box section-icon"></i>
+            <h4 class="section-title">Product Information</h4>
           </div>
-          <div class="product-snapshot">
-            <div class="product-image-large">
+          <div class="product-card">
+            <div class="product-image">
               <img [src]="selectedRedemption.productImageUrl || 'assets/placeholder-product.png'" 
-                   [alt]="selectedRedemption.productName" />
+                   [alt]="selectedRedemption.productName"
+                   (error)="$any($event.target).src='assets/placeholder-product.png'" />
             </div>
-            <div class="product-details">
-              <div class="product-name-large">{{ selectedRedemption.productName }}</div>
-              <div class="product-category-badge">{{ selectedRedemption.productCategory }}</div>
-              <div class="product-info-grid">
-                <div class="info-item">
-                  <span class="info-label">Points Each:</span>
-                  <span class="info-value">{{ selectedRedemption.productPointsPerUnit | number }} Points</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Quantity:</span>
-                  <span class="info-value">{{ selectedRedemption.quantity }}</span>
-                </div>
-                <div class="info-item total">
-                  <span class="info-label">Total Points:</span>
-                  <span class="info-value points-large">{{ selectedRedemption.pointsSpent | number }} Points</span>
-                </div>
-              </div>
+            <div class="product-card-details">
+              <div class="product-card-name">{{ selectedRedemption.productName }}</div>
+              <span class="category-badge">{{ selectedRedemption.productCategory }}</span>
+            </div>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Points per Unit</span>
+              <span class="info-value">{{ selectedRedemption.productPointsPerUnit | number }} pts</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Quantity</span>
+              <span class="info-value">{{ selectedRedemption.quantity }}</span>
+            </div>
+            <div class="info-item full-width">
+              <span class="info-label">Total Points Spent</span>
+              <span class="info-value highlight-lg">{{ selectedRedemption.pointsSpent | number }} pts</span>
             </div>
           </div>
         </div>
 
         <!-- Action Panel -->
-        <div class="action-panel">
-          <h4 class="panel-title">Action Panel</h4>
+        <div class="detail-section action-section">
+          <div class="section-header">
+            <i class="fa-solid fa-gavel section-icon"></i>
+            <h4 class="section-title">Actions</h4>
+          </div>
           
           <!-- Pending State Actions -->
-          <div *ngIf="canApprove(selectedRedemption.status)" class="action-buttons-group">
-            <button 
-              class="btn btn-approve-large"
-              (click)="approveRedemption()"
-              [disabled]="isSubmitting">
-              <span class="btn-icon">✓</span> Approve
-            </button>
-            <button 
-              class="btn btn-reject-large"
-              (click)="rejectRedemption()"
-              [disabled]="isSubmitting || !actionNotes.trim()">
-              <span class="btn-icon">✕</span> Reject
-            </button>
-            <button class="btn btn-more-actions">
-              <span class="btn-icon">⋮</span>
-            </button>
-          </div>
+          <ng-container *ngIf="canApprove(selectedRedemption.status)">
+            <div class="action-buttons">
+              <button 
+                class="btn btn-approve"
+                (click)="approveRedemption()"
+                [disabled]="isSubmitting">
+                <i class="fa-solid fa-check"></i> Approve
+              </button>
+              <button 
+                class="btn btn-reject"
+                (click)="rejectRedemption()"
+                [disabled]="isSubmitting"
+                [class.needs-reason]="!actionNotes.trim()">
+                <i class="fa-solid fa-xmark"></i> Reject
+              </button>
+            </div>
+            
+            <!-- Rejection Reason Warning -->
+            <div *ngIf="showReasonWarning" class="reason-warning">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              Please enter a rejection reason before rejecting.
+            </div>
+          </ng-container>
 
           <!-- Approved State Actions -->
-          <div *ngIf="canDeliver(selectedRedemption.status)" class="action-buttons-group">
-            <button 
-              class="btn btn-deliver-large"
-              (click)="markAsDelivered()"
-              [disabled]="isSubmitting">
-              <span class="btn-icon">✓</span> Mark Delivered
-            </button>
+          <ng-container *ngIf="canDeliver(selectedRedemption.status)">
+            <div class="action-buttons">
+              <button 
+                class="btn btn-deliver"
+                (click)="markAsDelivered()"
+                [disabled]="isSubmitting">
+                <i class="fa-solid fa-truck"></i> Mark as Delivered
+              </button>
+            </div>
+          </ng-container>
+
+          <!-- Delivered State -->
+          <div *ngIf="selectedRedemption.status === RedemptionStatus.Delivered" class="status-message success">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Delivered on {{ formatDateTime(selectedRedemption.deliveredAt!) }}</span>
           </div>
 
-          <!-- Read-only States -->
-          <div *ngIf="selectedRedemption.status === RedemptionStatus.Delivered" class="info-message success">
-            <span class="icon">✓</span>
-            This redemption has been delivered on {{ formatDateTime(selectedRedemption.deliveredAt!) }}
-          </div>
-
-          <div *ngIf="selectedRedemption.status === RedemptionStatus.Rejected" class="info-message error">
-            <span class="icon">✕</span>
-            This redemption was rejected.
-            <div class="rejection-reason" *ngIf="selectedRedemption.adminNotes">
-              <strong>Reason:</strong> {{ selectedRedemption.adminNotes }}
+          <!-- Rejected State -->
+          <div *ngIf="selectedRedemption.status === RedemptionStatus.Rejected" class="status-message error">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <div class="status-message-content">
+              <span>Redemption was rejected. Points have been refunded.</span>
+              <div class="rejection-reason" *ngIf="selectedRedemption.adminNotes">
+                <strong>Reason:</strong> {{ selectedRedemption.adminNotes }}
+              </div>
             </div>
           </div>
 
           <!-- Admin Notes Input -->
-          <div class="notes-section" *ngIf="canApprove(selectedRedemption.status) || canDeliver(selectedRedemption.status)">
+          <div class="notes-field" *ngIf="canApprove(selectedRedemption.status) || canDeliver(selectedRedemption.status)">
             <label class="notes-label">
-              Admin Notes 
-              <span *ngIf="canReject(selectedRedemption.status)" class="required">(optional)</span>
+              Admin Notes
+              <span *ngIf="canApprove(selectedRedemption.status)" class="required-hint">* Required for rejection</span>
             </label>
             <textarea 
               class="notes-textarea"
               [(ngModel)]="actionNotes"
-              [placeholder]="canApprove(selectedRedemption.status) ? 'Write an optional note...' : 'Add delivery notes (optional)...'"
+              [placeholder]="canApprove(selectedRedemption.status) ? 'Enter reason for rejection or optional notes for approval...' : 'Add delivery notes (optional)...'"
               rows="3"
-              [disabled]="isSubmitting"></textarea>
+              [class.warning-border]="showReasonWarning && canApprove(selectedRedemption.status)"
+              [disabled]="isSubmitting"
+              (input)="onNotesInput()"></textarea>
           </div>
 
           <!-- Existing Notes Display -->
-          <div class="existing-notes" *ngIf="selectedRedemption.adminNotes && !canApprove(selectedRedemption.status)">
+          <div class="existing-notes" *ngIf="selectedRedemption.adminNotes && !canApprove(selectedRedemption.status) && selectedRedemption.status !== RedemptionStatus.Rejected">
             <label class="notes-label">Admin Notes</label>
             <div class="notes-display">{{ selectedRedemption.adminNotes }}</div>
           </div>
         </div>
 
-        <!-- Audit Timeline (MVP) -->
-        <div class="audit-timeline">
-          <h4 class="timeline-title">Audit Timeline</h4>
+        <!-- Audit Timeline -->
+        <div class="detail-section">
+          <div class="section-header">
+            <i class="fa-solid fa-clock-rotate-left section-icon"></i>
+            <h4 class="section-title">Timeline</h4>
+          </div>
           <div class="timeline">
             <div class="timeline-item">
               <div class="timeline-dot created"></div>
@@ -409,9 +491,9 @@
             </div>
             
             <div class="timeline-item" *ngIf="selectedRedemption.approvedAt">
-              <div class="timeline-dot approved"></div>
+              <div class="timeline-dot" [class.approved]="selectedRedemption.status !== RedemptionStatus.Rejected" [class.rejected]="selectedRedemption.status === RedemptionStatus.Rejected"></div>
               <div class="timeline-content">
-                <div class="timeline-label">Approved</div>
+                <div class="timeline-label">{{ selectedRedemption.status === RedemptionStatus.Rejected ? 'Rejected' : 'Approved' }}</div>
                 <div class="timeline-time">{{ formatDateTime(selectedRedemption.approvedAt) }}</div>
               </div>
             </div>
@@ -430,8 +512,8 @@
 
     <!-- Loading State for Drawer -->
     <div class="drawer-loading" *ngIf="isLoadingDetails">
-      <div class="spinner"></div>
-      <p>Loading redemption details...</p>
+      <div class="loading-spinner"></div>
+      <p>Loading details...</p>
     </div>
   </div>
 </div>

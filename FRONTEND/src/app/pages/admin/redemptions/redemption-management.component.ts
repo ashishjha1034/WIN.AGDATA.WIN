@@ -1,9 +1,22 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
+
+// ECharts imports
+import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
+import * as echarts from 'echarts/core';
+import { BarChart, PieChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsOption } from 'echarts';
+
+// Register ECharts components
+echarts.use([BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
+
 import { RedemptionService } from '../../../services/redemption.service';
+import { ProductsService } from '../../../services/products.service';
 import { AuthService } from '../../../services/auth.service';
 import {
   Redemption,
@@ -11,14 +24,27 @@ import {
   RedemptionStatus,
   RedemptionListResponse
 } from '../../../models/redemption.models';
+import { ProductCategory } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+
+// Interface for product redemption aggregation
+interface ProductRedemptionCount {
+  productId: string;
+  productName: string;
+  category: string;
+  categoryId: string;
+  count: number;
+}
 
 @Component({
   selector: 'app-redemption-management',
   templateUrl: './redemption-management.component.html',
   styleUrls: ['./redemption-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent]
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective],
+  providers: [
+    provideEchartsCore({ echarts })
+  ]
 })
 export class RedemptionManagementComponent implements OnInit, OnDestroy {
   // Expose enums and Math for template
@@ -30,8 +56,9 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   filteredRedemptions: Redemption[] = [];
   selectedRedemption: RedemptionDetail | null = null;
   currentUser: any;
+  categories: ProductCategory[] = [];
 
-  // Status counts
+  // Status counts for charts
   statusCounts = {
     pending: 0,
     approved: 0,
@@ -46,14 +73,72 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   searchText = '';
   currentPage = 1;
   pageSize = 10;
-  showFilterBar = false;
+  showFilters = false;
   showDetailsDrawer = false;
 
   // Filter State
   selectedStatus: RedemptionStatus | null = null;
+  selectedStatusFilter: string = '';
+  sortField: string = 'date';
+  sortOrder: 'asc' | 'desc' = 'desc';
+  
+  // Chart state
+  selectedChartCategory = 'all';
+  redemptionStatusChartOption: EChartsOption = {};
+  topProductsChartOption: EChartsOption = {};
+  
+  // Signals for reactive chart data
+  private redemptionsSignal = signal<Redemption[]>([]);
+  private selectedCategorySignal = signal<string>('all');
+  
+  // Computed product redemption counts
+  topProductsChartData = computed(() => {
+    const redemptions = this.redemptionsSignal();
+    const selectedCategory = this.selectedCategorySignal();
+    
+    // Aggregate redemptions by product
+    const productCounts = new Map<string, ProductRedemptionCount>();
+    
+    redemptions.forEach(r => {
+      // Skip if filtering by category and doesn't match
+      if (selectedCategory !== 'all') {
+        const matchingCategory = this.categories.find(c => c.id === selectedCategory);
+        if (matchingCategory && r.productCategory !== matchingCategory.name) {
+          return;
+        }
+      }
+      
+      const existing = productCounts.get(r.productId);
+      if (existing) {
+        existing.count += r.quantity;
+      } else {
+        productCounts.set(r.productId, {
+          productId: r.productId,
+          productName: r.productName,
+          category: r.productCategory,
+          categoryId: '', // We don't have this in redemption data
+          count: r.quantity
+        });
+      }
+    });
+    
+    // Sort by count and take top 5
+    return Array.from(productCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  });
+
+  // Chart colors
+  private readonly chartColors = {
+    approved: '#2c5f3f',
+    pending: '#f59e0b',
+    delivered: '#6b7280',
+    rejected: '#ef4444'
+  };
   
   // Action notes
   actionNotes = '';
+  showReasonWarning = false;
 
   // Error & Success States
   errorMessage = '';
@@ -65,15 +150,16 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
 
   constructor(
     private redemptionService: RedemptionService,
+    private productsService: ProductsService,
     private authService: AuthService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     console.log('[RedemptionManagement] Component initialized');
-    console.log('[RedemptionManagement] Service apiUrl:', (this.redemptionService as any).apiUrl);
     
     this.loadCurrentUser();
+    this.loadCategories();
     this.loadRedemptions();
   }
 
@@ -87,6 +173,20 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
       console.log('[RedemptionManagement] Current user loaded:', user);
       this.currentUser = user;
     });
+  }
+
+  loadCategories(): void {
+    this.productsService.getCategories()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (categories) => {
+          this.categories = categories;
+          console.log('[RedemptionManagement] Categories loaded:', categories.length);
+        },
+        error: (error) => {
+          console.error('[RedemptionManagement] Error loading categories:', error);
+        }
+      });
   }
 
   loadRedemptions(): void {
@@ -115,8 +215,9 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
             return;
           }
 
-          // Backend returns { items: [...], counts: {...} }
           this.redemptions = response.items;
+          this.redemptionsSignal.set(response.items);
+          
           this.statusCounts = {
             pending: response.counts?.pending || 0,
             approved: response.counts?.approved || 0,
@@ -130,21 +231,175 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
           });
           
           this.applyFilters();
+          this.updateCharts();
         },
         error: (error) => {
-          console.error('[RedemptionManagement] Error loading redemptions:', {
-            error,
-            status: error.status,
-            message: error.message,
-            errorObj: error.error
-          });
-          
-          this.errorMessage = error.error?.message || error.message || 'Failed to load redemptions. Please check console for details.';
+          console.error('[RedemptionManagement] Error loading redemptions:', error);
+          this.errorMessage = error.error?.message || error.message || 'Failed to load redemptions.';
           this.showErrorAlert = true;
           this.redemptions = [];
           this.filteredRedemptions = [];
         }
       });
+  }
+
+  // Chart methods
+  hasRedemptionStatusData(): boolean {
+    const { approved, pending, delivered, rejected } = this.statusCounts;
+    return (approved + pending + delivered + rejected) > 0;
+  }
+
+  updateCharts(): void {
+    this.updateRedemptionStatusChart();
+    this.updateTopProductsChart();
+  }
+
+  updateRedemptionStatusChart(): void {
+    const { approved, pending, delivered, rejected } = this.statusCounts;
+    const total = approved + pending + delivered + rejected;
+
+    const data = [
+      { value: approved, name: 'Approved', itemStyle: { color: this.chartColors.approved } },
+      { value: pending, name: 'Pending', itemStyle: { color: this.chartColors.pending } },
+      { value: delivered, name: 'Delivered', itemStyle: { color: this.chartColors.delivered } },
+      { value: rejected, name: 'Rejected', itemStyle: { color: this.chartColors.rejected } }
+    ].filter(d => d.value > 0);
+
+    this.redemptionStatusChartOption = {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          const percent = total > 0 ? ((params.value / total) * 100).toFixed(1) : 0;
+          return `${params.name}: ${params.value} (${percent}%)`;
+        }
+      },
+      legend: {
+        orient: 'vertical',
+        right: 10,
+        top: 'center',
+        formatter: (name: string) => {
+          const item = data.find(d => d.name === name);
+          const value = item?.value || 0;
+          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+          return `${name}: ${value} (${percent}%)`;
+        },
+        textStyle: {
+          fontSize: 12,
+          color: '#6b7280'
+        }
+      },
+      series: [
+        {
+          name: 'Redemption Status',
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['35%', '50%'],
+          avoidLabelOverlap: false,
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: { show: false },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: 14,
+              fontWeight: 'bold'
+            }
+          },
+          labelLine: { show: false },
+          data: data
+        }
+      ]
+    };
+  }
+
+  updateTopProductsChart(): void {
+    const topProducts = this.topProductsChartData();
+    
+    if (topProducts.length === 0) {
+      this.topProductsChartOption = {};
+      return;
+    }
+
+    // Reverse for horizontal bar chart (bottom to top)
+    const reversed = [...topProducts].reverse();
+    const productNames = reversed.map(p => p.productName.length > 20 ? p.productName.substring(0, 20) + '...' : p.productName);
+    const counts = reversed.map(p => p.count);
+    const maxCount = Math.max(...counts);
+
+    this.topProductsChartOption = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: any) => {
+          const data = reversed[params[0].dataIndex];
+          return `<strong>${data.productName}</strong><br/>
+                  Category: ${data.category}<br/>
+                  Redemptions: ${data.count}`;
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '15%',
+        bottom: '3%',
+        top: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        max: maxCount * 1.2,
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        axisLine: { show: false },
+        splitLine: { show: false }
+      },
+      yAxis: {
+        type: 'category',
+        data: productNames,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          fontSize: 12,
+          color: '#374151',
+          width: 120,
+          overflow: 'truncate'
+        }
+      },
+      series: [
+        {
+          type: 'bar',
+          data: counts,
+          barWidth: '60%',
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: '#2c5f3f' },
+              { offset: 1, color: '#4ade80' }
+            ]),
+            borderRadius: [0, 4, 4, 0]
+          },
+          label: {
+            show: true,
+            position: 'right',
+            formatter: '{c}',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#374151'
+          }
+        }
+      ]
+    };
+  }
+
+  onChartCategoryChange(): void {
+    this.selectedCategorySignal.set(this.selectedChartCategory);
+    this.updateTopProductsChart();
+  }
+
+  // Toggle filters panel
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
   }
 
   applyFilters(): void {
@@ -156,9 +411,15 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
       filtered = filtered.filter(r =>
         r.userName?.toLowerCase().includes(search) ||
         r.productName?.toLowerCase().includes(search) ||
-        r.id?.toLowerCase().includes(search)
+        r.id?.toLowerCase().includes(search) ||
+        r.userId?.toLowerCase().includes(search) ||
+        r.productId?.toLowerCase().includes(search) ||
+        r.userEmail?.toLowerCase().includes(search)
       );
     }
+
+    // Apply sorting
+    filtered = this.applySorting(filtered);
 
     this.filteredRedemptions = filtered;
     this.currentPage = 1;
@@ -166,8 +427,26 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     console.log('[RedemptionManagement] Filters applied:', {
       totalRedemptions: this.redemptions.length,
       filteredCount: this.filteredRedemptions.length,
-      searchText: this.searchText
+      searchText: this.searchText,
+      sortField: this.sortField,
+      sortOrder: this.sortOrder
     });
+  }
+
+  applySorting(redemptions: Redemption[]): Redemption[] {
+    const sorted = [...redemptions];
+    const multiplier = this.sortOrder === 'desc' ? -1 : 1;
+    
+    switch (this.sortField) {
+      case 'date':
+        return sorted.sort((a, b) => multiplier * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+      case 'points':
+        return sorted.sort((a, b) => multiplier * (a.pointsSpent - b.pointsSpent));
+      case 'quantity':
+        return sorted.sort((a, b) => multiplier * (a.quantity - b.quantity));
+      default:
+        return sorted;
+    }
   }
 
   onSearch(): void {
@@ -181,11 +460,35 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
 
   filterByStatus(status: RedemptionStatus | null): void {
     this.selectedStatus = status;
+    this.selectedStatusFilter = status !== null ? status.toString() : '';
     this.loadRedemptions();
   }
 
-  toggleFilterBar(): void {
-    this.showFilterBar = !this.showFilterBar;
+  onStatusFilterChange(): void {
+    if (this.selectedStatusFilter === '') {
+      this.selectedStatus = null;
+    } else {
+      this.selectedStatus = parseInt(this.selectedStatusFilter) as RedemptionStatus;
+    }
+    this.loadRedemptions();
+  }
+
+  onSortChange(): void {
+    this.applyFilters();
+  }
+
+  setSortOrder(order: 'asc' | 'desc'): void {
+    this.sortOrder = order;
+    this.applyFilters();
+  }
+
+  resetFilters(): void {
+    this.searchText = '';
+    this.selectedStatus = null;
+    this.selectedStatusFilter = '';
+    this.sortField = 'date';
+    this.sortOrder = 'desc';
+    this.loadRedemptions();
   }
 
   refreshData(): void {
@@ -260,6 +563,14 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     this.showDetailsDrawer = false;
     this.selectedRedemption = null;
     this.actionNotes = '';
+    this.showReasonWarning = false;
+  }
+
+  // Clear warning when user starts typing
+  onNotesInput(): void {
+    if (this.actionNotes.trim()) {
+      this.showReasonWarning = false;
+    }
   }
 
   // Action handlers
@@ -309,12 +620,19 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
       return;
     }
     
+    // Validate rejection reason
     if (!this.actionNotes.trim()) {
-      this.errorMessage = 'Rejection reason is required';
-      this.showErrorAlert = true;
+      this.showReasonWarning = true;
+      this.cdr.detectChanges();
+      // Focus the textarea
+      setTimeout(() => {
+        const textarea = document.querySelector('.notes-textarea') as HTMLTextAreaElement;
+        if (textarea) textarea.focus();
+      }, 100);
       return;
     }
 
+    this.showReasonWarning = false;
     console.log('[RedemptionManagement] Rejecting redemption:', this.selectedRedemption.id);
     
     this.isSubmitting = true;
@@ -333,13 +651,29 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (response) => {
+        next: (response: any) => {
           console.log('[RedemptionManagement] Reject success:', response);
-          this.successMessage = response.message;
+          
+          // Build detailed success message
+          let message = response.message || 'Redemption rejected successfully.';
+          const details: string[] = [];
+          
+          if (response.pointsRefunded && response.pointsRefunded > 0) {
+            details.push(`${response.pointsRefunded.toLocaleString()} points refunded to user`);
+          }
+          if (response.quantityRestored && response.quantityRestored > 0) {
+            details.push(`${response.quantityRestored} item(s) restored to inventory`);
+          }
+          
+          if (details.length > 0) {
+            message = `${message} ${details.join('. ')}.`;
+          }
+          
+          this.successMessage = message;
           this.showSuccessAlert = true;
           this.closeDetails();
           this.loadRedemptions();
-          setTimeout(() => this.showSuccessAlert = false, 5000);
+          setTimeout(() => this.showSuccessAlert = false, 8000); // Longer display for detailed message
         },
         error: (error) => {
           console.error('[RedemptionManagement] Reject error:', error);

@@ -1,20 +1,43 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { takeUntil, finalize } from 'rxjs/operators';
+import { takeUntil, finalize, debounceTime } from 'rxjs/operators';
+
+// ECharts imports
+import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
+import * as echarts from 'echarts/core';
+import { BarChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsOption } from 'echarts';
+
+// Register ECharts components
+echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
+
 import { ProductsService } from '../../../services/products.service';
 import { Product, ProductKPI, ProductFilter, ProductCategory, CreateProductRequest } from '../../../models/product.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+
+// Low stock product interface for chart
+interface LowStockChartProduct {
+  name: string;
+  stock: number;
+  category: string;
+  isLowStock: boolean;
+}
 
 @Component({
   selector: 'app-product-management',
   templateUrl: './product-management.component.html',
   styleUrls: ['./product-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent]
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective],
+  providers: [
+    provideEchartsCore({ echarts })
+  ]
 })
 export class ProductManagementComponent implements OnInit, OnDestroy {
   // Expose Math for templates
@@ -33,15 +56,61 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   searchText = '';
   currentPage = 1;
   pageSize = 10;
-  showFilterDrawer = false;
+  showFilters = false;
   showAddProductModal = false;
   activeDropdown: string | null = null;
   isSubmitting = false;
   
-  // Error & Empty States
-  errorMessage = '';
-  showErrorAlert = false;
+  // Messages
+  errorMessage: string | null = null;
+  successMessage: string | null = null;
   hasLoadError = false;
+
+  // Chart state
+  selectedChartCategory = 'all';
+  lowStockThreshold = 10;
+  topNProducts = 4;
+  chartOption: EChartsOption = {};
+  
+  // Products signal for chart
+  private productsSignal = signal<Product[]>([]);
+  private selectedCategorySignal = signal<string>('all');
+
+  // Computed low stock products for chart - reads both signals for reactivity
+  lowStockProducts = computed(() => {
+    const products = this.productsSignal();
+    const selectedCategory = this.selectedCategorySignal();
+    let filtered = [...products];
+    
+    // Filter by category if selected
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(p => p.categoryId === selectedCategory);
+    }
+    
+    // Filter out unlimited stock products
+    filtered = filtered.filter(p => p.stockLevel !== 999999);
+    
+    // Sort by stock level ascending
+    filtered.sort((a, b) => a.stockLevel - b.stockLevel);
+    
+    // Take only the available products (up to topN, but show all if less)
+    const available = filtered.slice(0, this.topNProducts);
+    return available.map(p => ({
+      name: p.name,
+      stock: p.stockLevel,
+      category: p.categoryName,
+      isLowStock: p.stockLevel < this.lowStockThreshold
+    }));
+  });
+
+  // Check if chart has no data for current category
+  get chartHasNoData(): boolean {
+    return this.lowStockProducts().length === 0;
+  }
+
+  // Filter state for inline filters
+  selectedCategoryFilter = '';
+  maxPointsLimit = 50000;
 
   // New Product Form
   newProduct: CreateProductRequest = {
@@ -52,6 +121,12 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     imageUrl: '',
     initialStock: 0
   };
+
+  // New Category Form
+  newCategoryName = '';
+  newCategoryDescription = '';
+  isCreatingCategory = false;
+  showCategoryForm = false;
 
   // Filter State
   activeFilter: ProductFilter = {
@@ -64,6 +139,7 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private documentClickHandler: (event: MouseEvent) => void;
+  private searchSubject = new Subject<string>();
 
   @ViewChild('productsTable') productsTable!: ElementRef;
 
@@ -75,6 +151,17 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   ) {
     // Bind the click handler in constructor to maintain reference
     this.documentClickHandler = this.onDocumentClick.bind(this);
+    
+    // Debounce search
+    this.searchSubject.pipe(
+      debounceTime(300),
+      takeUntil(this.destroy$)
+    ).subscribe(query => {
+      this.searchText = query;
+      this.currentPage = 1;
+      this.applyFiltersAndPagination();
+      this.cdr.markForCheck();
+    });
   }
 
   ngOnInit(): void {
@@ -94,10 +181,161 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
 
   onDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    if (!target.closest('.dropdown-actions')) {
+    if (!target.closest('.action-menu')) {
       this.activeDropdown = null;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Get paginated products
+   */
+  get paginatedProducts(): Product[] {
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    return this.filteredProducts.slice(startIndex, startIndex + this.pageSize);
+  }
+
+  /**
+   * Get total pages
+   */
+  get totalPages(): number {
+    return Math.ceil(this.filteredProducts.length / this.pageSize);
+  }
+
+  /**
+   * Handle search input with debounce
+   */
+  onSearchInput(): void {
+    this.searchSubject.next(this.searchText);
+  }
+
+  /**
+   * Toggle filters panel
+   */
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  /**
+   * Handle range slider change
+   */
+  onRangeChange(): void {
+    // Ensure min doesn't exceed max
+    if (this.activeFilter.minPoints! > this.activeFilter.maxPoints!) {
+      const temp = this.activeFilter.minPoints;
+      this.activeFilter.minPoints = this.activeFilter.maxPoints;
+      this.activeFilter.maxPoints = temp;
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Update chart on category change
+   */
+  onChartCategoryChange(): void {
+    // Update the signal to trigger computed recalculation
+    this.selectedCategorySignal.set(this.selectedChartCategory);
+    this.updateChart();
+  }
+
+  /**
+   * Update inventory risk chart
+   */
+  private updateChart(): void {
+    const lowStock = this.lowStockProducts();
+    
+    if (lowStock.length === 0) {
+      this.chartOption = {
+        graphic: {
+          elements: [{
+            type: 'text',
+            left: 'center',
+            top: 'middle',
+            style: {
+              text: 'Not enough data for this category',
+              fontSize: 14,
+              fill: '#6b7280'
+            }
+          }]
+        }
+      };
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Reverse for horizontal bar (lowest stock at top)
+    const reversedProducts = [...lowStock].reverse();
+
+    this.chartOption = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: any) => {
+          const data = params[0];
+          const product = reversedProducts[data.dataIndex];
+          const status = product.isLowStock ? '⚠️ Low Stock' : '✓ Healthy';
+          return `<strong>${data.name}</strong><br/>
+                  Stock: ${data.value} units<br/>
+                  Category: ${product.category}<br/>
+                  Status: ${status}`;
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '15%',
+        bottom: '3%',
+        top: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: (value: number) => value.toString()
+        },
+        splitLine: {
+          show: false
+        },
+        axisLine: {
+          show: true,
+          lineStyle: { color: '#e5e7eb' }
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: reversedProducts.map(p => p.name),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          color: '#374151',
+          fontSize: 12,
+          width: 120,
+          overflow: 'truncate'
+        }
+      },
+      series: [
+        {
+          name: 'Stock',
+          type: 'bar',
+          data: reversedProducts.map(p => ({
+            value: p.stock,
+            itemStyle: {
+              color: p.isLowStock ? '#dc2626' : '#2c5f3f',
+              borderRadius: [0, 4, 4, 0]
+            }
+          })),
+          barWidth: '60%',
+          label: {
+            show: true,
+            position: 'right',
+            formatter: '{c}',
+            color: '#6b7280',
+            fontSize: 11
+          }
+        }
+      ]
+    };
+    
+    this.cdr.detectChanges();
   }
 
   /**
@@ -133,12 +371,11 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
    */
   loadProducts(): void {
     this.isLoading = true;
-    this.errorMessage = '';
-    this.showErrorAlert = false;
+    this.errorMessage = null;
 
     console.log('[ProductMgmt] Loading products...');
 
-    this.productsService.getProducts()
+    this.productsService.getAllProductsAdmin()
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -153,6 +390,7 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
         next: (data) => {
           console.log('[ProductMgmt] Products loaded successfully:', data);
           this.products = Array.isArray(data) ? data : [];
+          this.productsSignal.set(this.products);
           this.hasLoadError = false;
           
           // Calculate KPIs
@@ -161,6 +399,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
           
           // Apply filters and pagination
           this.applyFiltersAndPagination();
+          
+          // Update chart
+          this.updateChart();
+          
           this.cdr.detectChanges();
         },
         error: (error) => {
@@ -169,7 +411,6 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
           this.filteredProducts = [];
           this.hasLoadError = true;
           this.errorMessage = `Failed to load products: ${error?.status || error?.message || 'Unknown error'}. Please try again.`;
-          this.showErrorAlert = true;
           this.cdr.detectChanges();
         }
       });
@@ -188,18 +429,22 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       delete this.activeFilter.searchText;
     }
 
+    // Apply category filter from dropdown
+    if (this.selectedCategoryFilter) {
+      this.activeFilter.categoryIds = [this.selectedCategoryFilter];
+    } else {
+      this.activeFilter.categoryIds = [];
+    }
+
     filtered = this.productsService.filterProducts(filtered, this.activeFilter);
     
-    // Apply pagination
-    const startIndex = (this.currentPage - 1) * this.pageSize;
-    const endIndex = startIndex + this.pageSize;
-    this.filteredProducts = filtered.slice(startIndex, endIndex);
+    this.filteredProducts = filtered;
     
-    console.log('[ProductMgmt] Filtered products:', this.filteredProducts.length, 'of', filtered.length);
+    console.log('[ProductMgmt] Filtered products:', this.filteredProducts.length, 'of', this.products.length);
   }
 
   /**
-   * Handle search input
+   * Handle search input (legacy method)
    */
   onSearch(searchText: string): void {
     this.searchText = searchText;
@@ -208,43 +453,11 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Open filter drawer
-   */
-  openFilterDrawer(): void {
-    this.showFilterDrawer = true;
-  }
-
-  /**
-   * Close filter drawer
-   */
-  closeFilterDrawer(): void {
-    this.showFilterDrawer = false;
-  }
-
-  /**
-   * Handle category filter change
-   */
-  onCategoryFilterChange(categoryId: string, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (!this.activeFilter.categoryIds) {
-      this.activeFilter.categoryIds = [];
-    }
-    if (checked) {
-      if (!this.activeFilter.categoryIds.includes(categoryId)) {
-        this.activeFilter.categoryIds.push(categoryId);
-      }
-    } else {
-      this.activeFilter.categoryIds = this.activeFilter.categoryIds.filter(id => id !== categoryId);
-    }
-  }
-
-  /**
-   * Apply filters from drawer
+   * Apply filters from inline panel
    */
   applyFilters(): void {
     this.currentPage = 1;
     this.applyFiltersAndPagination();
-    this.closeFilterDrawer();
   }
 
   /**
@@ -256,9 +469,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       stockLevel: 'all',
       categoryIds: [],
       minPoints: 0,
-      maxPoints: 50000
+      maxPoints: this.maxPointsLimit
     };
     this.searchText = '';
+    this.selectedCategoryFilter = '';
     this.currentPage = 1;
     this.applyFiltersAndPagination();
   }
@@ -292,6 +506,79 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       initialStock: 0
     };
     this.isSubmitting = false;
+    this.resetCategoryForm();
+  }
+
+  /**
+   * Reset category creation form
+   */
+  resetCategoryForm(): void {
+    this.newCategoryName = '';
+    this.newCategoryDescription = '';
+    this.isCreatingCategory = false;
+  }
+
+  /**
+   * Create new category
+   */
+  createNewCategory(): void {
+    if (!this.newCategoryName?.trim()) {
+      this.errorMessage = 'Category name is required';
+      setTimeout(() => this.errorMessage = null, 5000);
+      return;
+    }
+
+    this.isCreatingCategory = true;
+
+    const request = {
+      name: this.newCategoryName.trim(),
+      description: this.newCategoryDescription?.trim() || undefined,
+      displayOrder: this.categories.length
+    };
+
+    this.productsService.createCategory(request)
+      .pipe(
+        finalize(() => {
+          this.isCreatingCategory = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (newCategory) => {
+          console.log('[ProductMgmt] Category created successfully:', newCategory);
+          // Refresh categories list
+          this.loadCategories();
+          // Set the new category as selected
+          this.newProduct.categoryId = newCategory.id;
+          // Hide and reset category form
+          this.showCategoryForm = false;
+          this.resetCategoryForm();
+          this.cdr.detectChanges();
+        },
+        error: (error) => {
+          console.error('[ProductMgmt] Error creating category:', error);
+          this.errorMessage = error?.error?.message || 'Failed to create category';
+          setTimeout(() => this.errorMessage = null, 5000);
+        }
+      });
+  }
+
+  /**
+   * Toggle category creation form visibility
+   */
+  toggleCategoryForm(): void {
+    this.showCategoryForm = !this.showCategoryForm;
+    if (!this.showCategoryForm) {
+      this.resetCategoryForm();
+    }
+  }
+
+  /**
+   * Cancel category creation
+   */
+  cancelCategoryCreation(): void {
+    this.showCategoryForm = false;
+    this.resetCategoryForm();
   }
 
   /**
@@ -301,8 +588,7 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     // Validation
     if (!this.newProduct.name || !this.newProduct.categoryId || this.newProduct.pointsCost <= 0) {
       this.errorMessage = 'Please fill in all required fields';
-      this.showErrorAlert = true;
-      setTimeout(() => this.showErrorAlert = false, 5000);
+      setTimeout(() => this.errorMessage = null, 5000);
       return;
     }
 
@@ -320,17 +606,26 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
           console.log('[ProductMgmt] Product created successfully:', newProduct);
           this.closeAddProductModal();
           this.loadProducts();
-          this.errorMessage = `Product "${newProduct.name}" created successfully!`;
-          this.showErrorAlert = true;
-          setTimeout(() => this.showErrorAlert = false, 5000);
+          this.showSuccess(`Product "${newProduct.name}" created successfully!`);
         },
         error: (error) => {
           console.error('[ProductMgmt] Error creating product:', error);
           this.errorMessage = `Failed to create product: ${error?.error?.message || error?.message || 'Unknown error'}`;
-          this.showErrorAlert = true;
-          setTimeout(() => this.showErrorAlert = false, 5000);
+          setTimeout(() => this.errorMessage = null, 5000);
         }
       });
+  }
+
+  /**
+   * Show success message
+   */
+  private showSuccess(message: string): void {
+    this.successMessage = message;
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      this.successMessage = null;
+      this.cdr.markForCheck();
+    }, 3000);
   }
 
   /**
@@ -378,15 +673,60 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   /**
    * Deactivate product
    */
-  deactivateProduct(product: Product, event?: MouseEvent): void {
+  deactivateProduct(productId: string, event?: MouseEvent): void {
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
     this.activeDropdown = null;
+    
+    const product = this.products.find(p => p.id === productId);
+    if (!product) return;
+    
     if (confirm(`Are you sure you want to deactivate "${product.name}"?`)) {
-      // TODO: Implement deactivate logic
-      console.log('Deactivate product:', product.id);
+      this.isLoading = true;
+      this.productsService.deactivateProduct(productId).subscribe({
+        next: (response) => {
+          console.log('Product deactivated successfully:', response);
+          this.loadProducts(); // Reload products to reflect changes
+        },
+        error: (error) => {
+          console.error('Error deactivating product:', error);
+          this.isLoading = false;
+          // Handle error appropriately
+          alert('Failed to deactivate product. Please try again.');
+        }
+      });
+    }
+  }
+
+  /**
+   * Activate product
+   */
+  activateProduct(productId: string, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    this.activeDropdown = null;
+    
+    const product = this.products.find(p => p.id === productId);
+    if (!product) return;
+    
+    if (confirm(`Are you sure you want to activate "${product.name}"?`)) {
+      this.isLoading = true;
+      this.productsService.activateProduct(productId).subscribe({
+        next: (response) => {
+          console.log('Product activated successfully:', response);
+          this.loadProducts(); // Reload products to reflect changes
+        },
+        error: (error) => {
+          console.error('Error activating product:', error);
+          this.isLoading = false;
+          // Handle error appropriately
+          alert('Failed to activate product. Please try again.');
+        }
+      });
     }
   }
 
@@ -466,10 +806,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
    * Get status badge class
    */
   getStatusClass(product: Product): string {
-    if (!product.isActive) return 'badge-inactive';
-    if (product.stockLevel === 0) return 'badge-out-of-stock';
-    if (product.stockLevel < 10) return 'badge-low-stock';
-    return 'badge-active';
+    if (!product.isActive) return 'inactive';
+    if (product.stockLevel === 0) return 'out-of-stock';
+    if (product.stockLevel < 10) return 'low-stock';
+    return 'active';
   }
 
   /**
@@ -482,25 +822,9 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     return 'Active';
   }
 
-  /**
-   * Close error alert
-   */
-  closeErrorAlert(): void {
-    this.showErrorAlert = false;
-  }
-
-  /**
-   * Page navigation
-   */
-  get totalPages(): number {
-    const filteredCount = this.productsService.filterProducts(this.products, this.activeFilter).length;
-    return Math.ceil(filteredCount / this.pageSize);
-  }
-
   goToPage(page: number): void {
     if (page >= 1 && page <= this.totalPages) {
       this.currentPage = page;
-      this.applyFiltersAndPagination();
     }
   }
 

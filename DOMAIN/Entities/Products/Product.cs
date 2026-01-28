@@ -41,7 +41,15 @@ public class Product : AuditableEntity<Guid>, IActivatable
         CategoryId = categoryId;
         ImageUrl = imageUrl;
 
-        Pricing = new ProductPricing(Id, pointsCost);
+        // Update existing pricing instead of creating new one to avoid EF tracking conflicts
+        if (Pricing != null)
+        {
+            Pricing.UpdatePricing(pointsCost);
+        }
+        else
+        {
+            Pricing = new ProductPricing(Id, pointsCost);
+        }
     }
 
     public void Activate() => IsActive = true;

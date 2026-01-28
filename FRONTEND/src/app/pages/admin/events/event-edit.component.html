@@ -2,12 +2,12 @@
   <div class="page-header">
     <div class="back-button">
       <button type="button" class="btn-back" (click)="onCancel()">
-        ← Back to Event
+        <i class="fa-solid fa-arrow-left"></i> Back to Event
       </button>
     </div>
     <h1>Edit Event</h1>
     <p class="subtitle" *ngIf="eventDetail">
-      {{ eventDetail.name }} • Status: <span class="status-badge" [ngClass]="'status-' + eventDetail.status">{{ eventDetail.status }}</span>
+      {{ eventDetail.name }} • Status: <span class="status-badge" [ngClass]="'status-' + eventDetail.status.toLowerCase()">{{ eventDetail.status }}</span>
     </p>
   </div>
 
@@ -20,9 +20,11 @@
   <!-- Error Alert -->
   <div *ngIf="showErrorAlert && !isLoading" class="alert alert-danger">
     <div class="alert-content">
-      <span class="alert-icon">⚠️</span>
+      <i class="fa-solid fa-circle-exclamation"></i>
       <span class="alert-text">{{ errorMessage }}</span>
-      <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+      <button type="button" class="alert-close" (click)="closeErrorAlert()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
   </div>
 
@@ -164,7 +166,7 @@
           <div class="form-group">
             <label for="pointsPerParticipant" class="form-label">
               Points Per Participant <span class="required">*</span>
-              <span *ngIf="pointsLocked" class="lock-badge">🔒 Locked</span>
+              <span *ngIf="pointsLocked" class="lock-badge"><i class="fa-solid fa-lock"></i> Locked</span>
             </label>
             <input
               id="pointsPerParticipant"
@@ -214,11 +216,15 @@
       <!-- Form Actions -->
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="isSubmitting">
-          Cancel
+          <i class="fa-solid fa-xmark"></i> Cancel
         </button>
         <button type="submit" class="btn btn-primary" [disabled]="!form.valid || isSubmitting">
-          <span *ngIf="!isSubmitting">Save Changes</span>
-          <span *ngIf="isSubmitting">Saving...</span>
+          <ng-container *ngIf="!isSubmitting">
+            <i class="fa-solid fa-check"></i> Save Changes
+          </ng-container>
+          <ng-container *ngIf="isSubmitting">
+            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+          </ng-container>
         </button>
       </div>
     </form>

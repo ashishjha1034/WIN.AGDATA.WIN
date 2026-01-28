@@ -25,6 +25,13 @@ public class ProductRepository : Repository<Product>, IProductRepository
             .Where(p => p.IsActive)
             .ToListAsync();
 
+    public async Task<IReadOnlyList<Product>> GetAllWithDetailsAsync()
+        => await _context.Products
+            .Include(p => p.Category)
+            .Include(p => p.Pricing)
+            .Include(p => p.Inventory)
+            .ToListAsync();
+
     public async Task<Product?> GetByIdWithInventoryAsync(Guid id)
         => await _context.Products
             .Include(p => p.Inventory)
@@ -50,6 +57,11 @@ public class ProductRepository : Repository<Product>, IProductRepository
     {
         _dbSet.Update(product);
     }
+
+    public async Task DeleteAsync(Product product)
+    {
+        _dbSet.Remove(product);
+    }
     
     public async Task<IReadOnlyList<Product>> GetByCategoryAsync(Guid categoryId)
         => await _context.Products
@@ -60,5 +72,13 @@ public class ProductRepository : Repository<Product>, IProductRepository
 
     public async Task<IReadOnlyList<ProductCategory>> GetCategoriesAsync()
         => await _context.ProductCategories.ToListAsync();
+
+    public void AddCategory(ProductCategory category)
+    {
+        _context.ProductCategories.Add(category);
+    }
+
+    public async Task<ProductCategory?> GetCategoryByIdAsync(Guid id)
+        => await _context.ProductCategories.FirstOrDefaultAsync(c => c.Id == id);
 
 }

@@ -82,6 +82,41 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
+    /// Get all products including inactive (admin only)
+    /// </summary>
+    /// <remarks>
+    /// Retrieve all products (both active and inactive) for admin management.
+    /// Admin only operation.
+    /// </remarks>
+    /// <returns>List of all products</returns>
+    /// <response code="200">Products retrieved successfully</response>
+    /// <response code="403">Forbidden - admin only</response>
+    [HttpGet("admin/all")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Get all products (admin)", Description = "List all products including inactive ones (admin only)")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> GetAllProductsAdmin()
+    {
+        try
+        {
+            var allProducts = await _productRepository.GetAllWithDetailsAsync();
+            var products = _mapper.Map<List<ProductDto>>(allProducts);
+
+            return Ok(new
+            {
+                count = products.Count,
+                data = products
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve products", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get product by ID
     /// </summary>
     /// <remarks>
@@ -101,10 +136,22 @@ public class ProductsController : ControllerBase
     {
         try
         {
-            var product = await _productRepository.GetActiveWithDetailsAsync(id);
+            // For admin users, get any product (active or inactive)
+            // For non-admin users, only get active products
+            Product? product;
+            
+            var isAdmin = User.IsInRole("Admin");
+            if (isAdmin)
+            {
+                product = await _productRepository.GetByIdForUpdateAsync(id);
+            }
+            else
+            {
+                product = await _productRepository.GetActiveWithDetailsAsync(id);
+            }
 
             if (product == null)
-                return NotFound(new { message = "Product not found or inactive" });
+                return NotFound(new { message = "Product not found" });
 
             var productDto = _mapper.Map<ProductDto>(product);
             return Ok(productDto);
@@ -324,6 +371,161 @@ public class ProductsController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Failed to adjust stock", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Create product category
+    /// </summary>
+    /// <remarks>
+    /// Add a new product category to the system.
+    /// Admin only operation.
+    /// </remarks>
+    /// <param name="request">Category creation details</param>
+    /// <returns>Created category</returns>
+    /// <response code="201">Category created successfully</response>
+    /// <response code="400">Invalid input or category name already exists</response>
+    /// <response code="403">Forbidden - admin only</response>
+    [HttpPost("categories")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Create category", Description = "Add new product category (admin only)")]
+    [ProducesResponseType(typeof(ProductCategoryDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<ProductCategoryDto>> CreateCategory([FromBody] CreateProductCategoryRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var command = new CreateProductCategoryCommand(request.Name, request.Description, request.DisplayOrder);
+            var result = await _mediator.Send(command);
+            
+            return CreatedAtAction(nameof(GetCategories), result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to create category", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Deactivate product
+    /// </summary>
+    /// <remarks>
+    /// Deactivate a product, making it unavailable for new redemptions.
+    /// Admin only operation.
+    /// </remarks>
+    /// <param name="id">Product ID</param>
+    /// <returns>Confirmation message</returns>
+    /// <response code="200">Product deactivated successfully</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">Product not found</response>
+    [HttpPost("{id:guid}/deactivate")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Deactivate product", Description = "Disable product from catalog (admin only)")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> DeactivateProduct(Guid id)
+    {
+        try
+        {
+            var command = new DeactivateProductCommand(id);
+            await _mediator.Send(command);
+
+            return Ok(new { message = "Product deactivated successfully", productId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to deactivate product", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Activate product
+    /// </summary>
+    /// <remarks>
+    /// Activate a product, making it available for new redemptions.
+    /// Admin only operation.
+    /// </remarks>
+    /// <param name="id">Product ID</param>
+    /// <returns>Confirmation message</returns>
+    /// <response code="200">Product activated successfully</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">Product not found</response>
+    [HttpPost("{id:guid}/activate")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Activate product", Description = "Enable product in catalog (admin only)")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> ActivateProduct(Guid id)
+    {
+        try
+        {
+            var command = new ActivateProductCommand(id);
+            await _mediator.Send(command);
+
+            return Ok(new { message = "Product activated successfully", productId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to activate product", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete product
+    /// </summary>
+    /// <remarks>
+    /// Permanently delete a product from the system.
+    /// Admin only operation. Use with caution as this cannot be undone.
+    /// </remarks>
+    /// <param name="id">Product ID</param>
+    /// <returns>Confirmation message</returns>
+    /// <response code="200">Product deleted successfully</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">Product not found</response>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Delete product", Description = "Permanently remove product (admin only)")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> DeleteProduct(Guid id)
+    {
+        try
+        {
+            var command = new DeleteProductCommand(id);
+            await _mediator.Send(command);
+
+            return Ok(new { message = "Product deleted successfully", productId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to delete product", error = ex.Message });
         }
     }
 }

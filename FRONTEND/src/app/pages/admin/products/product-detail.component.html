@@ -1,78 +1,108 @@
-<div class="admin-layout">
+<div class="admin-products-wrapper">
   <app-admin-sidebar></app-admin-sidebar>
   
-  <div class="product-detail-container">
+  <div class="admin-products-main">
     <!-- Loading State -->
-    <div *ngIf="isLoading" class="loading-state">
-      <div class="spinner"></div>
+    <div *ngIf="isLoading" class="loading-container">
+      <div class="loading-spinner"></div>
       <p>Loading product details...</p>
     </div>
 
     <!-- Error State -->
     <div *ngIf="!isLoading && hasError" class="error-state">
-      <div class="error-icon">⚠️</div>
+      <div class="error-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
       <h3 class="error-title">Failed to Load Product</h3>
       <p class="error-message">{{ errorMessage }}</p>
-      <button class="btn btn-primary" (click)="goBack()">Back to Products</button>
+      <button class="btn btn-primary" (click)="goBack()">
+        <i class="fa-solid fa-arrow-left"></i> Back to Products
+      </button>
     </div>
 
     <!-- Product Detail -->
     <div *ngIf="!isLoading && !hasError && product" class="product-detail-content">
-      <!-- Header -->
+      <!-- Compact Header with Back Button and Product Info -->
       <div class="detail-header">
-        <div class="header-left">
-          <div class="product-image-large">
-            <img [src]="product.imageUrl || 'assets/placeholder-product.png'" 
-                 [alt]="product.name"
-                 (error)="$any($event.target).src='assets/placeholder-product.png'" />
-          </div>
-          <div class="product-title-section">
-            <h1 class="product-title">{{ product.name }}</h1>
-            <span class="category-badge">{{ product.categoryName }}</span>
-            <div class="product-points">{{ product.pointsCost | number }} points</div>
-          </div>
-        </div>
-        <div class="header-right">
-          <button class="btn btn-primary" (click)="showAuditTrail = true" title="View Audit Trail">
-            📋 History
+        <div class="header-top-row">
+          <button class="btn-back" (click)="goBack()" aria-label="Back to products">
+            <i class="fa-solid fa-arrow-left"></i>
           </button>
-          <button class="btn btn-danger" (click)="deactivateProduct()">Deactivate</button>
-          <button class="btn btn-primary" (click)="goBack()">Back to Products</button>
+          <div class="product-header-content">
+            <div class="product-image-large">
+              <img [src]="product.imageUrl || 'assets/placeholder-product.png'" 
+                   [alt]="product.name"
+                   (error)="$any($event.target).src='assets/placeholder-product.png'" />
+            </div>
+            <div class="product-info-section">
+              <h1 class="product-title">{{ product.name }}</h1>
+              <div class="product-meta-inline">
+                <span class="category-badge">{{ product.categoryName }}</span>
+                <span class="points-badge">{{ product.pointsCost | number }} pts</span>
+                <span class="status-badge" [class.active]="product.isActive" [class.inactive]="!product.isActive">
+                  {{ product.isActive ? 'Active' : 'Inactive' }}
+                </span>
+              </div>
+              <!-- Stats inside info section -->
+              <div class="product-stats-inline">
+                <div class="stat-chip">
+                  <i class="fa-regular fa-calendar"></i>
+                  <span>{{ product.createdAt ? (product.createdAt | date:'mediumDate') : 'N/A' }}</span>
+                </div>
+                <div class="stat-chip">
+                  <i class="fa-solid fa-receipt"></i>
+                  <span>{{ totalRedemptions }} redemptions</span>
+                </div>
+                <div class="stat-chip" [class.low-stock]="product.stockLevel < 10 && product.stockLevel > 0" [class.out-of-stock]="product.stockLevel === 0">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                  <span>{{ product.stockLevel === 999999 ? 'Unlimited' : product.stockLevel }} in stock</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="tabs-container">
+      <!-- Modern Tabs -->
+      <div class="tabs-container" [class.inactive-product]="!product.isActive">
         <div class="tabs-nav">
-          <button class="tab-button" 
+          <button class="tab-btn" 
                   [class.active]="activeTab === 'info'"
                   (click)="switchTab('info')">
-            Product Info
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Product Info</span>
           </button>
-          <button class="tab-button" 
+          <button class="tab-btn" 
                   [class.active]="activeTab === 'stock'"
                   (click)="switchTab('stock')">
-            Stock & Control
+            <i class="fa-solid fa-cubes"></i>
+            <span>Stock & Control</span>
           </button>
-          <button class="tab-button" 
+          <button class="tab-btn" 
                   [class.active]="activeTab === 'redemptions'"
                   (click)="switchTab('redemptions')">
-            Redemptions
+            <i class="fa-solid fa-receipt"></i>
+            <span>Redemptions</span>
           </button>
         </div>
 
         <!-- Tab Content: Product Info -->
-        <div class="tab-content" *ngIf="activeTab === 'info'">
+        <div class="tab-content" *ngIf="activeTab === 'info'" [class.read-only-content]="!product.isActive">
           <div class="form-section">
             <h3 class="section-title">Basic Information</h3>
             <div class="form-grid">
               <div class="form-group">
                 <label>Product Name</label>
-                <input type="text" [(ngModel)]="editForm.name" class="form-input" />
+                <input type="text" [(ngModel)]="editForm.name" class="form-input" [readonly]="!product.isActive" [disabled]="!product.isActive" />
+              </div>
+              <div class="form-group">
+                <label>Image URL</label>
+                <input type="url" [(ngModel)]="editForm.imageUrl" class="form-input" placeholder="https://example.com/image.jpg" [readonly]="!product.isActive" [disabled]="!product.isActive" />
+                <small class="form-hint">Enter the URL of the product image.</small>
               </div>
               <div class="form-group full-width">
                 <label>Description</label>
-                <textarea [(ngModel)]="editForm.description" class="form-textarea" rows="4"></textarea>
+                <textarea [(ngModel)]="editForm.description" class="form-textarea" rows="4" [readonly]="!product.isActive" [disabled]="!product.isActive"></textarea>
               </div>
             </div>
           </div>
@@ -82,91 +112,103 @@
             <div class="form-grid">
               <div class="form-group">
                 <label>Category</label>
-                <input type="text" [(ngModel)]="editForm.categoryId" class="form-input" />
+                <select [(ngModel)]="editForm.categoryId" class="form-input" [disabled]="!product.isActive">
+                  <option value="">Select a category</option>
+                  <option *ngFor="let category of categories" [value]="category.id">
+                    {{ category.name }}
+                  </option>
+                </select>
               </div>
               <div class="form-group">
                 <label>Redemption Cost (Points)</label>
-                <input type="number" [(ngModel)]="editForm.pointsCost" class="form-input" min="100" />
+                <input type="number" [(ngModel)]="editForm.pointsCost" class="form-input" min="100" [readonly]="!product.isActive" [disabled]="!product.isActive" />
                 <small class="form-hint">Enter the redemption cost in points (minimum 100).</small>
               </div>
             </div>
           </div>
 
-          <div class="form-section">
-            <h3 class="section-title">Visibility</h3>
-            <div class="form-group">
-              <label>Status</label>
-              <div class="toggle-field">
-                <span>When set <strong>active</strong>, this product is redeemable and visible to users.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn btn-primary" (click)="saveChanges()">Save Changes</button>
+          <div class="form-actions" *ngIf="product.isActive">
+            <button class="btn btn-primary" (click)="saveChanges()">
+              <i class="fa-solid fa-floppy-disk"></i> Save Changes
+            </button>
           </div>
         </div>
 
         <!-- Tab Content: Stock & Control -->
-        <div class="tab-content" *ngIf="activeTab === 'stock'">
+        <div class="tab-content" *ngIf="activeTab === 'stock'" [class.read-only-content]="!product.isActive">
           <div class="form-section">
-            <h3 class="section-title">Stock Overview</h3>
-            <div class="stock-overview">
+            <h3 class="section-title">Stock Management</h3>
+            
+            <!-- Stock Overview and Adjustment Row -->
+            <div class="stock-row">
               <div class="stock-card">
                 <div class="stock-label">Current Stock</div>
                 <div class="stock-value-large">{{ product.stockLevel }}</div>
-                <div class="stock-status">Normal Stock</div>
-              </div>
-              <div class="stock-card">
-                <div class="stock-label">Reserved Stock</div>
-                <div class="stock-value-large">{{ product.reservedStock || 0 }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-section">
-            <h3 class="section-title">Adjust Stock</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Adjustment</label>
-                <div class="stock-adjustment-controls">
-                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount - 1">−</button>
-                  <input type="number" [(ngModel)]="stockAdjustment.amount" class="form-input-center" />
-                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount + 1">+</button>
+                <div class="stock-status" [class.low-stock]="product.stockLevel < 10 && product.stockLevel > 0" [class.out-of-stock]="product.stockLevel === 0">
+                  {{ product.stockLevel === 0 ? 'Out of Stock' : (product.stockLevel < 10 ? 'Low Stock' : 'Normal Stock') }}
                 </div>
               </div>
-              <div class="form-group">
-                <label>Reason (optional)</label>
-                <input type="text" class="form-input" placeholder="Stock level will be adjusted from 15 to 20." readonly />
+              <div class="stock-card adjustment-card" *ngIf="product.isActive">
+                <div class="stock-label">Adjustment</div>
+                <div class="stock-adjustment-controls">
+                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount - 1">
+                    <i class="fa-solid fa-minus"></i>
+                  </button>
+                  <input type="number" [(ngModel)]="stockAdjustment.amount" class="form-input-center" />
+                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount + 1">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+                <div class="stock-preview">
+                  New stock: {{ product.stockLevel + stockAdjustment.amount }}
+                </div>
+              </div>
+              <div class="stock-card readonly-note" *ngIf="!product.isActive">
+                <div class="readonly-message">
+                  <i class="fa-solid fa-lock"></i>
+                  <p>Stock adjustments are disabled for inactive products.</p>
+                  <p>Activate the product to manage stock levels.</p>
+                </div>
               </div>
             </div>
-            <button class="btn btn-primary" (click)="adjustStock()">Save Changes</button>
+
+            <!-- Reason Input -->
+            <div class="form-group reason-group" *ngIf="product.isActive">
+              <label>Reason (optional)</label>
+              <input type="text" [(ngModel)]="stockAdjustment.reason" class="form-input" placeholder="Enter reason for stock adjustment..." />
+            </div>
+
+            <!-- Centered Save Button -->
+            <div class="form-actions-center" *ngIf="product.isActive">
+              <button class="btn btn-primary" (click)="adjustStock()" [disabled]="stockAdjustment.amount === 0">
+                <i class="fa-solid fa-check"></i> Save Stock Adjustment
+              </button>
+            </div>
           </div>
 
           <div class="form-section danger-zone">
-            <h3 class="section-title">Product Control (Danger zone)</h3>
+            <h3 class="section-title">Product Control</h3>
             <div class="danger-actions">
-              <button class="btn btn-danger-outline" (click)="deactivateProduct()">
-                Deactivate Product
+              <button *ngIf="product.isActive" class="btn btn-warning-outline" (click)="deactivateProduct()">
+                <i class="fa-solid fa-ban"></i> Deactivate Product
               </button>
-              <button class="btn btn-danger-outline" (click)="deleteProduct()">
-                Delete Product
+              <button *ngIf="!product.isActive" class="btn btn-success-outline" (click)="activateProduct()">
+                <i class="fa-solid fa-check-circle"></i> Activate Product
               </button>
-            </div>
-            <div class="danger-warnings">
-              <p>⚠️ Deactivating will disable this product from being redeemable by users.</p>
-              <p>⚠️ Deleting this product will remove it permanently from the system.</p>
+              <button class="btn btn-danger-outline" (click)="deleteProduct()" [disabled]="!product.isActive">
+                <i class="fa-solid fa-trash"></i> Delete Product
+              </button>
             </div>
           </div>
         </div>
 
         <!-- Tab Content: Redemptions -->
-        <div class="tab-content" *ngIf="activeTab === 'redemptions'">
+        <div class="tab-content" *ngIf="activeTab === 'redemptions'" [class.read-only-content]="!product.isActive">
           <div class="redemptions-section">
             <div class="section-header">
               <h3 class="section-title">Redemptions</h3>
               <button class="btn-export" (click)="exportRedemptions()" [disabled]="filteredRedemptions.length === 0">
-                📊 Export CSV
+                <i class="fa-solid fa-file-csv"></i> Export CSV
               </button>
             </div>
 
@@ -180,24 +222,31 @@
               </button>
               <button 
                 class="filter-tab" 
-                [class.active]="activeRedemptionFilter === 'Pending'"
-                (click)="setRedemptionFilter('Pending')"
+                [class.active]="activeRedemptionFilter === RedemptionStatus.Pending"
+                (click)="setRedemptionFilter(RedemptionStatus.Pending)"
               >
-                Pending ({{ getRedemptionCount('Pending') }})
+                Pending ({{ getRedemptionCount(RedemptionStatus.Pending) }})
               </button>
               <button 
                 class="filter-tab" 
-                [class.active]="activeRedemptionFilter === 'Approved'"
-                (click)="setRedemptionFilter('Approved')"
+                [class.active]="activeRedemptionFilter === RedemptionStatus.Approved"
+                (click)="setRedemptionFilter(RedemptionStatus.Approved)"
               >
-                Approved ({{ getRedemptionCount('Approved') }})
+                Approved ({{ getRedemptionCount(RedemptionStatus.Approved) }})
               </button>
               <button 
                 class="filter-tab" 
-                [class.active]="activeRedemptionFilter === 'Delivered'"
-                (click)="setRedemptionFilter('Delivered')"
+                [class.active]="activeRedemptionFilter === RedemptionStatus.Delivered"
+                (click)="setRedemptionFilter(RedemptionStatus.Delivered)"
               >
-                Delivered ({{ getRedemptionCount('Delivered') }})
+                Delivered ({{ getRedemptionCount(RedemptionStatus.Delivered) }})
+              </button>
+              <button 
+                class="filter-tab" 
+                [class.active]="activeRedemptionFilter === RedemptionStatus.Rejected"
+                (click)="setRedemptionFilter(RedemptionStatus.Rejected)"
+              >
+                Rejected ({{ getRedemptionCount(RedemptionStatus.Rejected) }})
               </button>
             </div>
 
@@ -214,68 +263,31 @@
                   <th>Points Spent</th>
                   <th>Status</th>
                   <th>Date</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngIf="filteredRedemptions.length === 0">
-                  <td colspan="6" class="empty-cell">No redemptions found for this filter</td>
+                  <td colspan="5" class="empty-cell">
+                    <i class="fa-regular fa-folder-open"></i>
+                    No redemptions found for this filter
+                  </td>
                 </tr>
                 <tr *ngFor="let redemption of filteredRedemptions">
                   <td>{{ redemption.userName }}</td>
                   <td>{{ redemption.quantity }}</td>
-                  <td>{{ redemption.pointsSpent }}</td>
+                  <td>{{ redemption.pointsSpent | number }}</td>
                   <td>
-                    <span class="status-badge" [ngClass]="'status-' + redemption.status.toLowerCase()">
-                      {{ redemption.status }}
+                    <span class="status-badge" [ngClass]="'status-' + redemption.statusText.toLowerCase()">
+                      {{ redemption.statusText }}
                     </span>
                   </td>
-                  <td>{{ redemption.createdAt | date:'short' }}</td>
-                  <td>
-                    <button class="btn-action-small" title="View Details">👁️</button>
-                  </td>
+                  <td>{{ redemption.requestDate | date:'short' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- Audit Trail Modal -->
-<div class="modal-overlay" *ngIf="showAuditTrail" (click)="showAuditTrail = false">
-  <div class="modal-content audit-modal" (click)="$event.stopPropagation()">
-    <div class="modal-header">
-      <h3>Product Audit Trail</h3>
-      <button class="close-btn" (click)="showAuditTrail = false">✕</button>
-    </div>
-    
-    <div class="audit-timeline" *ngIf="product">
-      <!-- Updated Event -->
-      <div class="audit-event" *ngIf="product.updatedAt">
-        <div class="audit-icon">📝</div>
-        <div class="audit-details">
-          <div class="audit-action">Product Updated</div>
-          <div class="audit-timestamp">{{ product.updatedAt | date:'medium' }}</div>
-          <div class="audit-user" *ngIf="product.updatedBy">Updated by Admin</div>
-        </div>
-      </div>
-
-      <!-- Created Event -->
-      <div class="audit-event">
-        <div class="audit-icon">✨</div>
-        <div class="audit-details">
-          <div class="audit-action">Product Created</div>
-          <div class="audit-timestamp">{{ product.createdAt | date:'medium' }}</div>
-          <div class="audit-user" *ngIf="product.createdBy">Created by Admin</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-footer">
-      <button class="btn btn-primary" (click)="showAuditTrail = false">Close</button>
     </div>
   </div>
 </div>

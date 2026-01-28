@@ -11,4 +11,5 @@ public class ProductDto
     public string? ImageUrl { get; set; }
     public int StockLevel { get; set; }
     public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

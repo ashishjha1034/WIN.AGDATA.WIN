@@ -53,9 +53,16 @@ export interface UpdateProductRequest {
   imageUrl?: string;
 }
 
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string;
+  displayOrder?: number;
+}
+
 export interface UpdateStockRequest {
   amount: number;
   operation: 'increase' | 'decrease' | 'adjust';
+  reason?: string;
 }
 
 export interface ProductListResponse {
@@ -86,19 +93,23 @@ export interface ProductRedemption {
   id: string;
   userId: string;
   userName: string;
+  userEmail: string;
   quantity: number;
   pointsSpent: number;
-  status: RedemptionStatus;
+  status: number;  // Using numeric status from backend
+  statusText: string; // Human-readable status text
+  requestDate: string;  // renamed from createdAt
+  approvedDate?: string;
+  deliveredDate?: string;
   adminNotes?: string;
-  createdAt: string;
 }
 
 export enum RedemptionStatus {
-  Pending = 'Pending',
-  Approved = 'Approved',
-  Delivered = 'Delivered',
-  Rejected = 'Rejected',
-  Cancelled = 'Cancelled'
+  Pending = 0,
+  Approved = 1,
+  Rejected = 2,
+  Delivered = 3,
+  Cancelled = 4
 }
 
 export interface ProductRedemptionsResponse {

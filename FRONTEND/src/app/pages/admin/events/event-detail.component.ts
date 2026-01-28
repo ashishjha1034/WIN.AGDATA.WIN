@@ -13,7 +13,8 @@ import {
   PointsAward,
   EventKPI,
   AttendanceStatus,
-  RankAwardRequest
+  RankAwardRequest,
+  UpdateEventRequest
 } from '../../../models/event.models';
 import { EventDetailOverviewComponent } from './tabs/event-detail-overview.component';
 import { EventDetailParticipantsComponent } from './tabs/event-detail-participants.component';
@@ -58,6 +59,19 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   showConfirmCancel = false;
   errorMessage = '';
   showErrorAlert = false;
+
+  // Edit Modal State
+  showEditEventModal = false;
+  isSubmittingEdit = false;
+  editForm: UpdateEventRequest = {
+    name: '',
+    description: '',
+    eventDate: '',
+    location: '',
+    maxParticipants: undefined,
+    totalPointsPool: 0,
+    registrationEndDateUtc: ''
+  };
 
   private destroy$ = new Subject<void>();
 
@@ -160,10 +174,108 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Edit event
+   * Open Edit Event modal with prefilled data
    */
   editEvent(): void {
-    this.router.navigateByUrl(`/admin/events/${this.eventId}/edit`);
+    if (!this.event) return;
+    
+    // Populate form with current event data
+    this.editForm = {
+      name: this.event.name || '',
+      description: this.event.description || '',
+      eventDate: this.event.eventDate ? this.event.eventDate.split('T')[0] : '',
+      location: this.event.location || '',
+      maxParticipants: this.event.maxParticipants,
+      totalPointsPool: this.event.totalPointsPool || 0,
+      registrationEndDateUtc: this.event.registrationEndDateUtc ? this.event.registrationEndDateUtc.split('T')[0] : ''
+    };
+    
+    this.showEditEventModal = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Close edit modal
+   */
+  closeEditModal(): void {
+    this.showEditEventModal = false;
+    this.isSubmittingEdit = false;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Validate edit form
+   */
+  validateEditForm(): boolean {
+    if (!this.editForm.name || this.editForm.name.length < 3) {
+      this.errorMessage = 'Event name must be at least 3 characters';
+      this.showErrorAlert = true;
+      return false;
+    }
+    if (!this.editForm.description || this.editForm.description.length < 10) {
+      this.errorMessage = 'Description must be at least 10 characters';
+      this.showErrorAlert = true;
+      return false;
+    }
+    if (!this.editForm.eventDate) {
+      this.errorMessage = 'Event date is required';
+      this.showErrorAlert = true;
+      return false;
+    }
+    if (!this.editForm.registrationEndDateUtc) {
+      this.errorMessage = 'Registration end date is required';
+      this.showErrorAlert = true;
+      return false;
+    }
+    if (!this.editForm.totalPointsPool || this.editForm.totalPointsPool < 1) {
+      this.errorMessage = 'Total points pool must be at least 1';
+      this.showErrorAlert = true;
+      return false;
+    }
+
+    // Validate dates
+    const eventDate = new Date(this.editForm.eventDate);
+    const regEndDate = new Date(this.editForm.registrationEndDateUtc);
+    if (regEndDate > eventDate) {
+      this.errorMessage = 'Registration deadline must be before or on event date';
+      this.showErrorAlert = true;
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Submit edit form
+   */
+  submitEditEvent(): void {
+    this.showErrorAlert = false;
+    
+    if (!this.validateEditForm()) {
+      return;
+    }
+
+    this.isSubmittingEdit = true;
+    
+    this.eventService.updateEvent(this.eventId, this.editForm)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updatedEvent) => {
+          console.log('[EventDetail] Event updated:', updatedEvent);
+          this.isSubmittingEdit = false;
+          this.closeEditModal();
+          // Reload event details to reflect changes
+          this.loadEventDetail();
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error('[EventDetail] Error updating event:', error);
+          this.isSubmittingEdit = false;
+          this.errorMessage = error?.error?.message || 'Failed to update event. Please try again.';
+          this.showErrorAlert = true;
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   /**

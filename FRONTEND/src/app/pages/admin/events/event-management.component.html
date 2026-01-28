@@ -1,189 +1,417 @@
-<div class="admin-layout">
+<div class="admin-events-wrapper">
   <app-admin-sidebar></app-admin-sidebar>
-  
-  <div class="event-management-container">
-  <!-- Error Alert -->
-  <div *ngIf="showErrorAlert" class="alert alert-danger">
-    <div class="alert-content">
-      <span class="alert-icon">⚠️</span>
-      <span class="alert-text">{{ errorMessage }}</span>
-      <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
-    </div>
-  </div>
 
-  <!-- Page Header -->
-  <div class="page-header">
-    <div class="header-left">
-      <h1 class="page-title">Event Management</h1>
-      <p class="page-subtitle">Create, monitor, and control reward events</p>
-    </div>
-    <div class="header-right">
-      <button class="btn btn-primary" (click)="createEvent()" title="Create Event">
-        <span class="btn-icon">➕</span>
-        Create Event
-      </button>
-    </div>
-  </div>
-
-  <!-- KPI Strip -->
-  <div class="kpi-strip" *ngIf="kpi || isLoading">
-    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-content">
-        <div class="kpi-label">Total Events</div>
-        <div class="kpi-value">{{ kpi?.totalEvents || 0 }}</div>
+  <div class="admin-events-main">
+    <!-- Header - Matches Products/Users -->
+    <header class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">Events Management</h1>
       </div>
-    </div>
-
-    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-      <div class="kpi-icon">🟢</div>
-      <div class="kpi-content">
-        <div class="kpi-label">Live Events</div>
-        <div class="kpi-value">{{ kpi?.liveEvents || 0 }}</div>
+      <div class="header-right">
+        <div class="user-info" *ngIf="currentUser">
+          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+          <span class="user-role">
+            <i class="fa-solid fa-shield-halved"></i>
+            {{ currentUser?.roles?.[0] || 'Admin' }}
+          </span>
+        </div>
       </div>
-    </div>
+    </header>
 
-    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-      <div class="kpi-icon">📅</div>
-      <div class="kpi-content">
-        <div class="kpi-label">Upcoming Events</div>
-        <div class="kpi-value">{{ kpi?.upcomingEvents || 0 }}</div>
-      </div>
-    </div>
-
-    <div class="kpi-card" [class.skeleton]="isLoading && !kpi">
-      <div class="kpi-icon">✅</div>
-      <div class="kpi-content">
-        <div class="kpi-label">Completed Events</div>
-        <div class="kpi-value">{{ kpi?.completedEvents || 0 }}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Event Control Area -->
-  <div class="event-control-area">
-    <!-- Status Tabs & Search -->
-    <div class="control-bar">
-      <div class="status-tabs">
-        <button 
-          *ngFor="let status of statusOptions"
-          class="tab-button"
-          [class.active]="activeStatusTab === status.value"
-          (click)="onStatusTabChange(status.value)"
-        >
-          {{ status.label }}
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Success Message -->
+      <div class="success-alert" *ngIf="successMessage" role="alert">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ successMessage }}</span>
+        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <div class="filter-controls">
-        <div class="search-box">
-          <input 
-            type="text" 
-            placeholder="Search events..."
-            [(ngModel)]="searchText"
-            (input)="onSearch(searchText)"
-            class="search-input"
-          />
-          <span class="search-icon">🔍</span>
-        </div>
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="showErrorAlert" role="alert">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ errorMessage }}</span>
+        <button class="alert-dismiss" (click)="closeErrorAlert()" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
-    </div>
 
-    <!-- Events Table -->
-    <div class="table-container">
-      <div *ngIf="isLoading" class="loading-state">
-        <div class="spinner"></div>
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-container">
+        <div class="loading-spinner"></div>
         <p>Loading events...</p>
       </div>
 
-      <div *ngIf="!isLoading && filteredEvents.length === 0 && !hasLoadError" class="empty-state">
-        <div class="empty-icon">📭</div>
-        <p>No events found</p>
-        <p class="empty-subtext">Create your first event to get started</p>
-      </div>
-
-      <table class="events-table" *ngIf="!isLoading && filteredEvents.length > 0" #eventsTable>
-        <thead>
-          <tr class="table-header">
-            <th class="col-name">Event Name</th>
-            <th class="col-status">Status</th>
-            <th class="col-date">Date</th>
-            <th class="col-participants">Participants</th>
-            <th class="col-total-points">Total Points</th>
-            <th class="col-actions">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr 
-            *ngFor="let event of filteredEvents"
-            class="table-row"
-          >
-            <td class="col-name">
-              <div class="event-name-cell">
-                <div class="event-name" (click)="openEventDetail(event.id)">
-                  {{ event.name }}
+      <ng-container *ngIf="!isLoading">
+        <!-- Charts Section - 2 charts side by side -->
+        <section class="charts-section" aria-label="Event Analytics">
+          <div class="charts-grid">
+            <!-- Chart 1: Events Status Pie Chart -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title-group">
+                  <h2 class="chart-title">Events Status</h2>
+                  <p class="chart-subtitle">Distribution by status</p>
                 </div>
-                <div class="event-desc">{{ event.description | slice:0:50 }}...</div>
               </div>
-            </td>
-            <td class="col-status">
-              <span 
-                class="status-badge"
-                [style.backgroundColor]="getStatusColor(event.status)"
-                [style.color]="getStatusTextColor(event.status)"
-              >
-                {{ event.status }}
-              </span>
-            </td>
-            <td class="col-date">
-              {{ formatDate(event.eventDate) }}
-            </td>
-            <td class="col-participants">
-              <span class="participant-count">
-                {{ event.participantCount }}<span *ngIf="event.maxParticipants"> / {{ event.maxParticipants }}</span>
-              </span>
-            </td>
-            <td class="col-total-points">
-              <span class="points-value">{{ event.totalPointsPool | number }}</span>
-            </td>
-            <td class="col-actions">
-              <button 
-                class="btn-action btn-view"
-                (click)="openEventDetail(event.id)"
-                title="View event details"
-              >
-                View
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+              <div class="chart-body">
+                <div 
+                  *ngIf="hasEventStatusData()"
+                  echarts 
+                  [options]="eventStatusChartOption" 
+                  [merge]="eventStatusChartOption"
+                  class="status-chart"
+                  aria-label="Pie chart showing events status distribution">
+                </div>
+                <div class="chart-empty" *ngIf="!hasEventStatusData()">
+                  <i class="fa-regular fa-chart-pie"></i>
+                  <p>No event data available</p>
+                </div>
+              </div>
+            </div>
 
-    <!-- Pagination -->
-    <div class="pagination-container" *ngIf="!isLoading && filteredEvents.length > 0">
-      <div class="pagination-info">
-        Showing {{ (currentPage - 1) * pageSize + 1 }} to 
-        {{ Math.min(currentPage * pageSize, events.length) }} of {{ events.length }} events
-      </div>
-      <div class="pagination-controls">
-        <button 
-          class="btn-page"
-          [disabled]="currentPage === 1"
-          (click)="onPageChange(currentPage - 1)"
-        >
-          ◀
+            <!-- Chart 2: Enrollment Progress Bar Chart -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title-group">
+                  <h2 class="chart-title">Participants Enrollment Progress</h2>
+                  <p class="chart-subtitle">Top {{ topNUpcoming }} upcoming events by enrollment</p>
+                </div>
+              </div>
+              <div class="chart-body">
+                <div 
+                  *ngIf="upcomingEventsForChart().length > 0"
+                  echarts 
+                  [options]="enrollmentChartOption" 
+                  [merge]="enrollmentChartOption"
+                  class="enrollment-chart"
+                  aria-label="Horizontal bar chart showing enrollment progress for upcoming events">
+                </div>
+                <div class="chart-empty" *ngIf="upcomingEventsForChart().length === 0">
+                  <i class="fa-regular fa-chart-bar"></i>
+                  <p>No upcoming events found</p>
+                </div>
+              </div>
+              <div class="chart-legend" *ngIf="upcomingEventsForChart().length > 0">
+                <div class="legend-item">
+                  <span class="legend-color enrolled"></span>
+                  <span class="legend-label">Enrolled</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color remaining"></span>
+                  <span class="legend-label">Available Slots</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Controls Card -->
+        <section class="controls-section">
+          <div class="controls-card">
+            <div class="controls-row">
+              <!-- Search -->
+              <div class="search-group">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input
+                  type="text"
+                  class="search-input"
+                  placeholder="Search events by name..."
+                  [(ngModel)]="searchText"
+                  (input)="onSearch(searchText)"
+                  aria-label="Search events"
+                />
+              </div>
+
+              <!-- Create Event Button -->
+              <button class="btn-primary" (click)="createEvent()">
+                <i class="fa-solid fa-plus"></i>
+                Create Event
+              </button>
+
+              <!-- Sort By Dropdown -->
+              <div class="sort-group">
+                <label class="sort-label">Sort by:</label>
+                <select 
+                  class="sort-select"
+                  [(ngModel)]="sortBy"
+                  (change)="onSortChange()"
+                  aria-label="Sort events by">
+                  <option value="eventDate">Event Date</option>
+                  <option value="participants">Participants</option>
+                  <option value="pointsPool">Points Pool</option>
+                  <option value="pointsDistributed">Points Distributed (%)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tabs Bar -->
+        <section class="tabs-section">
+          <div class="tabs-bar">
+            <button 
+              *ngFor="let status of statusOptions"
+              class="tab-btn"
+              [class.active]="activeStatusTab === status.value"
+              (click)="onStatusTabChange(status.value)"
+            >
+              {{ status.label }}
+              <span class="tab-count" *ngIf="getStatusCount(status.value) > 0">
+                {{ getStatusCount(status.value) }}
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Events Table -->
+        <section class="table-section">
+          <div class="table-container">
+            <table class="events-table" *ngIf="filteredEvents.length > 0">
+              <thead>
+                <tr>
+                  <th>Event Name</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Participants</th>
+                  <th>Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr 
+                  *ngFor="let event of filteredEvents"
+                  class="event-row"
+                  (click)="openEventDetail(event.id)"
+                  tabindex="0"
+                  (keydown.enter)="openEventDetail(event.id)"
+                  role="button"
+                  [attr.aria-label]="'View details for ' + event.name"
+                >
+                  <td class="event-cell">
+                    <div class="event-info">
+                      <div class="event-name">{{ event.name }}</div>
+                      <div class="event-desc">{{ event.description | slice:0:60 }}{{ event.description && event.description.length > 60 ? '...' : '' }}</div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-tag" [class]="'status-' + event.status.toLowerCase()">
+                      {{ event.status }}
+                    </span>
+                  </td>
+                  <td class="date-cell">
+                    {{ formatDate(event.eventDate) }}
+                  </td>
+                  <td class="participants-cell">
+                    <div class="progress-cell">
+                      <span class="progress-percent">{{ getParticipantPercent(event) }}%</span>
+                      <div class="mini-progress">
+                        <div class="mini-progress-fill" [style.width.%]="getParticipantPercent(event)"></div>
+                      </div>
+                      <span class="progress-counts">{{ event.participantCount }} / {{ event.maxParticipants || '∞' }}</span>
+                    </div>
+                  </td>
+                  <td class="points-cell">
+                    <div class="progress-cell">
+                      <span class="progress-percent">{{ getPointsPercent(event) }}%</span>
+                      <div class="mini-progress">
+                        <div class="mini-progress-fill" [style.width.%]="getPointsPercent(event)"></div>
+                      </div>
+                      <span class="progress-counts">{{ event.distributedPoints | number }} / {{ event.totalPointsPool | number }}</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Empty State -->
+            <div class="empty-state" *ngIf="filteredEvents.length === 0 && !hasLoadError">
+              <i class="fa-regular fa-calendar-xmark"></i>
+              <p>No events found</p>
+              <p class="empty-subtext">Create your first event to get started</p>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" *ngIf="totalPages > 1">
+              <button
+                class="page-btn"
+                [disabled]="currentPage === 1"
+                (click)="onPageChange(currentPage - 1)"
+              >
+                <i class="fa-solid fa-chevron-left"></i> Previous
+              </button>
+              <div class="page-info">
+                Page {{ currentPage }} of {{ totalPages }}
+              </div>
+              <button
+                class="page-btn"
+                [disabled]="currentPage >= totalPages"
+                (click)="onPageChange(currentPage + 1)"
+              >
+                Next <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </main>
+  </div>
+
+  <!-- Create/Edit Event Modal -->
+  <div class="modal-overlay" *ngIf="showCreateEventModal || showEditEventModal" (click)="closeEventModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ showEditEventModal ? 'Edit Event' : 'Create New Event' }}</h3>
+        <button class="modal-close" (click)="closeEventModal()">
+          <i class="fa-solid fa-xmark"></i>
         </button>
-        <span class="page-number">{{ currentPage }}</span>
-        <button 
-          class="btn-page"
-          [disabled]="currentPage >= getTotalPages()"
-          (click)="onPageChange(currentPage + 1)"
-        >
-          ▶
-        </button>
       </div>
+      
+      <form class="modal-form" (ngSubmit)="showEditEventModal ? submitEditEvent() : submitNewEvent()">
+        <!-- Event Name -->
+        <div class="form-group">
+          <label class="form-label" for="eventName">
+            Event Name <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="eventName"
+            class="form-input"
+            [(ngModel)]="newEvent.name"
+            name="name"
+            placeholder="Enter event name"
+            required
+            minlength="3"
+            maxlength="100"
+          />
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label class="form-label" for="eventDescription">
+            Description <span class="required">*</span>
+          </label>
+          <textarea 
+            id="eventDescription"
+            class="form-input form-textarea"
+            [(ngModel)]="newEvent.description"
+            name="description"
+            placeholder="Enter event description"
+            required
+            minlength="10"
+            maxlength="500"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <div class="form-row">
+          <!-- Event Date -->
+          <div class="form-group">
+            <label class="form-label" for="eventDate">
+              Event Date <span class="required">*</span>
+            </label>
+            <input 
+              type="date" 
+              id="eventDate"
+              class="form-input"
+              [(ngModel)]="newEvent.eventDate"
+              name="eventDate"
+              required
+            />
+          </div>
+
+          <!-- Registration End Date -->
+          <div class="form-group">
+            <label class="form-label" for="registrationEndDate">
+              Registration Deadline <span class="required">*</span>
+            </label>
+            <input 
+              type="date" 
+              id="registrationEndDate"
+              class="form-input"
+              [(ngModel)]="newEvent.registrationEndDateUtc"
+              name="registrationEndDateUtc"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Max Participants -->
+          <div class="form-group">
+            <label class="form-label" for="maxParticipants">
+              Max Participants
+            </label>
+            <input 
+              type="number" 
+              id="maxParticipants"
+              class="form-input"
+              [(ngModel)]="newEvent.maxParticipants"
+              name="maxParticipants"
+              placeholder="Leave empty for unlimited"
+              min="0"
+            />
+          </div>
+
+          <!-- Total Points Pool -->
+          <div class="form-group">
+            <label class="form-label" for="totalPointsPool">
+              Total Points Pool <span class="required">*</span>
+            </label>
+            <input 
+              type="number" 
+              id="totalPointsPool"
+              class="form-input"
+              [(ngModel)]="newEvent.totalPointsPool"
+              name="totalPointsPool"
+              placeholder="Enter points pool"
+              required
+              min="1"
+            />
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-group">
+          <label class="form-label" for="location">
+            Location
+          </label>
+          <input 
+            type="text" 
+            id="location"
+            class="form-input"
+            [(ngModel)]="newEvent.location"
+            name="location"
+            placeholder="Enter location (optional)"
+            maxlength="200"
+          />
+        </div>
+
+        <!-- Form Actions -->
+        <div class="modal-actions">
+          <button 
+            type="button" 
+            class="btn-secondary"
+            (click)="closeEventModal()"
+            [disabled]="isSubmittingEvent"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            class="btn-primary"
+            [disabled]="isSubmittingEvent"
+          >
+            <span *ngIf="isSubmittingEvent">
+              <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+            </span>
+            <span *ngIf="!isSubmittingEvent">
+              <i class="fa-solid fa-check"></i> {{ showEditEventModal ? 'Update Event' : 'Create Event' }}
+            </span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
-</div>
 </div>

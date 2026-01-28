@@ -11,211 +11,386 @@
   <div class="event-detail-container" *ngIf="!isLoading && showErrorAlert">
     <div class="alert alert-danger">
       <div class="alert-content">
-        <span class="alert-icon">⚠️</span>
+        <i class="fa-solid fa-circle-exclamation"></i>
         <span class="alert-text">{{ errorMessage }}</span>
-        <button type="button" class="alert-close" (click)="closeErrorAlert()">✕</button>
+        <button type="button" class="alert-close" (click)="closeErrorAlert()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Main Content -->
   <div class="event-detail-container" *ngIf="!isLoading && !showErrorAlert && event">
-    <!-- Header -->
-    <div class="event-detail-header">
-    <div class="header-top">
-      <button class="btn-back" (click)="goBack()" title="Back to events">← Back</button>
-      <h1 class="event-title">{{ event?.name }}</h1>
-      <span 
-        class="status-badge"
-        [style.backgroundColor]="getStatusColor(event?.status || '')"
-        [style.color]="'#FFFFFF'"
-      >
-        {{ event?.status }}
-      </span>
-    </div>
-
-    <div class="header-info">
-      <div class="info-item">
-        <span class="label">Event Start Date</span>
-        <span class="value">{{ formatDate(event?.eventDate || '') }}</span>
-      </div>
-      <div class="divider"></div>
-      <div class="info-item">
-        <span class="label">Status</span>
-        <span class="value">{{ event?.status }}</span>
-      </div>
-    </div>
-
-    <div class="header-actions">
-      <!-- Edit only for Upcoming events -->
-      <button class="btn btn-secondary" (click)="editEvent()" *ngIf="event?.status === 'Upcoming'">
-        ✏️ Edit Event
-      </button>
-      <!-- Activate (Go Live) button for Upcoming events -->
-      <button 
-        class="btn btn-primary" 
-        (click)="activateEvent()"
-        *ngIf="event?.status === 'Upcoming' && isAdmin()"
-      >
-        ▶️ Activate (Go Live)
-      </button>
-      <!-- Complete button for Live events -->
-      <button 
-        class="btn btn-secondary" 
-        (click)="completeEvent()"
-        *ngIf="event?.status === 'Live' && isAdmin()"
-      >
-        ✓ Complete Event
-      </button>
-      <!-- Cancel button for Upcoming and Live events -->
-      <button 
-        class="btn btn-danger" 
-        (click)="cancelEvent()"
-        *ngIf="(event?.status === 'Upcoming' || event?.status === 'Live') && isAdmin()"
-      >
-        ✕ Cancel Event
-      </button>
-    </div>
-  </div>
-
-  <!-- Tabs -->
-  <div class="tabs-container">
-    <div class="tabs-nav">
-      <button 
-        class="tab-link"
-        [class.active]="activeTab === 'overview'"
-        (click)="switchTab('overview')"
-      >
-        Overview
-      </button>
-      <button 
-        class="tab-link"
-        [class.active]="activeTab === 'participants'"
-        (click)="switchTab('participants')"
-      >
-        Participants
-      </button>
-      <button 
-        class="tab-link"
-        [class.active]="activeTab === 'points'"
-        (click)="switchTab('points')"
-      >
-        Points & Rewards
-      </button>
-    </div>
-
-    <div class="tabs-content">
-      <!-- Overview Tab -->
-      <div class="tab-pane" [class.active]="activeTab === 'overview'">
-        <app-event-detail-overview [event]="event"></app-event-detail-overview>
-      </div>
-
-      <!-- Participants Tab -->
-      <div class="tab-pane" [class.active]="activeTab === 'participants'">
-        <app-event-detail-participants #participantsTab [eventId]="eventId" [event]="event" (participantsChanged)="onParticipantsChanged()"></app-event-detail-participants>
-      </div>
-
-      <!-- Points & Rewards Tab -->
-      <div class="tab-pane" [class.active]="activeTab === 'points'">
-        <app-event-detail-points #pointsTab [eventId]="eventId" [event]="event" (pointsAwarded)="onPointsAwarded()"></app-event-detail-points>
-      </div>
-    </div>
-  </div>
-
-  <!-- Activate Confirmation Modal -->
-  <div class="modal" *ngIf="showConfirmActivate" (click)="showConfirmActivate = false">
-    <div class="modal-content modal-info" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>▶️ Activate Event?</h3>
-        <button class="modal-close" (click)="showConfirmActivate = false">✕</button>
-      </div>
-      <div class="modal-body">
-        <p>You're about to activate this event and set it to <strong>Live</strong>.</p>
-        <div class="confirmation-summary" *ngIf="event">
-          <div class="summary-row">
-            <span class="label">Event Name:</span>
-            <span class="value">{{ event.name }}</span>
+    <!-- Compact Detail Header Card -->
+    <div class="detail-header-card">
+      <div class="header-main">
+        <button class="btn-back" (click)="goBack()" title="Back to events">
+          <i class="fa-solid fa-arrow-left"></i>
+          Back
+        </button>
+        
+        <div class="header-content">
+          <div class="header-info">
+            <h1 class="event-title">{{ event?.name }}</h1>
+            <div class="event-meta">
+              <span class="status-tag" [class]="'status-' + (event?.status?.toLowerCase() || 'upcoming')">
+                {{ event?.status }}
+              </span>
+              <span class="meta-divider">•</span>
+              <span class="event-date">
+                <i class="fa-regular fa-calendar"></i>
+                {{ formatDate(event?.eventDate || '') }}
+              </span>
+              <span class="meta-divider">•</span>
+              <span class="event-participants">
+                <i class="fa-solid fa-users"></i>
+                {{ event?.participantCount || event?.registeredCount || 0 }} Participants
+              </span>
+            </div>
           </div>
-          <div class="summary-row">
-            <span class="label">Current Status:</span>
-            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ event.status }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Participants:</span>
-            <span class="value">{{ event.participantCount }}</span>
+          
+          <div class="header-actions">
+            <!-- Edit Button - Circular Icon -->
+            <div class="action-btn-group" *ngIf="event?.status === 'Upcoming'">
+              <button class="action-btn action-btn-edit" (click)="editEvent()" title="Edit Event">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <span class="action-label">Edit</span>
+            </div>
+            
+            <!-- Go Live Button - Circular Icon -->
+            <div class="action-btn-group" *ngIf="event?.status === 'Upcoming' && isAdmin()">
+              <button class="action-btn action-btn-primary" (click)="activateEvent()" title="Activate Event">
+                <i class="fa-solid fa-bolt"></i>
+              </button>
+              <span class="action-label">Go Live</span>
+            </div>
+            
+            <!-- Complete Button - Circular Icon -->
+            <div class="action-btn-group" *ngIf="event?.status === 'Live' && isAdmin()">
+              <button class="action-btn action-btn-complete" (click)="completeEvent()" title="Complete Event">
+                <i class="fa-solid fa-flag-checkered"></i>
+              </button>
+              <span class="action-label">Complete</span>
+            </div>
+            
+            <!-- Cancel Button - Circular Icon -->
+            <div class="action-btn-group" *ngIf="(event?.status === 'Upcoming' || event?.status === 'Live') && isAdmin()">
+              <button class="action-btn action-btn-danger" (click)="cancelEvent()" title="Cancel Event">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+              <span class="action-label">Cancel</span>
+            </div>
           </div>
         </div>
-        <p class="info-text">ℹ️ Once activated, registration will close and check-in will become available.</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" (click)="showConfirmActivate = false">Cancel</button>
-        <button class="btn btn-primary" (click)="confirmActivateEvent()">Yes, Activate Event</button>
       </div>
     </div>
-  </div>
 
-  <!-- Complete Confirmation Modal -->
-  <div class="modal" *ngIf="showConfirmComplete" (click)="showConfirmComplete = false">
-    <div class="modal-content modal-warning" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>✓ Complete Event?</h3>
-        <button class="modal-close" (click)="showConfirmComplete = false">✕</button>
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tabs-nav">
+        <button 
+          class="tab-link"
+          [class.active]="activeTab === 'overview'"
+          (click)="switchTab('overview')"
+        >
+          <i class="fa-solid fa-chart-simple"></i>
+          Overview
+        </button>
+        <button 
+          class="tab-link"
+          [class.active]="activeTab === 'participants'"
+          (click)="switchTab('participants')"
+        >
+          <i class="fa-solid fa-users"></i>
+          Participants
+        </button>
+        <button 
+          class="tab-link"
+          [class.active]="activeTab === 'points'"
+          (click)="switchTab('points')"
+        >
+          <i class="fa-solid fa-coins"></i>
+          Points & Rewards
+        </button>
       </div>
-      <div class="modal-body">
-        <p>You're about to mark this event as <strong>Completed</strong>.</p>
-        <div class="confirmation-summary" *ngIf="event">
-          <div class="summary-row">
-            <span class="label">Event Name:</span>
-            <span class="value">{{ event.name }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Current Status:</span>
-            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ event.status }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Participants:</span>
-            <span class="value">{{ event.participantCount }}</span>
-          </div>
+
+      <div class="tabs-content">
+        <!-- Overview Tab -->
+        <div class="tab-pane" [class.active]="activeTab === 'overview'">
+          <app-event-detail-overview [event]="event"></app-event-detail-overview>
         </div>
-        <p class="warning-text">⚠️ Once completed, you cannot change this status. Ensure all points have been awarded.</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" (click)="showConfirmComplete = false">Keep Editing</button>
-        <button class="btn btn-danger" (click)="confirmCompleteEvent()">Yes, Complete Event</button>
+
+        <!-- Participants Tab -->
+        <div class="tab-pane" [class.active]="activeTab === 'participants'">
+          <app-event-detail-participants #participantsTab [eventId]="eventId" [event]="event" (participantsChanged)="onParticipantsChanged()"></app-event-detail-participants>
+        </div>
+
+        <!-- Points & Rewards Tab -->
+        <div class="tab-pane" [class.active]="activeTab === 'points'">
+          <app-event-detail-points #pointsTab [eventId]="eventId" [event]="event" (pointsAwarded)="onPointsAwarded()"></app-event-detail-points>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Cancel Confirmation Modal -->
-  <div class="modal" *ngIf="showConfirmCancel" (click)="showConfirmCancel = false">
-    <div class="modal-content modal-danger" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>⚠️ Cancel Event?</h3>
-        <button class="modal-close" (click)="showConfirmCancel = false">✕</button>
-      </div>
-      <div class="modal-body">
-        <p>You're about to <strong>cancel this event</strong>. This is a destructive action.</p>
-        <div class="confirmation-summary" *ngIf="event">
-          <div class="summary-row">
-            <span class="label">Event Name:</span>
-            <span class="value">{{ event.name }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Current Status:</span>
-            <span class="value status-badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ getStatusLabel(event.status) }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Participants Registered:</span>
-            <span class="value">{{ event.registeredCount }}</span>
-          </div>
+    <!-- Activate Confirmation Modal -->
+    <div class="modal" *ngIf="showConfirmActivate" (click)="showConfirmActivate = false">
+      <div class="modal-content modal-info" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-bolt"></i> Activate Event?</h3>
+          <button class="modal-close" (click)="showConfirmActivate = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
-        <p class="warning-text">⚠️ All registered participants will be notified. Points already awarded will not be refunded.</p>
+        <div class="modal-body">
+          <p>You're about to activate this event and set it to <strong>Live</strong>.</p>
+          <div class="confirmation-summary" *ngIf="event">
+            <div class="summary-row">
+              <span class="label">Event Name:</span>
+              <span class="value">{{ event.name }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Current Status:</span>
+              <span class="value status-tag" [class]="'status-' + event.status.toLowerCase()">{{ event.status }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Participants:</span>
+              <span class="value">{{ event.participantCount }}</span>
+            </div>
+          </div>
+          <p class="info-text"><i class="fa-solid fa-circle-info"></i> Once activated, registration will close and check-in will become available.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" (click)="showConfirmActivate = false">Cancel</button>
+          <button class="btn btn-primary" (click)="confirmActivateEvent()">Yes, Activate Event</button>
+        </div>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" (click)="showConfirmCancel = false">Keep Event</button>
-        <button class="btn btn-danger" (click)="confirmCancelEvent()">Yes, Cancel Event</button>
+    </div>
+
+    <!-- Complete Confirmation Modal -->
+    <div class="modal" *ngIf="showConfirmComplete" (click)="showConfirmComplete = false">
+      <div class="modal-content modal-warning" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-flag-checkered"></i> Complete Event?</h3>
+          <button class="modal-close" (click)="showConfirmComplete = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>You're about to mark this event as <strong>Completed</strong>.</p>
+          <div class="confirmation-summary" *ngIf="event">
+            <div class="summary-row">
+              <span class="label">Event Name:</span>
+              <span class="value">{{ event.name }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Current Status:</span>
+              <span class="value status-tag" [class]="'status-' + event.status.toLowerCase()">{{ event.status }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Participants:</span>
+              <span class="value">{{ event.participantCount }}</span>
+            </div>
+          </div>
+          <p class="warning-text"><i class="fa-solid fa-triangle-exclamation"></i> Once completed, you cannot change this status. Ensure all points have been awarded.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" (click)="showConfirmComplete = false">Keep Editing</button>
+          <button class="btn btn-danger" (click)="confirmCompleteEvent()">Yes, Complete Event</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel Confirmation Modal -->
+    <div class="modal" *ngIf="showConfirmCancel" (click)="showConfirmCancel = false">
+      <div class="modal-content modal-danger" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-triangle-exclamation"></i> Cancel Event?</h3>
+          <button class="modal-close" (click)="showConfirmCancel = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>You're about to <strong>cancel this event</strong>. This is a destructive action.</p>
+          <div class="confirmation-summary" *ngIf="event">
+            <div class="summary-row">
+              <span class="label">Event Name:</span>
+              <span class="value">{{ event.name }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Current Status:</span>
+              <span class="value status-tag" [class]="'status-' + event.status.toLowerCase()">{{ getStatusLabel(event.status) }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Participants Registered:</span>
+              <span class="value">{{ event.registeredCount }}</span>
+            </div>
+          </div>
+          <p class="warning-text"><i class="fa-solid fa-triangle-exclamation"></i> All registered participants will be notified. Points already awarded will not be refunded.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" (click)="showConfirmCancel = false">Keep Event</button>
+          <button class="btn btn-danger" (click)="confirmCancelEvent()">Yes, Cancel Event</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Event Modal -->
+    <div class="modal edit-modal-overlay" *ngIf="showEditEventModal" (click)="closeEditModal()">
+      <div class="modal-content edit-modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-pen"></i> Edit Event</h3>
+          <button class="modal-close" (click)="closeEditModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
+        <form class="edit-form" (ngSubmit)="submitEditEvent()">
+          <!-- Event Name -->
+          <div class="form-group">
+            <label class="form-label" for="editEventName">
+              Event Name <span class="required">*</span>
+            </label>
+            <input 
+              type="text" 
+              id="editEventName"
+              class="form-input"
+              [(ngModel)]="editForm.name"
+              name="name"
+              placeholder="Enter event name"
+              required
+              minlength="3"
+              maxlength="100"
+            />
+          </div>
+
+          <!-- Description -->
+          <div class="form-group">
+            <label class="form-label" for="editEventDescription">
+              Description <span class="required">*</span>
+            </label>
+            <textarea 
+              id="editEventDescription"
+              class="form-input form-textarea"
+              [(ngModel)]="editForm.description"
+              name="description"
+              placeholder="Enter event description"
+              required
+              minlength="10"
+              maxlength="500"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div class="form-row">
+            <!-- Event Date -->
+            <div class="form-group">
+              <label class="form-label" for="editEventDate">
+                Event Date <span class="required">*</span>
+              </label>
+              <input 
+                type="date" 
+                id="editEventDate"
+                class="form-input"
+                [(ngModel)]="editForm.eventDate"
+                name="eventDate"
+                required
+              />
+            </div>
+
+            <!-- Registration End Date -->
+            <div class="form-group">
+              <label class="form-label" for="editRegistrationEndDate">
+                Registration Deadline <span class="required">*</span>
+              </label>
+              <input 
+                type="date" 
+                id="editRegistrationEndDate"
+                class="form-input"
+                [(ngModel)]="editForm.registrationEndDateUtc"
+                name="registrationEndDateUtc"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <!-- Max Participants -->
+            <div class="form-group">
+              <label class="form-label" for="editMaxParticipants">
+                Max Participants
+              </label>
+              <input 
+                type="number" 
+                id="editMaxParticipants"
+                class="form-input"
+                [(ngModel)]="editForm.maxParticipants"
+                name="maxParticipants"
+                placeholder="Leave empty for unlimited"
+                min="0"
+              />
+            </div>
+
+            <!-- Total Points Pool -->
+            <div class="form-group">
+              <label class="form-label" for="editTotalPointsPool">
+                Total Points Pool <span class="required">*</span>
+              </label>
+              <input 
+                type="number" 
+                id="editTotalPointsPool"
+                class="form-input"
+                [(ngModel)]="editForm.totalPointsPool"
+                name="totalPointsPool"
+                placeholder="Enter points pool"
+                required
+                min="1"
+              />
+            </div>
+          </div>
+
+          <!-- Location -->
+          <div class="form-group">
+            <label class="form-label" for="editLocation">
+              Location
+            </label>
+            <input 
+              type="text" 
+              id="editLocation"
+              class="form-input"
+              [(ngModel)]="editForm.location"
+              name="location"
+              placeholder="Enter location (optional)"
+              maxlength="200"
+            />
+          </div>
+
+          <!-- Form Actions -->
+          <div class="modal-actions">
+            <button 
+              type="button" 
+              class="btn btn-secondary"
+              (click)="closeEditModal()"
+              [disabled]="isSubmittingEdit"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              class="btn btn-primary"
+              [disabled]="isSubmittingEdit"
+            >
+              <span *ngIf="isSubmittingEdit">
+                <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+              </span>
+              <span *ngIf="!isSubmittingEdit">
+                <i class="fa-solid fa-check"></i> Update Event
+              </span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
 </div>
-

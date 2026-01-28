@@ -1,0 +1,119 @@
+/**
+ * AGDATA Design System Tokens
+ * ===========================================
+ * This file contains all CSS custom properties (tokens) for the AGDATA brand.
+ * DO NOT use hard-coded colors, fonts, or sizing anywhere else.
+ * Always reference these tokens via var(--token-name).
+ */
+
+:root {
+  /* Surfaces / backgrounds */
+  --ag-color-background: #ffffff;
+  --ag-color-background-active: rgba(141,141,141,0.5);
+  --ag-color-background-hover: rgba(141,141,141,0.12);
+  --ag-color-background-selected: rgba(141,141,141,0.20);
+  --ag-color-background-selected-hover: rgba(141,141,141,0.32);
+  --ag-color-background-brand: #007079;
+  --ag-color-background-inverse: #004E60;
+
+  /* Layers */
+  --ag-color-layer-01: #ffffff;
+  --ag-color-layer-02: #ffffff;
+  --ag-color-layer-03: #ffffff;
+  --ag-color-layer-hover: #e5e5e5;
+  --ag-color-layer-active: #c6c6c6;
+  --ag-color-layer-selected: #e0e0e0;
+
+  /* Fields */
+  --ag-color-field-01: #f4f4f4;
+  --ag-color-field-02: #ffffff;
+  --ag-color-field-03: #ffffff;
+  --ag-color-field-hover: #e8e8e8;
+
+  /* Borders */
+  --ag-color-border-subtle: #e0e0e0;
+  --ag-color-border-strong: #8d8d8d;
+  --ag-color-border-inverse: #161616;
+  --ag-color-border-interactive: #007079;
+  --ag-color-border-disabled: #ebe6c6;
+
+  /* Text */
+  --ag-color-text-primary: #161616;
+  --ag-color-text-secondary: #525252;
+  --ag-color-text-placeholder: #a8a8a8;
+  --ag-color-text-on-color: #ffffff;
+  --ag-color-text-helper: #6f6f6f;
+  --ag-color-text-error: #da1e28;
+  --ag-color-text-disabled: #8d8d8d;
+
+  /* Icons */
+  --ag-color-icon-primary: #161616;
+  --ag-color-icon-secondary: #525252;
+  --ag-color-icon-on-color: #ffffff;
+  --ag-color-icon-disabled: #8d8d8d;
+  --ag-color-icon-interactive: #0f62fe;
+
+  /* Support / semantic */
+  --ag-color-support-error: #da1e28;
+  --ag-color-support-success: #42be65;
+  --ag-color-support-warning: #f1e21b;
+  --ag-color-support-info: #0043ce;
+  --ag-color-support-caution-major: #ff832b;
+  --ag-color-support-caution-minor: #f1e21b;
+  --ag-color-support-undefined: #8a3ffc;
+
+  /* Focus */
+  --ag-color-focus: #0f62fe;
+  --ag-color-focus-inset: #ffffff;
+  --ag-color-focus-inverse: #ffffff;
+
+  /* Buttons */
+  --ag-button-primary: #007479;
+  --ag-button-primary-hover: #006068;
+  --ag-button-primary-active: #004144;
+  --ag-button-secondary: #393939;
+  --ag-button-secondary-hover: #4c4c4c;
+  --ag-button-secondary-active: #6f6f6f;
+  --ag-button-danger: #da1e28;
+  --ag-button-danger-hover: #b81922;
+  --ag-button-danger-active: #750013;
+  --ag-button-info: #0043ce;
+  --ag-button-info-hover: #0353e9;
+  --ag-button-disabled: #c6c6c6;
+
+  /* Tags */
+  --ag-tag-blue-bg: #d0e2ff;  --ag-tag-blue-text: #0043ce;  --ag-tag-blue-hover: #b8d5ff;
+  --ag-tag-green-bg: #a7f0ba; --ag-tag-green-text: #006027; --ag-tag-green-hover: #74c69d;
+  --ag-tag-red-bg: #ffd7d9;   --ag-tag-red-text: #a2191f;  --ag-tag-red-hover: #ffc2c5;
+  --ag-tag-gray-bg: #e0e0e0;  --ag-tag-gray-text: #161616; --ag-tag-gray-hover: #d1d1d1;
+  --ag-tag-yellow-bg: #fef3c7; --ag-tag-yellow-text: #92400e; --ag-tag-yellow-hover: #fde68a;
+  --ag-tag-teal-bg: #a7f3d0; --ag-tag-teal-text: #064e3b; --ag-tag-teal-hover: #6ee7b7;
+  --ag-tag-purple-bg: #f0e7ff; --ag-tag-purple-text: #7209b7; --ag-tag-purple-hover: #e2d0ff;
+
+  /* Typography (font shorthand: weight size/line "family") */
+  --ag-typo-label: 500 0.75rem/1 "Roboto";
+  --ag-typo-helper-text: 400 0.75rem/1 "Roboto";
+  --ag-typo-legal: 400 0.75rem/1 "Roboto";
+  --ag-typo-button: 400 0.875rem/1 "Roboto";
+
+  --ag-typo-link-helper: 400 0.75rem/1 "Roboto";
+  --ag-typo-link-01: 400 0.875rem/1.25 "Roboto";
+  --ag-typo-link-02: 400 1rem/1.5 "Roboto";
+
+  --ag-typo-h1: 700 2.625rem/3.125 "Roboto";
+  --ag-typo-h2: 500 2rem/2.5 "Roboto";
+  --ag-typo-h3: 500 1.75rem/2.25 "Roboto";
+  --ag-typo-h4: 500 1.25rem/1.75 "Roboto";
+  --ag-typo-h5: 500 1rem/1.5 "Roboto";
+  --ag-typo-h6: 500 0.875rem/1.25 "Roboto";
+
+  --ag-typo-subtitle-01: 400 1rem/1.5 "Roboto";
+  --ag-typo-subtitle-02: 400 0.875rem/1.25 "Roboto";
+
+  --ag-typo-body-01: 400 1rem/1.5 "Roboto";
+  --ag-typo-body-01-bold: 700 1rem/1.5 "Roboto";
+  --ag-typo-body-01-italic: 400 1rem/1.5 "Roboto";
+  --ag-typo-body-02: 400 0.875rem/1.25 "Roboto";
+  --ag-typo-body-02-bold: 700 0.875rem/1.25 "Roboto";
+  --ag-typo-body-02-italic: 400 0.875rem/1.25 "Roboto";
+}

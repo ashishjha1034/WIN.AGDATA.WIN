@@ -1,23 +1,43 @@
-import { Component, OnInit, OnDestroy, ViewChild, signal, computed, effect } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, signal, computed, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, finalize } from 'rxjs/operators';
+import { Subject, forkJoin, of } from 'rxjs';
+import { takeUntil, debounceTime, finalize, catchError } from 'rxjs/operators';
+
+// ECharts imports
+import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
+import * as echarts from 'echarts/core';
+import { BarChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsOption } from 'echarts';
+
+// Register ECharts components
+echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { AdminUsersService } from '../../../services/admin-users.service';
-import { AdminGroupsService } from '../../../services/admin-groups.service';
-import { UserListItem, UserFilterCriteria, StatsDto, InviteUserRequest } from '../../../models/user.models';
-import { Group } from '../../../models/group.models';
+import { AuthService } from '../../../services/auth.service';
+import { UserListItem, UserFilterCriteria, InviteUserRequest } from '../../../models/user.models';
 
-import { KPICardComponent } from './components/kpi-card.component';
-import { UserFiltersComponent } from './components/user-filters.component';
 import { UserTableComponent, UserTableAction } from './components/user-table.component';
 import { UserDetailDrawerComponent, DrawerAction } from './components/user-detail-drawer.component';
 import { AddUserModalComponent } from './components/add-user-modal.component';
-import { GroupListComponent } from './components/group-list.component';
-import { GroupDetailsComponent } from './components/group-details.component';
-import { AddGroupMembersModalComponent } from './components/add-group-members-modal.component';
+
+// Sort options type
+type SortField = 'name' | 'email' | 'balance' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
+
+interface SortOption {
+  field: SortField;
+  direction: SortDirection;
+}
+
+// Top user for chart
+interface TopUser {
+  name: string;
+  balance: number;
+}
 
 @Component({
   selector: 'app-admin-users',
@@ -26,35 +46,37 @@ import { AddGroupMembersModalComponent } from './components/add-group-members-mo
     CommonModule,
     FormsModule,
     AdminSidebarComponent,
-    KPICardComponent,
-    UserFiltersComponent,
+    NgxEchartsDirective,
     UserTableComponent,
     UserDetailDrawerComponent,
-    AddUserModalComponent,
-    GroupListComponent,
-    GroupDetailsComponent,
-    AddGroupMembersModalComponent
+    AddUserModalComponent
+  ],
+  providers: [
+    provideEchartsCore({ echarts })
   ],
   templateUrl: './admin-users.component.html',
-  styleUrls: ['./admin-users.component.css']
+  styleUrls: ['./admin-users.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AdminUsersComponent implements OnInit, OnDestroy {
   @ViewChild(UserDetailDrawerComponent) drawerComponent?: UserDetailDrawerComponent;
   @ViewChild(AddUserModalComponent) addUserModalComponent?: AddUserModalComponent;
 
-  // Tab management
-  activeTab: 'users' | 'groups' = 'users';
+  // Current admin user
+  currentUser: any;
 
   // Users data - using signals for reactivity
   private usersSignal = signal<UserListItem[]>([]);
   private searchQuerySignal = signal<string>('');
   private filtersSignal = signal<UserFilterCriteria>({});
-  
-  // Computed filtered users - automatically updates when signals change
+  private sortSignal = signal<SortOption>({ field: 'name', direction: 'asc' });
+
+  // Computed filtered and sorted users
   filteredUsers = computed(() => {
     let filtered = [...this.usersSignal()];
     const query = this.searchQuerySignal().toLowerCase();
     const filters = this.filtersSignal();
+    const sort = this.sortSignal();
 
     // Apply search filter
     if (query) {
@@ -81,57 +103,118 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
       );
     }
 
+    // Apply balance range filter (fixed)
+    if (filters.balanceRange) {
+      filtered = filtered.filter(user => {
+        const balance = user.points?.current ?? 0;
+        switch (filters.balanceRange) {
+          case '0-1000':
+            return balance >= 0 && balance <= 1000;
+          case '1000-5000':
+            return balance > 1000 && balance <= 5000;
+          case '5000+':
+            return balance > 5000;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'name':
+          comparison = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+          break;
+        case 'email':
+          comparison = a.email.localeCompare(b.email);
+          break;
+        case 'balance':
+          comparison = (a.points?.current ?? 0) - (b.points?.current ?? 0);
+          break;
+        case 'createdAt':
+          // If createdAt exists, use it; otherwise fall back to id
+          comparison = (a.id || '').localeCompare(b.id || '');
+          break;
+      }
+      return sort.direction === 'asc' ? comparison : -comparison;
+    });
+
     return filtered;
   });
 
-  stats: StatsDto | null = null;
+  // Top 5 users for chart
+  topUsers = computed(() => {
+    const users = [...this.usersSignal()];
+    return users
+      .sort((a, b) => (b.points?.current ?? 0) - (a.points?.current ?? 0))
+      .slice(0, 5)
+      .map(u => ({
+        name: `${u.firstName} ${u.lastName}`,
+        balance: u.points?.current ?? 0
+      }));
+  });
 
-  // Pagination - computed from filtered users
+  // Pagination
   currentPage = 1;
   pageSize = 10;
-  
+
   get totalItems(): number {
     return this.filteredUsers().length;
   }
 
   // UI States
   isLoading = false;
-  isLoadingStats = false;
   error: string | null = null;
   successMessage: string | null = null;
+
+  // Filters state
+  searchQuery = '';
+  statusFilter = '';
+  roleFilter = '';
+  balanceFilter = '';
+  sortField: SortField = 'name';
+  sortDirection: SortDirection = 'asc';
+  showFilters = false;
 
   // Modal and Drawer states
   isAddUserModalOpen = false;
   isDrawerOpen = false;
   selectedUserId: string | null = null;
 
-  // Groups data (placeholder - not MVP)
-  groups: Group[] = [];
-  selectedGroupId: string | null = null;
-  selectedGroupName: string = '';
-  selectedGroupMembers: string[] = [];
-  isAddGroupMembersModalOpen = false;
+  // Chart options
+  chartOption: EChartsOption = {};
 
   private destroy$ = new Subject<void>();
-  private filterSubject = new Subject<UserFilterCriteria>();
+  private searchSubject = new Subject<string>();
 
   constructor(
     private adminUsersService: AdminUsersService,
-    private groupsService: AdminGroupsService
+    private authService: AuthService,
+    private cdr: ChangeDetectorRef
   ) {
-    // Debounce filter changes and update signal
-    this.filterSubject.pipe(
+    // Debounce search
+    this.searchSubject.pipe(
       debounceTime(300),
       takeUntil(this.destroy$)
-    ).subscribe(filters => {
-      this.filtersSignal.set(filters);
+    ).subscribe(query => {
+      this.searchQuerySignal.set(query);
       this.currentPage = 1;
+      this.cdr.markForCheck();
     });
   }
 
   ngOnInit(): void {
+    // Get current user
+    this.authService.currentUser$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(user => {
+        this.currentUser = user;
+        this.cdr.markForCheck();
+      });
+
     this.loadUsers();
-    this.loadStats();
   }
 
   /**
@@ -145,53 +228,142 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
       finalize(() => {
         this.isLoading = false;
+        this.cdr.markForCheck();
       })
     ).subscribe({
       next: (response) => {
-        // Update the signal with API data
         this.usersSignal.set(response.users || []);
+        this.updateChart();
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.error = err.message || 'Failed to load users';
         console.error('Failed to load users:', err);
+        this.cdr.markForCheck();
       }
     });
   }
 
   /**
-   * Load statistics
+   * Update chart with top 5 users
    */
-  private loadStats(): void {
-    this.isLoadingStats = true;
+  private updateChart(): void {
+    const top5 = this.topUsers();
+    
+    if (top5.length === 0) {
+      this.chartOption = {};
+      return;
+    }
 
-    this.adminUsersService.getStats().pipe(
-      takeUntil(this.destroy$),
-      finalize(() => {
-        this.isLoadingStats = false;
-      })
-    ).subscribe({
-      next: (response) => {
-        this.stats = response;
+    // Reverse for horizontal bar (top user at top)
+    const reversedUsers = [...top5].reverse();
+
+    this.chartOption = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: any) => {
+          const data = params[0];
+          return `${data.name}<br/>Balance: ${data.value.toLocaleString()} pts`;
+        }
       },
-      error: (err) => {
-        console.error('Failed to load stats:', err);
-      }
+      legend: {
+        show: false
+      },
+      grid: {
+        left: '3%',
+        right: '8%',
+        bottom: '3%',
+        top: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: (value: number) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value.toString()
+        },
+        splitLine: {
+          lineStyle: { color: '#f0f0f0' }
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: reversedUsers.map(u => u.name),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          color: '#374151',
+          fontSize: 12
+        }
+      },
+      series: [
+        {
+          name: 'Balance',
+          type: 'bar',
+          data: reversedUsers.map(u => u.balance),
+          itemStyle: {
+            color: '#2c5f3f',
+            borderRadius: [0, 4, 4, 0]
+          },
+          barWidth: '60%',
+          label: {
+            show: true,
+            position: 'right',
+            formatter: (params: any) => params.value.toLocaleString(),
+            color: '#6b7280',
+            fontSize: 11
+          }
+        }
+      ]
+    };
+  }
+
+  /**
+   * Handle search input
+   */
+  onSearchInput(): void {
+    this.searchSubject.next(this.searchQuery);
+  }
+
+  /**
+   * Apply filters
+   */
+  applyFilters(): void {
+    this.filtersSignal.set({
+      status: (this.statusFilter || undefined) as 'active' | 'inactive' | undefined,
+      role: this.roleFilter || undefined,
+      balanceRange: (this.balanceFilter || undefined) as '0-1000' | '1000-5000' | '5000+' | undefined
     });
-  }
-
-  /**
-   * Handle filter changes from filter component
-   */
-  onFiltersChanged(filters: UserFilterCriteria): void {
-    this.filterSubject.next(filters);
-  }
-
-  /**
-   * Handle search changes - update signal immediately for responsiveness
-   */
-  onSearchChanged(query: string): void {
-    this.searchQuerySignal.set(query);
+    this.sortSignal.set({
+      field: this.sortField,
+      direction: this.sortDirection
+    });
     this.currentPage = 1;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Reset filters
+   */
+  resetFilters(): void {
+    this.searchQuery = '';
+    this.statusFilter = '';
+    this.roleFilter = '';
+    this.balanceFilter = '';
+    this.sortField = 'name';
+    this.sortDirection = 'asc';
+    this.searchQuerySignal.set('');
+    this.filtersSignal.set({});
+    this.sortSignal.set({ field: 'name', direction: 'asc' });
+    this.currentPage = 1;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Toggle filters panel
+   */
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
   }
 
   /**
@@ -199,10 +371,11 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   onPageChanged(page: number): void {
     this.currentPage = page;
+    this.cdr.markForCheck();
   }
 
   /**
-   * Get paginated users for display - computed from filtered signal
+   * Get paginated users for display
    */
   get paginatedUsers(): UserListItem[] {
     const filtered = this.filteredUsers();
@@ -211,9 +384,9 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle row double-click to open drawer
+   * Handle row single-click to open drawer
    */
-  onRowDoubleClicked(user: UserListItem): void {
+  onRowClicked(user: UserListItem): void {
     this.openDrawer(user.id);
   }
 
@@ -249,20 +422,21 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   openDrawer(userId: string): void {
     this.selectedUserId = userId;
     this.isDrawerOpen = true;
+    this.cdr.markForCheck();
   }
 
   /**
-   * Open drawer in edit mode for a user
+   * Open drawer in edit mode
    */
   openDrawerForEdit(userId: string): void {
     this.selectedUserId = userId;
     this.isDrawerOpen = true;
-    // Small delay to let drawer open then trigger edit mode
     setTimeout(() => {
       if (this.drawerComponent) {
         this.drawerComponent.enterEditMode();
       }
     }, 100);
+    this.cdr.markForCheck();
   }
 
   /**
@@ -271,20 +445,21 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   openDrawerForTransactions(userId: string): void {
     this.selectedUserId = userId;
     this.isDrawerOpen = true;
-    // Small delay to let drawer open then switch to activity tab
     setTimeout(() => {
       if (this.drawerComponent) {
         this.drawerComponent.activeTab = 'activity';
       }
     }, 100);
+    this.cdr.markForCheck();
   }
 
   /**
-   * Close user detail drawer
+   * Close drawer
    */
   closeDrawer(): void {
     this.isDrawerOpen = false;
     this.selectedUserId = null;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -292,20 +467,12 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   onDrawerAction(action: DrawerAction): void {
     switch (action.type) {
-      case 'assign-roles':
-        // TODO: Open assign roles modal
-        console.log('Assign roles for user:', this.selectedUserId);
-        break;
       case 'deactivate':
         if (this.selectedUserId) {
           this.deactivateUser(this.selectedUserId);
         }
         break;
-      case 'edit':
-        // Edit is handled in drawer component
-        break;
       case 'user-updated':
-        // Refresh users list after user was edited
         this.loadUsers();
         this.showSuccess('User updated successfully!');
         break;
@@ -317,6 +484,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   openAddUserModal(): void {
     this.isAddUserModalOpen = true;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -327,10 +495,11 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     if (this.addUserModalComponent) {
       this.addUserModalComponent.closeModal();
     }
+    this.cdr.markForCheck();
   }
 
   /**
-   * Handle user creation - aligned with backend InviteUserRequest
+   * Handle user creation
    */
   onUserCreated(request: InviteUserRequest): void {
     this.adminUsersService.createUser(request).pipe(
@@ -341,11 +510,10 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         }
       })
     ).subscribe({
-      next: (response) => {
+      next: () => {
         this.showSuccess('User created successfully!');
         this.closeAddUserModal();
         this.loadUsers();
-        this.loadStats();
       },
       error: (err) => {
         const errorMessage = err.message || 'Failed to create user';
@@ -358,22 +526,26 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Show success message with auto-dismiss
+   * Show success message
    */
   private showSuccess(message: string): void {
     this.successMessage = message;
+    this.cdr.markForCheck();
     setTimeout(() => {
       this.successMessage = null;
+      this.cdr.markForCheck();
     }, 3000);
   }
 
   /**
-   * Show error message with auto-dismiss
+   * Show error message
    */
   private showError(message: string): void {
     this.error = message;
+    this.cdr.markForCheck();
     setTimeout(() => {
       this.error = null;
+      this.cdr.markForCheck();
     }, 5000);
   }
 
@@ -382,14 +554,13 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    */
   private resetUserPassword(userId: string): void {
     if (confirm('Send password reset email to this user?')) {
-      // TODO: Implement password reset API call
       console.log('Resetting password for user:', userId);
       this.showSuccess('Password reset email sent!');
     }
   }
 
   /**
-   * Toggle user active/inactive status
+   * Toggle user status
    */
   private toggleUserStatus(user: UserListItem): void {
     const action = user.isActive ? 'deactivate' : 'activate';
@@ -399,10 +570,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         : this.adminUsersService.activateUser(user.id);
 
       request$.pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isLoading = false;
-        })
+        takeUntil(this.destroy$)
       ).subscribe({
         next: () => {
           this.showSuccess(`User ${action}d successfully!`);
@@ -411,7 +579,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
             this.closeDrawer();
           }
         },
-        error: (err) => {
+        error: () => {
           this.showError(`Failed to ${action} user`);
         }
       });
@@ -424,17 +592,14 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   private deactivateUser(userId: string): void {
     if (confirm('Are you sure you want to deactivate this user?')) {
       this.adminUsersService.deactivateUser(userId).pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isLoading = false;
-        })
+        takeUntil(this.destroy$)
       ).subscribe({
         next: () => {
           this.showSuccess('User deactivated successfully!');
           this.closeDrawer();
           this.loadUsers();
         },
-        error: (err) => {
+        error: () => {
           this.showError('Failed to deactivate user');
         }
       });
@@ -447,74 +612,16 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   private deleteUser(userId: string): void {
     if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       this.adminUsersService.deleteUser(userId).pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isLoading = false;
-        })
+        takeUntil(this.destroy$)
       ).subscribe({
         next: () => {
           this.showSuccess('User deleted successfully!');
           this.loadUsers();
         },
-        error: (err) => {
+        error: () => {
           this.showError('Failed to delete user');
         }
       });
-    }
-  }
-
-  /**
-   * GROUP MANAGEMENT METHODS (Placeholder - Not MVP)
-   * Groups feature is disabled in current MVP
-   */
-
-  /**
-   * Handle group selection from group list
-   */
-  onGroupSelected(group: Group): void {
-    this.selectedGroupId = group.id;
-    this.selectedGroupName = group.name;
-    this.selectedGroupMembers = [];
-  }
-
-  /**
-   * Handle create group click (placeholder)
-   */
-  onCreateGroupClick(): void {
-    // Groups not implemented in MVP
-    this.showError('Groups feature coming soon');
-  }
-
-  /**
-   * Handle add members to group click (placeholder)
-   */
-  onAddGroupMembersClick(groupId: string): void {
-    // Groups not implemented in MVP
-    this.showError('Groups feature coming soon');
-  }
-
-  /**
-   * Close add group members modal
-   */
-  closeAddGroupMembersModal(): void {
-    this.isAddGroupMembersModalOpen = false;
-  }
-
-  /**
-   * Handle members added to group (placeholder)
-   */
-  onGroupMembersAdded(userIds: string[]): void {
-    this.showSuccess(`${userIds.length} member(s) added to group successfully!`);
-    this.closeAddGroupMembersModal();
-  }
-
-  /**
-   * Handle group updated
-   */
-  onGroupUpdated(): void {
-    // Refresh group details and list
-    if (this.selectedGroupId) {
-      this.onGroupSelected({ id: this.selectedGroupId, name: this.selectedGroupName } as Group);
     }
   }
 

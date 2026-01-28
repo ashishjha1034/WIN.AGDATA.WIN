@@ -2,12 +2,10 @@
   <!-- Logo Section -->
   <div class="sidebar-header">
     <div class="logo-wrapper">
-      <img src="assets/agdata-logo.svg" alt="AGDATA" class="agdata-logo" *ngIf="!isCollapsed"/>
+      <img src="assets/brand/agdata-logo-white.png" alt="AGDATA" class="agdata-logo" *ngIf="!isCollapsed"/>
     </div>
     <button class="toggle-btn" (click)="toggleSidebar()" title="Toggle sidebar">
-      <svg viewBox="0 0 24 24" fill="currentColor">
-        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59zm0 6L14 12l-6 6 6 6 1.41-1.41L10.83 18l4.58-4.59z"/>
-      </svg>
+      <i class="fa-solid fa-circle-dot"></i>
     </button>
   </div>
 
@@ -22,7 +20,7 @@
           class="menu-link"
           [title]="item.label"
         >
-          <span class="menu-icon">{{ item.icon }}</span>
+          <span class="menu-icon"><i [class]="item.icon"></i></span>
           <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
           <span class="badge" *ngIf="item.badge && !isCollapsed">{{ item.badge }}</span>
         </a>

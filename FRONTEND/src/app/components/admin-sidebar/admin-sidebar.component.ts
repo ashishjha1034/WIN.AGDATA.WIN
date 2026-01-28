@@ -25,32 +25,32 @@ export class AdminSidebarComponent implements OnInit, OnDestroy {
   menuItems: MenuItem[] = [
     {
       label: 'Dashboard',
-      icon: '??',
+      icon: 'fa-solid fa-chart-line',
       path: '/admin/dashboard'
     },
     {
       label: 'Users',
-      icon: '??',
+      icon: 'fa-solid fa-users',
       path: '/admin/users'
     },
     {
       label: 'Products',
-      icon: '??',
+      icon: 'fa-solid fa-headphones',
       path: '/admin/products'
     },
     {
       label: 'Events',
-      icon: '??',
+      icon: 'fa-solid fa-calendar-days',
       path: '/admin/events'
     },
     {
       label: 'Redemptions',
-      icon: '??',
+      icon: 'fa-regular fa-circle-check',
       path: '/admin/redemptions'
     },
     {
       label: 'Transactions / Audit',
-      icon: '??',
+      icon: 'fa-solid fa-wallet',
       path: '/admin/transactions'
     }
   ];

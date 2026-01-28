@@ -20,17 +20,23 @@ namespace WIN.AGDATA.WIN.API.Controllers;
 public class AdminRedemptionsController : ControllerBase
 {
     private readonly IRedemptionRepository _redemptionRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly IProductRepository _productRepository;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUnitOfWork _unitOfWork;
 
     public AdminRedemptionsController(
         IRedemptionRepository redemptionRepository,
+        IUserRepository userRepository,
+        IProductRepository productRepository,
         IMapper mapper,
         ICurrentUserService currentUserService,
         IUnitOfWork unitOfWork)
     {
         _redemptionRepository = redemptionRepository;
+        _userRepository = userRepository;
+        _productRepository = productRepository;
         _mapper = mapper;
         _currentUserService = currentUserService;
         _unitOfWork = unitOfWork;
@@ -231,25 +237,48 @@ public class AdminRedemptionsController : ControllerBase
             if (string.IsNullOrWhiteSpace(request.Reason))
                 return BadRequest(new { message = "Rejection reason is required" });
 
-            var redemption = await _redemptionRepository.GetByIdAsync(id);
+            var redemption = await _redemptionRepository.GetByIdWithDetailsAsync(id);
 
             if (redemption == null)
                 return NotFound(new { message = "Redemption not found" });
 
             var currentAdminId = _currentUserService.GetCurrentUserId();
 
+            // Get user with points account for refund
+            var user = await _userRepository.GetByIdWithPointsAsync(redemption.UserId);
+            if (user == null)
+                return BadRequest(new { message = "User not found for refund" });
+
+            // Get product with inventory for stock restoration
+            var product = await _productRepository.GetByIdWithInventoryAsync(redemption.ProductId);
+            if (product == null)
+                return BadRequest(new { message = "Product not found for inventory restoration" });
+
             // Call domain method - it will validate the state
             redemption.Reject(currentAdminId, request.Reason);
 
+            // Refund points to user
+            user.PointsAccount.RefundPoints(redemption.PointsSpent, currentAdminId, $"Refund for rejected redemption: {request.Reason}");
+
+            // Restore product inventory
+            product.Inventory.AdjustStock(redemption.Quantity, currentAdminId);
+
+            // Update all entities
             await _redemptionRepository.UpdateAsync(redemption);
+            await _userRepository.UpdateAsync(user);
+            await _productRepository.UpdateAsync(product);
+            
+            // Save all changes atomically
             await _unitOfWork.SaveChangesAsync();
 
             return Ok(new
             {
-                message = "Redemption rejected successfully",
+                message = "Redemption rejected successfully. Points refunded and inventory restored.",
                 redemptionId = id,
                 rejectedBy = currentAdminId,
-                reason = request.Reason
+                reason = request.Reason,
+                pointsRefunded = redemption.PointsSpent,
+                quantityRestored = redemption.Quantity
             });
         }
         catch (DomainException ex)

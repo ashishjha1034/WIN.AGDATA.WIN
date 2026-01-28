@@ -1,178 +1,170 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { AuthService } from '../../../services/auth.service';
-import { DashboardService, DashboardStats, PendingRedemption, RecentEvent, LowStockProduct, PointsChartData } from '../../../services/dashboard.service';
-import { Subject } from 'rxjs';
-import { takeUntil, finalize } from 'rxjs/operators';
-import { ChartConfiguration, Chart, ChartEvent } from 'chart.js';
-import { BaseChartDirective } from 'ng2-charts';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NgChartsModule } from 'ng2-charts';
+import { RouterModule } from '@angular/router';
+import { Subject, forkJoin, of } from 'rxjs';
+import { takeUntil, catchError, map } from 'rxjs/operators';
+
+// ECharts imports - tree-shaken
+import { NgxEchartsDirective, provideEcharts } from 'ngx-echarts';
+import type { EChartsOption } from 'echarts';
+
+// Components
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { KpiCardComponent } from './components/kpi-card/kpi-card.component';
+import { ChartCardComponent } from './components/chart-card/chart-card.component';
+import { TableCardComponent } from './components/table-card/table-card.component';
+
+// Services
+import { AuthService } from '../../../services/auth.service';
+import { DashboardService, DashboardStats, PendingRedemption, LowStockProduct } from '../../../services/dashboard.service';
+import { RedemptionService } from '../../../services/redemption.service';
+import { EventService } from '../../../services/event.service';
+import { ProductsService } from '../../../services/products.service';
+
+// Models
+import { RedemptionStatus, RedemptionListResponse } from '../../../models/redemption.models';
+import { Event, EventStatus } from '../../../models/event.models';
+
+// Interfaces for dashboard data
+interface KpiData {
+  totalUsers: number;
+  totalEvents: number;
+  totalProducts: number;
+  lowStockProducts: number;
+  pendingRedemptions: number;
+  liveEvents: number;
+}
+
+interface RedemptionStatusCounts {
+  approved: number;
+  pending: number;
+  delivered: number;
+  rejected: number;
+  cancelled: number;
+}
+
+interface EventStatusCounts {
+  upcoming: number;
+  live: number;
+  completed: number;
+  cancelled: number;
+}
+
+interface LiveEventDisplay {
+  id: string;
+  name: string;
+  awardedPercent: number;
+  distributedPoints: number;
+  totalPointsPool: number;
+}
+
+interface PendingRedemptionDisplay {
+  id: string;
+  userName: string;
+  productName: string;
+  requestDate: string;
+  pointsSpent: number;
+}
+
+interface LowStockProductDisplay {
+  id: string;
+  name: string;
+  category: string;
+  stockCount: number;
+}
 
 @Component({
   selector: 'app-admin-dashboard',
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, NgChartsModule, AdminSidebarComponent]
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    NgxEchartsDirective,
+    AdminSidebarComponent,
+    KpiCardComponent,
+    ChartCardComponent,
+    TableCardComponent
+  ],
+  providers: [
+    provideEcharts()
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AdminDashboardComponent implements OnInit, OnDestroy {
-  @ViewChild('barChart') barChart?: BaseChartDirective;
-  @ViewChild('doughnutChart') doughnutChart?: BaseChartDirective;
-
   currentUser: any;
   isLoading = true;
   errorMessage: string | null = null;
 
-  // Dashboard data
-  stats: DashboardStats = {
+  // KPI Data
+  kpiData: KpiData = {
     totalUsers: 0,
-    totalPointsEarned: 0,
-    pointsRedeemed: 0,
-    pendingRedemptions: 0
+    totalEvents: 0,
+    totalProducts: 0,
+    lowStockProducts: 0,
+    pendingRedemptions: 0,
+    liveEvents: 0
   };
 
-  pendingRedemptions: PendingRedemption[] = [];
-  recentEvents: RecentEvent[] = [];
-  lowStockProducts: LowStockProduct[] = [];
+  // Chart Data
+  redemptionStatusCounts: RedemptionStatusCounts = {
+    approved: 0,
+    pending: 0,
+    delivered: 0,
+    rejected: 0,
+    cancelled: 0
+  };
 
-  searchQuery = '';
+  eventStatusCounts: EventStatusCounts = {
+    upcoming: 0,
+    live: 0,
+    completed: 0,
+    cancelled: 0
+  };
+
+  // Table Data
+  pendingRedemptionsList: PendingRedemptionDisplay[] = [];
+  lowStockProductsList: LowStockProductDisplay[] = [];
+  liveEventsList: LiveEventDisplay[] = [];
+
+  // ECharts options
+  redemptionsChartOption: EChartsOption = {};
+  eventsChartOption: EChartsOption = {};
+
+  // Theme colors
+  private readonly chartColors = {
+    approved: '#2c5f3f',    // Green
+    pending: '#f59e0b',     // Amber
+    delivered: '#6b7280',   // Gray
+    rejected: '#ef4444',    // Red
+    upcoming: '#0891b2',    // Teal
+    live: '#10b981',        // Emerald
+    completed: '#94a3b8',   // Slate
+    cancelled: '#dc2626'    // Red
+  };
+
   private destroy$ = new Subject<void>();
-
-  // Chart.js Bar Chart Configuration
-  barChartOptions: ChartConfiguration<'bar'>['options'] = {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top',
-        labels: {
-          font: {
-            size: 12,
-            weight: 500 as any
-          },
-          color: '#666',
-          padding: 15,
-          usePointStyle: true,
-          pointStyle: 'circle'
-        }
-      },
-      tooltip: {
-        enabled: true,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleFont: { size: 12, weight: 'bold' },
-        bodyFont: { size: 11 },
-        padding: 12,
-        displayColors: true,
-        borderColor: '#e5e7eb',
-        borderWidth: 1
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: '#e5e7eb',
-          display: true,
-          drawTicks: true
-        } as any,
-        ticks: {
-          color: '#6b7280',
-          font: { size: 11 }
-        }
-      },
-      x: {
-        grid: {
-          display: false
-        },
-        ticks: {
-          color: '#6b7280',
-          font: { size: 11 }
-        }
-      }
-    }
-  };
-
-  barChartLabels: string[] = [];
-  barChartData: ChartConfiguration<'bar'>['data'] = {
-    labels: [],
-    datasets: [
-      {
-        label: 'Points Earned',
-        data: [],
-        backgroundColor: '#2c5f3f',
-        borderColor: '#1b4332',
-        borderWidth: 1,
-        borderRadius: 4,
-        hoverBackgroundColor: '#1b4332'
-      },
-      {
-        label: 'Points Redeemed',
-        data: [],
-        backgroundColor: '#a8d5ba',
-        borderColor: '#52b788',
-        borderWidth: 1,
-        borderRadius: 4,
-        hoverBackgroundColor: '#52b788'
-      }
-    ]
-  };
-
-  // Chart.js Doughnut Chart Configuration
-  doughnutChartOptions: ChartConfiguration<'doughnut'>['options'] = {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          font: { size: 12 },
-          color: '#666',
-          padding: 15,
-          usePointStyle: true
-        }
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context) {
-            const total = context.dataset.data.reduce((a: any, b: any) => (a as number) + (b as number), 0);
-            const percentage = ((context.parsed as number) / (total as number) * 100).toFixed(1);
-            return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
-          }
-        }
-      }
-    }
-  };
-
-  doughnutChartData: ChartConfiguration<'doughnut'>['data'] = {
-    labels: ['Approved', 'Pending', 'Delivered'],
-    datasets: [
-      {
-        data: [0, 0, 0],
-        backgroundColor: ['#2c5f3f', '#f59e0b', '#9ca3af'],
-        borderColor: ['#1b4332', '#d97706', '#6b7280'],
-        borderWidth: 2
-      }
-    ]
-  };
 
   constructor(
     private authService: AuthService,
     private dashboardService: DashboardService,
+    private redemptionService: RedemptionService,
+    private eventService: EventService,
+    private productsService: ProductsService,
     private cdr: ChangeDetectorRef
-  ) { }
+  ) {}
 
   ngOnInit(): void {
-    // Get current user
     this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
         this.currentUser = user;
+        this.cdr.markForCheck();
       });
 
-    // Load all dashboard data
     this.loadDashboardData();
   }
 
@@ -180,152 +172,256 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.errorMessage = null;
 
-    console.log('[Dashboard] Starting loadDashboardData');
-    console.log('[Dashboard] Current auth token:', !!this.authService.getToken());
-
-    // We only require the core 3 endpoints to display the dashboard: stats, pending redemptions, recent events.
-    // Optional endpoints (low-stock, points-chart) load in background and do not block rendering.
-
-    let coreCompleted = 0;
-    const totalCore = 3;
-
-    const markCoreComplete = () => {
-      coreCompleted++;
-      console.log(`[Dashboard] Core completed ${coreCompleted}/${totalCore}`);
-      if (coreCompleted >= totalCore) {
-        this.isLoading = false;
-        console.log('[Dashboard] Core data loaded - UI will display now');
-        // Force change detection in case this ran outside Angular zone
-        try { this.cdr.detectChanges(); } catch (e) { /* ignore */ }
-      }
-    };
-
-    // Stats (CORE)
-    this.dashboardService.getStats()
-      .pipe(takeUntil(this.destroy$))
+    // Parallel data fetching with forkJoin
+    forkJoin({
+      stats: this.dashboardService.getStats().pipe(catchError(() => of(null))),
+      redemptions: this.redemptionService.getAllRedemptions().pipe(catchError(() => of(null))),
+      events: this.eventService.getEvents().pipe(catchError(() => of([]))),
+      products: this.productsService.getAllProductsAdmin().pipe(catchError(() => of([]))),
+      lowStock: this.dashboardService.getLowStockProducts().pipe(catchError(() => of([])))
+    }).pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (stats) => {
-          console.log('[Dashboard] Stats loaded:', stats);
-          this.stats = stats;
+        next: (data) => {
+          this.processStats(data.stats);
+          this.processRedemptions(data.redemptions);
+          this.processEvents(data.events);
+          this.processProducts(data.products, data.lowStock);
+          
+          this.updateCharts();
+          this.isLoading = false;
+          this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('[Dashboard] Error loading stats:', error);
-          if (error.status === 401) {
-            this.errorMessage = 'Unauthorized: Please log in again';
-            this.redirectToLogin();
-          } else {
-            this.errorMessage = 'Failed to load dashboard statistics';
-          }
-        },
-        complete: markCoreComplete
-      });
-
-    // Pending Redemptions (CORE)
-    this.dashboardService.getPendingRedemptions()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (redemptions) => {
-          console.log('[Dashboard] Pending redemptions loaded:', redemptions);
-          this.pendingRedemptions = redemptions;
-          // Update doughnut chart for redemption status (Approved, Pending, Delivered)
-          try {
-            const approved = redemptions.filter(r => Number(r.status) === 1).length;
-            const pending = redemptions.filter(r => Number(r.status) === 0).length;
-            const delivered = redemptions.filter(r => Number(r.status) === 3).length;
-            if (this.doughnutChartData.datasets && this.doughnutChartData.datasets[0]) {
-              this.doughnutChartData.datasets[0].data = [approved, pending, delivered].map(n => Number(n));
-            }
-            console.log('[Dashboard] Updated doughnutChartData:', this.doughnutChartData);
-            try { this.cdr.detectChanges(); } catch (e) { /* ignore */ }
-            // Defer update to next macrotask to ensure canvas is ready
-            setTimeout(() => {
-              try { this.doughnutChart?.chart?.update(); } catch (e) { console.warn('doughnutChart update failed', e); }
-            }, 0);
-          } catch (e) {
-            console.warn('Failed to compute redemption status chart data', e);
-          }
-        },
-        error: (error) => {
-          console.error('[Dashboard] Error loading pending redemptions:', error);
-          if (error.status === 401) this.redirectToLogin();
-          this.pendingRedemptions = [];
-        },
-        complete: markCoreComplete
-      });
-
-    // Recent Events (CORE)
-    this.dashboardService.getRecentEvents()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (events) => {
-          console.log('[Dashboard] Recent events loaded:', events);
-          this.recentEvents = events;
-        },
-        error: (error) => {
-          console.error('[Dashboard] Error loading recent events:', error);
-          if (error.status === 401) this.redirectToLogin();
-          this.recentEvents = [];
-        },
-        complete: markCoreComplete
-      });
-
-    // Low stock products (OPTIONAL)
-    this.dashboardService.getLowStockProducts()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (products) => {
-          console.log('[Dashboard] Low stock products loaded:', products);
-          this.lowStockProducts = products;
-        },
-        error: (error) => {
-          console.warn('[Dashboard] Low stock products failed (optional):', error);
-          this.lowStockProducts = [];
-        }
-      });
-
-    // Points chart data (OPTIONAL)
-    this.dashboardService.getPointsChartData(6)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (chartData) => {
-          console.log('[Dashboard] Points chart data loaded:', chartData);
-          this.updateBarChartData(chartData);
-        },
-        error: (error) => {
-          console.warn('[Dashboard] Points chart data failed (optional):', error);
+          console.error('[Dashboard] Error loading data:', error);
+          this.errorMessage = 'Failed to load dashboard data. Please try again.';
+          this.isLoading = false;
+          this.cdr.markForCheck();
         }
       });
   }
 
-  // loadingCount/checkLoadingComplete removed — core requests determine visibility now
-
-  private redirectToLogin(): void {
-    console.warn('[Dashboard] Redirecting to login due to 401 error');
-    // Will be handled by auth guard, but force logout
-    localStorage.removeItem('agdata_token');
-    localStorage.removeItem('agdata_refresh_token');
-  }
-
-  private updateBarChartData(chartData: PointsChartData): void {
-    this.barChartLabels = (chartData.labels || []).map((l: any) => String(l));
-    // Update the actual data object used by the template
-    this.barChartData.labels = this.barChartLabels;
-    if (this.barChartData.datasets) {
-      this.barChartData.datasets[0].data = (chartData.earned || []).map((v: any) => Number(v));
-      this.barChartData.datasets[1].data = (chartData.redeemed || []).map((v: any) => Number(v));
+  private processStats(stats: DashboardStats | null): void {
+    if (stats) {
+      this.kpiData.totalUsers = stats.totalUsers;
+      this.kpiData.pendingRedemptions = stats.pendingRedemptions;
     }
-    console.log('[Dashboard] Updated barChartData:', this.barChartData);
-    try { this.cdr.detectChanges(); } catch (e) { /* ignore */ }
-    // Defer update to next macrotask to ensure canvas is ready
-    setTimeout(() => {
-      try { this.barChart?.chart?.update(); } catch (e) { console.warn('barChart update failed', e); }
-    }, 0);
   }
 
-  onSearch(query: string): void {
-    this.searchQuery = query;
-    // Implement search functionality here
-    console.log('Search query:', query);
+  private processRedemptions(redemptions: RedemptionListResponse | null): void {
+    if (!redemptions) return;
+
+    // Use counts from response if available
+    if (redemptions.counts) {
+      this.redemptionStatusCounts = {
+        approved: redemptions.counts.approved || 0,
+        pending: redemptions.counts.pending || 0,
+        delivered: redemptions.counts.delivered || 0,
+        rejected: redemptions.counts.rejected || 0,
+        cancelled: redemptions.counts.cancelled || 0
+      };
+      this.kpiData.pendingRedemptions = this.redemptionStatusCounts.pending;
+    }
+
+    // Process pending redemptions for table
+    const pendingItems = (redemptions.items || [])
+      .filter(r => r.status === RedemptionStatus.Pending)
+      .sort((a, b) => b.pointsSpent - a.pointsSpent)
+      .slice(0, 10);
+
+    this.pendingRedemptionsList = pendingItems.map(r => ({
+      id: r.id,
+      userName: r.userName || 'Unknown User',
+      productName: r.productName || 'Unknown Product',
+      requestDate: r.createdAt,
+      pointsSpent: r.pointsSpent
+    }));
+  }
+
+  private processEvents(events: Event[]): void {
+    if (!events) return;
+
+    // Count events by status
+    const statusCounts = { upcoming: 0, live: 0, completed: 0, cancelled: 0 };
+    
+    events.forEach(event => {
+      const status = this.mapEventStatus(event.status);
+      if (status in statusCounts) {
+        statusCounts[status as keyof typeof statusCounts]++;
+      }
+    });
+
+    this.eventStatusCounts = statusCounts;
+    this.kpiData.totalEvents = events.length;
+    this.kpiData.liveEvents = statusCounts.live;
+
+    // Process live events for table
+    const liveEvents = events
+      .filter(e => this.mapEventStatus(e.status) === 'live')
+      .map(e => {
+        const pool = e.totalPointsPool || 0;
+        const distributed = e.distributedPoints || 0;
+        const percent = pool > 0 ? Math.round((distributed / pool) * 100) : 0;
+        return {
+          id: e.id,
+          name: e.name,
+          awardedPercent: percent,
+          distributedPoints: distributed,
+          totalPointsPool: pool
+        };
+      })
+      .sort((a, b) => a.awardedPercent - b.awardedPercent)
+      .slice(0, 10);
+
+    this.liveEventsList = liveEvents;
+  }
+
+  private processProducts(products: any[], lowStock: LowStockProduct[]): void {
+    this.kpiData.totalProducts = products?.length || 0;
+    
+    // Low stock products (including out-of-stock with 0)
+    this.lowStockProductsList = (lowStock || [])
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        category: p.category || 'Uncategorized',
+        stockCount: p.currentStock ?? 0
+      }))
+      .sort((a, b) => a.stockCount - b.stockCount)
+      .slice(0, 10);
+
+    this.kpiData.lowStockProducts = this.lowStockProductsList.length;
+  }
+
+  private mapEventStatus(status: EventStatus | string): string {
+    const statusMap: Record<string, string> = {
+      'Draft': 'upcoming',
+      'Upcoming': 'upcoming',
+      'Active': 'live',
+      'Live': 'live',
+      'Completed': 'completed',
+      'Cancelled': 'cancelled'
+    };
+    return statusMap[status] || 'upcoming';
+  }
+
+  private updateCharts(): void {
+    this.updateRedemptionsChart();
+    this.updateEventsChart();
+  }
+
+  private updateRedemptionsChart(): void {
+    const { approved, pending, delivered, rejected } = this.redemptionStatusCounts;
+    const total = approved + pending + delivered + rejected;
+
+    const data = [
+      { value: approved, name: 'Approved', itemStyle: { color: this.chartColors.approved } },
+      { value: pending, name: 'Pending', itemStyle: { color: this.chartColors.pending } },
+      { value: delivered, name: 'Delivered', itemStyle: { color: this.chartColors.delivered } },
+      { value: rejected, name: 'Rejected', itemStyle: { color: this.chartColors.rejected } }
+    ].filter(d => d.value > 0);
+
+    this.redemptionsChartOption = {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          const percent = total > 0 ? ((params.value / total) * 100).toFixed(1) : 0;
+          return `${params.name}: ${params.value} (${percent}%)`;
+        }
+      },
+      legend: {
+        orient: 'vertical',
+        right: 10,
+        top: 'center',
+        formatter: (name: string) => {
+          const item = data.find(d => d.name === name);
+          const value = item?.value || 0;
+          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+          return `${name} – ${value} (${percent}%)`;
+        },
+        textStyle: {
+          fontSize: 12,
+          color: '#4b5563'
+        }
+      },
+      series: [
+        {
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['35%', '50%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          emphasis: {
+            label: { show: false }
+          },
+          labelLine: { show: false },
+          data: data
+        }
+      ]
+    };
+  }
+
+  private updateEventsChart(): void {
+    const { upcoming, live, completed, cancelled } = this.eventStatusCounts;
+    const total = upcoming + live + completed + cancelled;
+
+    const data = [
+      { value: upcoming, name: 'Upcoming', itemStyle: { color: this.chartColors.upcoming } },
+      { value: live, name: 'Live', itemStyle: { color: this.chartColors.live } },
+      { value: completed, name: 'Completed', itemStyle: { color: this.chartColors.completed } },
+      { value: cancelled, name: 'Cancelled', itemStyle: { color: this.chartColors.cancelled } }
+    ].filter(d => d.value > 0);
+
+    this.eventsChartOption = {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          const percent = total > 0 ? ((params.value / total) * 100).toFixed(1) : 0;
+          return `${params.name}: ${params.value} (${percent}%)`;
+        }
+      },
+      legend: {
+        orient: 'vertical',
+        right: 10,
+        top: 'center',
+        formatter: (name: string) => {
+          const item = data.find(d => d.name === name);
+          const value = item?.value || 0;
+          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+          return `${name} – ${value} (${percent}%)`;
+        },
+        textStyle: {
+          fontSize: 12,
+          color: '#4b5563'
+        }
+      },
+      series: [
+        {
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['35%', '50%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          emphasis: {
+            label: { show: false }
+          },
+          labelLine: { show: false },
+          data: data
+        }
+      ]
+    };
+  }
+
+  formatDistributionLabel(event: LiveEventDisplay): string {
+    if (event.totalPointsPool === 0) {
+      return `${event.awardedPercent}% : Unlimited Pool`;
+    }
+    return `${event.awardedPercent}% : ${event.distributedPoints.toLocaleString()} of ${event.totalPointsPool.toLocaleString()}`;
+  }
+
+  getStockBadgeClass(count: number): string {
+    if (count === 0) return 'stock-badge stock-badge--out';
+    if (count < 5) return 'stock-badge stock-badge--critical';
+    return 'stock-badge stock-badge--low';
   }
 
   ngOnDestroy(): void {

@@ -50,7 +50,11 @@ export interface UserTableAction {
           <tr 
             *ngFor="let user of users" 
             class="user-row"
-            (dblclick)="onRowDoubleClick(user)"
+            (click)="onRowClick(user)"
+            tabindex="0"
+            (keydown.enter)="onRowClick(user)"
+            role="button"
+            [attr.aria-label]="'View details for ' + user.firstName + ' ' + user.lastName"
           >
             <td class="user-cell">
               <div class="user-info">
@@ -374,6 +378,17 @@ export interface UserTableAction {
       cursor: pointer;
     }
 
+    .user-row:focus {
+      outline: none;
+      background-color: #f0fdf4;
+      box-shadow: inset 0 0 0 2px #2c5f3f;
+    }
+
+    .user-row:focus-visible {
+      outline: 2px solid #2c5f3f;
+      outline-offset: -2px;
+    }
+
     .pagination {
       display: flex;
       justify-content: center;
@@ -424,6 +439,7 @@ export class UserTableComponent {
   @Output() actionTriggered = new EventEmitter<UserTableAction>();
   @Output() pageChanged = new EventEmitter<number>();
   @Output() rowDoubleClicked = new EventEmitter<UserListItem>();
+  @Output() rowClicked = new EventEmitter<UserListItem>();
 
   activeMenuId: string | null = null;
 
@@ -450,6 +466,10 @@ export class UserTableComponent {
 
   onRowDoubleClick(user: UserListItem): void {
     this.rowDoubleClicked.emit(user);
+  }
+
+  onRowClick(user: UserListItem): void {
+    this.rowClicked.emit(user);
   }
 
   onAction(type: UserTableAction['type'], user: UserListItem): void {

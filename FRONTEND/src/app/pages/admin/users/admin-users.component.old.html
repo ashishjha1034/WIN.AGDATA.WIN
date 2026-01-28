@@ -1,0 +1,146 @@
+<div class="admin-users-container">
+  <app-admin-sidebar></app-admin-sidebar>
+
+  <div class="main-content">
+    <!-- Success Message -->
+    <div class="success-banner" *ngIf="successMessage">
+      <p>✓ {{ successMessage }}</p>
+    </div>
+
+    <!-- Error Message -->
+    <div class="error-banner" *ngIf="error">
+      <p>✕ {{ error }}</p>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <h1>User Management</h1>
+        <p class="subtitle">Manage all platform users, roles, balances, and activity</p>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-primary" (click)="openAddUserModal()">
+          + Add User
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tabs">
+        <button
+          class="tab"
+          [class.active]="activeTab === 'users'"
+          (click)="activeTab = 'users'"
+        >
+          Users
+        </button>
+        <button
+          class="tab"
+          [class.active]="activeTab === 'groups'"
+          (click)="activeTab = 'groups'"
+        >
+          Groups
+        </button>
+      </div>
+    </div>
+
+    <!-- Users Tab Content -->
+    <div *ngIf="activeTab === 'users'" class="tab-content">
+      <!-- KPI Cards Row -->
+      <div class="kpi-row" *ngIf="!isLoadingStats">
+        <app-kpi-card
+          title="Total Users"
+          [value]="stats?.totalUsers || 0"
+          icon="👥"
+          color="#4b5563"
+        ></app-kpi-card>
+
+        <app-kpi-card
+          title="Active Users"
+          [value]="stats?.totalUsers || 0"
+          icon="✓"
+          color="#10b981"
+        ></app-kpi-card>
+
+        <app-kpi-card
+          title="Total Points"
+          [value]="stats?.totalPointsEarned || 0"
+          icon="⭐"
+          color="#f59e0b"
+        ></app-kpi-card>
+
+        <app-kpi-card
+          title="Pending Redemptions"
+          [value]="stats?.pendingRedemptions || 0"
+          icon="💰"
+          color="#ef4444"
+        ></app-kpi-card>
+      </div>
+
+      <!-- Filters -->
+      <app-user-filters
+        (filtersChanged)="onFiltersChanged($event)"
+        (searchChanged)="onSearchChanged($event)"
+      ></app-user-filters>
+
+      <!-- Users Table -->
+      <app-user-table
+        [users]="paginatedUsers"
+        [isLoading]="isLoading"
+        [currentPage]="currentPage"
+        [pageSize]="pageSize"
+        [totalItems]="totalItems"
+        (actionTriggered)="onTableAction($event)"
+        (pageChanged)="onPageChanged($event)"
+        (rowDoubleClicked)="onRowDoubleClicked($event)"
+      ></app-user-table>
+    </div>
+
+    <!-- Groups Tab Content -->
+    <div *ngIf="activeTab === 'groups'" class="tab-content groups-tab-content">
+      <div class="groups-container">
+        <!-- Group List Panel (Left) -->
+        <app-group-list
+          [selectedGroupId]="selectedGroupId"
+          (groupSelected)="onGroupSelected($event)"
+          (createGroupClick)="onCreateGroupClick()"
+        ></app-group-list>
+
+        <!-- Group Details Panel (Right) -->
+        <app-group-details
+          [groupId]="selectedGroupId"
+          (addMembersClick)="onAddGroupMembersClick($event)"
+          (groupUpdated)="onGroupUpdated()"
+        ></app-group-details>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Drawer -->
+  <app-user-detail-drawer
+    #userDrawer
+    [isOpen]="isDrawerOpen"
+    [userId]="selectedUserId"
+    (closed)="closeDrawer()"
+    (actionTriggered)="onDrawerAction($event)"
+  ></app-user-detail-drawer>
+
+  <!-- Add User Modal -->
+  <app-add-user-modal
+    [isOpen]="isAddUserModalOpen"
+    (closed)="closeAddUserModal()"
+    (userCreated)="onUserCreated($event)"
+  ></app-add-user-modal>
+
+  <!-- Add Group Members Modal -->
+  <app-add-group-members-modal
+    [isOpen]="isAddGroupMembersModalOpen"
+    [groupId]="selectedGroupId"
+    [groupName]="selectedGroupName"
+    [currentMembers]="selectedGroupMembers"
+    (closed)="closeAddGroupMembersModal()"
+    (membersAdded)="onGroupMembersAdded($event)"
+  ></app-add-group-members-modal>
+</div>
