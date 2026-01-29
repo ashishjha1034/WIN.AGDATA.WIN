@@ -3,7 +3,9 @@ using MediatR;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers;
 
@@ -22,6 +24,19 @@ public class CreateProductHandler : IRequestHandler<CreateProductCommand, Produc
 
     public async Task<ProductDto> Handle(CreateProductCommand request, CancellationToken ct)
     {
+        // Validate category existence (moved from validator to handler - Option A)
+        var category = await _productRepository.GetCategoryByIdAsync(request.CategoryId);
+        if (category == null)
+        {
+            throw new DomainException("Selected category does not exist.");
+        }
+
+        // Validate stock minimum (required, min 1)
+        if (request.InitialStock < SharedValidationRules.StockMin)
+        {
+            throw new DomainException($"Initial stock must be at least {SharedValidationRules.StockMin}.");
+        }
+
         var product = new Product(
             request.Name,
             request.Description,

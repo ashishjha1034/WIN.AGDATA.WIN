@@ -91,8 +91,15 @@ public class AuthController : ControllerBase
             if (user.IsLockedOut())
             {
                 var remaining = user.GetRemainingLockoutTime();
-                // Return generic message to prevent enumeration
-                return Unauthorized(new { message = genericError });
+                // Return 423 Locked status with structured response for frontend countdown
+                // Include lockedOut flag and retryAfterSeconds for UX
+                var retryAfterSeconds = remaining.HasValue ? (int)Math.Ceiling(remaining.Value.TotalSeconds) : 180;
+                return StatusCode(StatusCodes.Status423Locked, new 
+                { 
+                    message = "Account temporarily locked due to too many failed attempts.", 
+                    lockedOut = true,
+                    retryAfterSeconds = retryAfterSeconds
+                });
             }
 
             var passwordValid = user.VerifyPassword(request.Password);
@@ -103,6 +110,19 @@ public class AuthController : ControllerBase
                 user.RecordFailedLogin();
                 await _userRepository.UpdateAsync(user);
                 await _unitOfWork.SaveChangesAsync();
+                
+                // Check if this attempt caused a lockout
+                if (user.IsLockedOut())
+                {
+                    var remaining = user.GetRemainingLockoutTime();
+                    var retryAfterSeconds = remaining.HasValue ? (int)Math.Ceiling(remaining.Value.TotalSeconds) : 180;
+                    return StatusCode(StatusCodes.Status423Locked, new 
+                    { 
+                        message = "Account temporarily locked due to too many failed attempts.", 
+                        lockedOut = true,
+                        retryAfterSeconds = retryAfterSeconds
+                    });
+                }
                 
                 return Unauthorized(new { message = genericError });
             }

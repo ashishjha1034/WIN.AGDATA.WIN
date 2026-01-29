@@ -6,18 +6,11 @@ namespace WIN.AGDATA.WIN.APPLICATION.Validators.UserValidators;
 
 /// <summary>
 /// FluentValidation validator for CreateUserRequest
-/// Enforces: name rules, employee ID format, email domain, password strength, uniqueness
+/// Enforces: name rules, employee ID format, email domain with local-part length, password strength, uniqueness
 /// </summary>
 public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
 {
     private readonly IUserRepository _userRepository;
-
-    // Validation constants
-    private const int NameMinLength = 2;
-    private const int NameMaxLength = 50;
-    private const int EmployeeIdLength = 9;
-    private const int PasswordMinLength = 12;
-    private const string CorporateDomain = "@agdata.com";
 
     public CreateUserRequestValidator(IUserRepository userRepository)
     {
@@ -26,35 +19,35 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
         // First Name: 2-50 chars, alphabets only, no spaces/digits/symbols
         RuleFor(x => x.FirstName)
             .NotEmpty().WithMessage("First name is required.")
-            .MinimumLength(NameMinLength).WithMessage($"First name must be at least {NameMinLength} characters.")
-            .MaximumLength(NameMaxLength).WithMessage($"First name cannot exceed {NameMaxLength} characters.")
+            .MinimumLength(SharedValidationRules.NameMinLength).WithMessage($"First name must be at least {SharedValidationRules.NameMinLength} characters.")
+            .MaximumLength(SharedValidationRules.NameMaxLength).WithMessage($"First name cannot exceed {SharedValidationRules.NameMaxLength} characters.")
             .Matches(@"^[a-zA-Z]+$").WithMessage("First name must contain only letters (no spaces, digits, or symbols).");
 
         // Last Name: same rules as First Name
         RuleFor(x => x.LastName)
             .NotEmpty().WithMessage("Last name is required.")
-            .MinimumLength(NameMinLength).WithMessage($"Last name must be at least {NameMinLength} characters.")
-            .MaximumLength(NameMaxLength).WithMessage($"Last name cannot exceed {NameMaxLength} characters.")
+            .MinimumLength(SharedValidationRules.NameMinLength).WithMessage($"Last name must be at least {SharedValidationRules.NameMinLength} characters.")
+            .MaximumLength(SharedValidationRules.NameMaxLength).WithMessage($"Last name cannot exceed {SharedValidationRules.NameMaxLength} characters.")
             .Matches(@"^[a-zA-Z]+$").WithMessage("Last name must contain only letters (no spaces, digits, or symbols).");
 
         // Employee ID: exactly 9 alphanumeric characters
         RuleFor(x => x.EmployeeId)
             .NotEmpty().WithMessage("Employee ID is required.")
-            .Length(EmployeeIdLength).WithMessage($"Employee ID must be exactly {EmployeeIdLength} characters.")
+            .Length(SharedValidationRules.EmployeeIdLength).WithMessage($"Employee ID must be exactly {SharedValidationRules.EmployeeIdLength} characters.")
             .Matches(@"^[a-zA-Z0-9]+$").WithMessage("Employee ID must contain only letters and numbers.")
             .MustAsync(BeUniqueEmployeeId).WithMessage("This Employee ID is already in use.");
 
-        // Email: valid format + @agdata.com domain + unique
+        // Email: valid format + @agdata.com domain with local-part >= 5 chars + unique
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Please enter a valid email address.")
-            .Must(EndWithCorporateDomain).WithMessage($"Email must end with {CorporateDomain}.")
+            .Must(SharedValidationRules.IsValidCorporateEmail).WithMessage(SharedValidationRules.GetCorporateEmailErrorMessage())
             .MustAsync(BeUniqueEmail).WithMessage("This email is already in use.");
 
         // Password: strong password requirements
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(PasswordMinLength).WithMessage($"Password must be at least {PasswordMinLength} characters.")
+            .MinimumLength(SharedValidationRules.PasswordMinLength).WithMessage($"Password must be at least {SharedValidationRules.PasswordMinLength} characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches(@"[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.")
@@ -62,12 +55,6 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
             .Matches(@"^\S+$").WithMessage("Password cannot contain spaces.")
             .Must((request, password) => !ContainsPersonalInfo(password, request.FirstName, request.LastName, request.EmployeeId))
             .WithMessage("Password cannot contain your first name, last name, or employee ID.");
-    }
-
-    private bool EndWithCorporateDomain(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        return email.ToLowerInvariant().EndsWith(CorporateDomain);
     }
 
     private async Task<bool> BeUniqueEmployeeId(string employeeId, CancellationToken cancellationToken)

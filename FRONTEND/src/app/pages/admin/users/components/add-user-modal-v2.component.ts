@@ -9,11 +9,12 @@ import { ValidationService, ValidationResult } from '../../../../services/valida
 import { CustomValidators, ValidationConstants, calculatePasswordStrength } from '../../../../shared/validators/custom-validators';
 import { ValidationHintComponent } from '../../../../shared/components/validation-hint.component';
 import { PasswordStrengthComponent } from '../../../../shared/components/password-strength.component';
+import { FormErrorsSummaryComponent } from '../../../../shared/components/form-errors-summary.component';
 
 @Component({
   selector: 'app-add-user-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, ValidationHintComponent, PasswordStrengthComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, ValidationHintComponent, PasswordStrengthComponent, FormErrorsSummaryComponent],
   template: `
     <div class="modal-overlay" *ngIf="isOpen" (click)="closeModal()"></div>
     <div class="modal" [class.open]="isOpen">
@@ -29,7 +30,15 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
 
           <!-- First Name -->
           <div class="form-group">
-            <label for="firstName">First Name <span class="required">*</span></label>
+            <div class="label-row">
+              <label for="firstName">First Name <span class="required">*</span></label>
+              <span class="char-counter" 
+                    [class.warning]="getCharCount('firstName') > 0 && getCharCount('firstName') < minNameLength"
+                    [class.valid]="getCharCount('firstName') >= minNameLength"
+                    aria-live="polite">
+                {{ getCharCount('firstName') }} / {{ maxNameLength }}
+              </span>
+            </div>
             <input
               id="firstName"
               type="text"
@@ -38,19 +47,30 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
               class="form-input"
               [class.error]="isFieldInvalid('firstName')"
               [class.valid]="isFieldValid('firstName')"
+              [attr.maxlength]="maxNameLength"
               aria-describedby="firstName-hint"
             />
             <app-validation-hint
               id="firstName-hint"
               [control]="form.get('firstName')!"
               fieldName="First name"
-              helperText="2-50 letters only, no spaces or numbers">
+              fieldType="name"
+              [minLength]="minNameLength"
+              [maxLength]="maxNameLength">
             </app-validation-hint>
           </div>
 
           <!-- Last Name -->
           <div class="form-group">
-            <label for="lastName">Last Name <span class="required">*</span></label>
+            <div class="label-row">
+              <label for="lastName">Last Name <span class="required">*</span></label>
+              <span class="char-counter" 
+                    [class.warning]="getCharCount('lastName') > 0 && getCharCount('lastName') < minNameLength"
+                    [class.valid]="getCharCount('lastName') >= minNameLength"
+                    aria-live="polite">
+                {{ getCharCount('lastName') }} / {{ maxNameLength }}
+              </span>
+            </div>
             <input
               id="lastName"
               type="text"
@@ -59,13 +79,16 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
               class="form-input"
               [class.error]="isFieldInvalid('lastName')"
               [class.valid]="isFieldValid('lastName')"
+              [attr.maxlength]="maxNameLength"
               aria-describedby="lastName-hint"
             />
             <app-validation-hint
               id="lastName-hint"
               [control]="form.get('lastName')!"
               fieldName="Last name"
-              helperText="2-50 letters only, no spaces or numbers">
+              fieldType="name"
+              [minLength]="minNameLength"
+              [maxLength]="maxNameLength">
             </app-validation-hint>
           </div>
 
@@ -86,6 +109,14 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
               />
               <button 
                 type="button" 
+                class="generate-btn" 
+                (click)="generateEmployeeId()"
+                [disabled]="generatingEmployeeId || generateAttemptsLeft <= 0"
+                aria-label="Generate random employee ID">
+                {{ generatingEmployeeId ? 'Generating...' : 'Generate (' + generateAttemptsLeft + ')' }}
+              </button>
+              <button 
+                type="button" 
                 class="check-btn" 
                 (click)="checkEmployeeIdNow()"
                 [disabled]="checkingEmployeeId || !form.get('employeeId')?.value"
@@ -97,8 +128,9 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
               id="employeeId-hint"
               [control]="form.get('employeeId')!"
               fieldName="Employee ID"
+              fieldType="employeeId"
               helperText="Exactly 9 alphanumeric characters"
-              [checking]="checkingEmployeeId"
+              [checking]="checkingEmployeeId || generatingEmployeeId"
               [uniquenessResult]="employeeIdResult">
             </app-validation-hint>
           </div>
@@ -130,6 +162,7 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
               id="email-hint"
               [control]="form.get('email')!"
               fieldName="Email"
+              fieldType="email"
               helperText="Must end with @agdata.com"
               [checking]="checkingEmail"
               [uniquenessResult]="emailResult">
@@ -195,6 +228,13 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
             </app-password-strength>
           </div>
         </div>
+
+        <!-- Form Errors Summary -->
+        <app-form-errors-summary
+          [form]="form"
+          [fieldLabels]="formFieldLabels"
+          title="Please fix the following errors:">
+        </app-form-errors-summary>
 
         <!-- Error Message -->
         <div class="error-banner" *ngIf="error" role="alert">
@@ -324,6 +364,31 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
 
     .required { color: #dc2626; }
 
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .label-row label {
+      margin-bottom: 0;
+    }
+
+    .char-counter {
+      font-size: 11px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .char-counter.warning {
+      color: #f59e0b;
+    }
+
+    .char-counter.valid {
+      color: #16a34a;
+    }
+
     .optional {
       font-size: 11px;
       color: #9ca3af;
@@ -417,6 +482,30 @@ import { PasswordStrengthComponent } from '../../../../shared/components/passwor
     .check-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    .generate-btn {
+      padding: 10px 12px;
+      background: #4b5563;
+      color: white;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .generate-btn:hover:not(:disabled) {
+      background: #3a4251;
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #9ca3af;
+      border-color: #9ca3af;
     }
 
     .password-input-wrapper {
@@ -576,6 +665,27 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
   emailResult: ValidationResult | null = null;
   employeeIdResult: ValidationResult | null = null;
 
+  // Employee ID generator state
+  generatingEmployeeId = false;
+  generateAttemptsLeft = 3;
+  private readonly MAX_GENERATE_ATTEMPTS = 3;
+  private readonly INTERNAL_RETRY_LIMIT = 3;
+
+  // Character counter constants
+  readonly maxNameLength = ValidationConstants.NAME_MAX_LENGTH;
+  readonly minNameLength = ValidationConstants.NAME_MIN_LENGTH;
+
+  // Form field labels for error summary
+  readonly formFieldLabels: Record<string, string> = {
+    firstName: 'First Name',
+    lastName: 'Last Name',
+    employeeId: 'Employee ID',
+    email: 'Email Address',
+    role: 'Role',
+    sendPasswordEmail: 'Send Password Email',
+    temporaryPassword: 'Temporary Password'
+  };
+
   private destroy$ = new Subject<void>();
   private emailCheck$ = new Subject<string>();
   private employeeIdCheck$ = new Subject<string>();
@@ -595,15 +705,11 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
     this.form = this.fb.group({
       firstName: ['', [
         Validators.required,
-        Validators.minLength(ValidationConstants.NAME_MIN_LENGTH),
-        Validators.maxLength(ValidationConstants.NAME_MAX_LENGTH),
-        CustomValidators.alphabetOnly()
+        CustomValidators.liveNameValidation()
       ]],
       lastName: ['', [
         Validators.required,
-        Validators.minLength(ValidationConstants.NAME_MIN_LENGTH),
-        Validators.maxLength(ValidationConstants.NAME_MAX_LENGTH),
-        CustomValidators.alphabetOnly()
+        CustomValidators.liveNameValidation()
       ]],
       employeeId: ['', [
         Validators.required,
@@ -727,6 +833,70 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Generate a random 9-character alphanumeric Employee ID
+   * Checks uniqueness and retries internally if collision detected
+   */
+  generateEmployeeId(): void {
+    if (this.generateAttemptsLeft <= 0 || this.generatingEmployeeId) return;
+
+    this.generatingEmployeeId = true;
+    this.employeeIdResult = null;
+    this.cdr.markForCheck();
+
+    this.tryGenerateUniqueEmployeeId(0);
+  }
+
+  private tryGenerateUniqueEmployeeId(internalAttempt: number): void {
+    // Generate random 9-char alphanumeric ID (A-Z, 0-9)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let generatedId = '';
+    for (let i = 0; i < 9; i++) {
+      generatedId += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Check uniqueness
+    this.validationService.checkEmployeeIdAvailability(generatedId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (result) => {
+          if (result.isValid) {
+            // Success! Fill the field
+            this.form.get('employeeId')?.setValue(generatedId);
+            this.form.get('employeeId')?.markAsDirty();
+            this.form.get('employeeId')?.markAsTouched();
+            this.employeeIdResult = result;
+            this.generateAttemptsLeft--;
+            this.generatingEmployeeId = false;
+            this.cdr.markForCheck();
+          } else {
+            // Collision - retry if we haven't exceeded internal retries
+            if (internalAttempt < this.INTERNAL_RETRY_LIMIT - 1) {
+              this.tryGenerateUniqueEmployeeId(internalAttempt + 1);
+            } else {
+              // Failed after all internal retries
+              this.employeeIdResult = {
+                isValid: false,
+                message: "Couldn't generate a unique ID now. Try again."
+              };
+              this.generateAttemptsLeft--;
+              this.generatingEmployeeId = false;
+              this.cdr.markForCheck();
+            }
+          }
+        },
+        error: () => {
+          // On error, still fill the field but warn user
+          this.form.get('employeeId')?.setValue(generatedId);
+          this.form.get('employeeId')?.markAsDirty();
+          this.employeeIdResult = null;
+          this.generateAttemptsLeft--;
+          this.generatingEmployeeId = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
   isFieldInvalid(fieldName: string): boolean {
     const field = this.form.get(fieldName);
     return !!(field && field.invalid && (field.dirty || field.touched));
@@ -735,6 +905,11 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
   isFieldValid(fieldName: string): boolean {
     const field = this.form.get(fieldName);
     return !!(field && field.valid && field.dirty);
+  }
+
+  getCharCount(fieldName: string): number {
+    const value = this.form.get(fieldName)?.value;
+    return value ? value.length : 0;
   }
 
   get canSubmit(): boolean {
@@ -763,6 +938,9 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
     this.isSubmitting = false;
     this.emailResult = null;
     this.employeeIdResult = null;
+    // Reset employee ID generator state
+    this.generateAttemptsLeft = this.MAX_GENERATE_ATTEMPTS;
+    this.generatingEmployeeId = false;
     this.closed.emit();
   }
 

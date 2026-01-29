@@ -1,20 +1,29 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Validators;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
 /// <summary>
 /// Controller for validation endpoints - supports debounced uniqueness checks from frontend
+/// All endpoints are Admin-only and rate-limited to prevent enumeration attacks
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Policy = "AdminOnly")]
+[EnableRateLimiting("ValidationRateLimit")]
 public class ValidationController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
     private readonly IProductRepository _productRepository;
 
+    /// <summary>
+    /// Initializes a new instance of the ValidationController
+    /// </summary>
+    /// <param name="userRepository">User repository for email and employee ID checks</param>
+    /// <param name="productRepository">Product repository for product and category name checks</param>
     public ValidationController(
         IUserRepository userRepository,
         IProductRepository productRepository)
@@ -29,7 +38,6 @@ public class ValidationController : ControllerBase
     /// <param name="email">Email to check</param>
     /// <param name="excludeUserId">Optional user ID to exclude (for edit scenarios)</param>
     [HttpGet("check-email")]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ValidationResult>> CheckEmail(
         [FromQuery] string email,
         [FromQuery] Guid? excludeUserId = null)
@@ -39,10 +47,10 @@ public class ValidationController : ControllerBase
             return Ok(new ValidationResult { IsValid = false, Message = "Email is required" });
         }
 
-        // Check corporate domain
-        if (!email.ToLowerInvariant().EndsWith("@agdata.com"))
+        // Validate corporate email format (domain + local-part length)
+        if (!SharedValidationRules.IsValidCorporateEmail(email))
         {
-            return Ok(new ValidationResult { IsValid = false, Message = "Email must end with @agdata.com" });
+            return Ok(new ValidationResult { IsValid = false, Message = SharedValidationRules.GetCorporateEmailErrorMessage() });
         }
 
         var existingUser = await _userRepository.GetByEmailAsync(email.ToLowerInvariant());
@@ -67,7 +75,6 @@ public class ValidationController : ControllerBase
     /// <param name="employeeId">Employee ID to check</param>
     /// <param name="excludeUserId">Optional user ID to exclude (for edit scenarios)</param>
     [HttpGet("check-employee-id")]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ValidationResult>> CheckEmployeeId(
         [FromQuery] string employeeId,
         [FromQuery] Guid? excludeUserId = null)
@@ -77,10 +84,10 @@ public class ValidationController : ControllerBase
             return Ok(new ValidationResult { IsValid = false, Message = "Employee ID is required" });
         }
 
-        // Check format (exactly 9 alphanumeric characters)
-        if (employeeId.Length != 9 || !System.Text.RegularExpressions.Regex.IsMatch(employeeId, @"^[a-zA-Z0-9]+$"))
+        // Check format using shared rules
+        if (!SharedValidationRules.IsValidEmployeeId(employeeId))
         {
-            return Ok(new ValidationResult { IsValid = false, Message = "Employee ID must be exactly 9 alphanumeric characters" });
+            return Ok(new ValidationResult { IsValid = false, Message = $"Employee ID must be exactly {SharedValidationRules.EmployeeIdLength} alphanumeric characters" });
         }
 
         var existingUser = await _userRepository.GetByEmployeeIdAsync(employeeId);
@@ -104,7 +111,6 @@ public class ValidationController : ControllerBase
     /// </summary>
     /// <param name="name">Category name to check</param>
     [HttpGet("check-category-name")]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ValidationResult>> CheckCategoryName([FromQuery] string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -122,6 +128,44 @@ public class ValidationController : ControllerBase
 
         return Ok(new ValidationResult { IsValid = false, Message = "This category name is already in use" });
     }
+
+    /// <summary>
+    /// Check if a product name is available (not already in use, case-insensitive)
+    /// </summary>
+    /// <param name="name">Product name to check</param>
+    /// <param name="excludeProductId">Optional product ID to exclude (for edit scenarios)</param>
+    [HttpGet("check-product-name")]
+    public async Task<ActionResult<ValidationResult>> CheckProductName(
+        [FromQuery] string name,
+        [FromQuery] Guid? excludeProductId = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Ok(new ValidationResult { IsValid = false, Message = "Product name is required" });
+        }
+
+        // Check format using shared rules
+        if (!SharedValidationRules.IsValidProductName(name))
+        {
+            return Ok(new ValidationResult { IsValid = false, Message = $"Product name must contain 1-{SharedValidationRules.ProductNameMaxWords} words, each word alphanumeric only" });
+        }
+
+        var products = await _productRepository.GetAllWithDetailsAsync();
+        var existingProduct = products.FirstOrDefault(p => p.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+        
+        if (existingProduct == null)
+        {
+            return Ok(new ValidationResult { IsValid = true, Message = "Available" });
+        }
+
+        // If excluding a product (edit scenario), check if the found product is the same
+        if (excludeProductId.HasValue && existingProduct.Id == excludeProductId.Value)
+        {
+            return Ok(new ValidationResult { IsValid = true, Message = "Available" });
+        }
+
+        return Ok(new ValidationResult { IsValid = false, Message = "This product name is already in use" });
+    }
 }
 
 /// <summary>
@@ -129,6 +173,8 @@ public class ValidationController : ControllerBase
 /// </summary>
 public class ValidationResult
 {
+    /// <summary>Whether the validation passed</summary>
     public bool IsValid { get; set; }
+    /// <summary>Message describing the result</summary>
     public string Message { get; set; } = string.Empty;
 }

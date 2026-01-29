@@ -258,6 +258,7 @@ public class ProductsController : ControllerBase
     /// Modify product information like name, description, and points cost.
     /// Admin only operation.
     /// All fields are optional - only provide the fields you want to update.
+    /// String values are trimmed before saving to ensure consistency.
     /// </remarks>
     /// <param name="id">Product ID</param>
     /// <param name="request">Updated product details (partial updates supported)</param>
@@ -283,12 +284,14 @@ public class ProductsController : ControllerBase
             if (product == null)
                 return NotFound(new { message = "Product not found" });
 
-            // Only update fields that are provided (not null/empty)
-            var name = !string.IsNullOrWhiteSpace(request.Name) ? request.Name : product.Name;
-            var description = request.Description ?? product.Description;
+            // Normalize inputs by trimming before applying updates
+            // This ensures consistent behavior between frontend and backend validation
+            var name = !string.IsNullOrWhiteSpace(request.Name) ? request.Name.Trim() : product.Name;
+            var description = !string.IsNullOrWhiteSpace(request.Description) ? request.Description.Trim() : product.Description;
             var categoryId = request.CategoryId ?? product.CategoryId;
             var pointsCost = request.PointsCost ?? product.CurrentPricing;
-            var imageUrl = request.ImageUrl ?? product.ImageUrl;
+            var imageUrl = !string.IsNullOrWhiteSpace(request.ImageUrl) ? request.ImageUrl.Trim() : 
+                           (request.ImageUrl == null ? product.ImageUrl : null); // Allow clearing URL with empty string
 
             // Update the product
             product.UpdateDetails(name, description, categoryId, pointsCost, imageUrl);
@@ -421,26 +424,62 @@ public class ProductsController : ControllerBase
     /// <remarks>
     /// Deactivate a product, making it unavailable for new redemptions.
     /// Admin only operation.
+    /// 
+    /// **Business Rules:**
+    /// 
+    /// **Hard Blockers (cannot be bypassed):**
+    /// - If any redemption for this product is Pending or Approved, deactivation is blocked.
+    /// - Returns HTTP 400 with code "DEACTIVATE_BLOCKED"
+    /// 
+    /// **Soft Warnings (require confirmation):**
+    /// - If product has stock > 0 or recent redemptions, returns HTTP 409 with code "DEACTIVATE_WARNINGS"
+    /// - To proceed, resubmit with force=true in request body
+    /// 
+    /// Example request body:
+    /// ```json
+    /// { "force": false }
+    /// ```
     /// </remarks>
     /// <param name="id">Product ID</param>
-    /// <returns>Confirmation message</returns>
+    /// <param name="request">Deactivation request with optional force flag</param>
+    /// <returns>Confirmation message or warning/error details</returns>
     /// <response code="200">Product deactivated successfully</response>
+    /// <response code="400">Deactivation blocked due to pending/approved redemptions</response>
     /// <response code="403">Forbidden - admin only</response>
     /// <response code="404">Product not found</response>
+    /// <response code="409">Deactivation has warnings, requires confirmation</response>
     [HttpPost("{id:guid}/deactivate")]
     [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
-    [SwaggerOperation(Summary = "Deactivate product", Description = "Disable product from catalog (admin only)")]
+    [SwaggerOperation(Summary = "Deactivate product", Description = "Disable product from catalog (admin only). Enforces business rules.")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(DeactivateProductBlocked), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult> DeactivateProduct(Guid id)
+    [ProducesResponseType(typeof(DeactivateProductWarnings), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult> DeactivateProduct(Guid id, [FromBody] DeactivateProductRequest? request = null)
     {
         try
         {
-            var command = new DeactivateProductCommand(id);
-            await _mediator.Send(command);
+            var command = new DeactivateProductCommand(id, request?.Force ?? false);
+            var result = await _mediator.Send(command);
 
-            return Ok(new { message = "Product deactivated successfully", productId = id });
+            if (result.Success)
+            {
+                return Ok(new { message = "Product deactivated successfully", productId = id });
+            }
+
+            if (result.IsBlocked)
+            {
+                return BadRequest(result.Blocked);
+            }
+
+            if (result.HasWarnings)
+            {
+                return Conflict(result.Warnings);
+            }
+
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Unexpected deactivation result" });
         }
         catch (InvalidOperationException ex)
         {

@@ -88,47 +88,158 @@
 
         <!-- Tab Content: Product Info -->
         <div class="tab-content" *ngIf="activeTab === 'info'" [class.read-only-content]="!product.isActive">
-          <div class="form-section">
+          <form [formGroup]="editForm" class="form-section">
             <h3 class="section-title">Basic Information</h3>
             <div class="form-grid">
               <div class="form-group">
-                <label>Product Name</label>
-                <input type="text" [(ngModel)]="editForm.name" class="form-input" [readonly]="!product.isActive" [disabled]="!product.isActive" />
+                <label for="name">Product Name</label>
+                <div class="input-with-action">
+                  <input 
+                    id="name"
+                    type="text" 
+                    formControlName="name" 
+                    class="form-input" 
+                    [class.error]="isFieldInvalid('name') || (productNameResult && !productNameResult.isValid)"
+                    [class.valid]="isFieldValid('name') && (!productNameResult || productNameResult.isValid)"
+                    [readonly]="!product.isActive" 
+                    [attr.disabled]="!product.isActive ? true : null"
+                    maxlength="50"
+                    aria-describedby="name-hint" />
+                  <button 
+                    type="button" 
+                    class="check-btn" 
+                    (click)="checkProductNameNow()"
+                    [disabled]="checkingProductName || !editForm.get('name')?.value || editForm.get('name')?.invalid || !product.isActive"
+                    *ngIf="product.isActive">
+                    Check
+                  </button>
+                </div>
+                <app-validation-hint
+                  id="name-hint"
+                  [control]="editForm.get('name')!"
+                  fieldName="Product name"
+                  fieldType="productName"
+                  [minLength]="ValidationConstants.NAME_MIN_LENGTH"
+                  [maxLength]="ValidationConstants.NAME_MAX_LENGTH"
+                  helperText="1-4 words, alphanumeric only, 2-50 characters"
+                  [checking]="checkingProductName"
+                  [uniquenessResult]="productNameResult"
+                  *ngIf="product.isActive">
+                </app-validation-hint>
               </div>
               <div class="form-group">
-                <label>Image URL</label>
-                <input type="url" [(ngModel)]="editForm.imageUrl" class="form-input" placeholder="https://example.com/image.jpg" [readonly]="!product.isActive" [disabled]="!product.isActive" />
-                <small class="form-hint">Enter the URL of the product image.</small>
+                <label for="imageUrl">Image URL</label>
+                <input 
+                  id="imageUrl"
+                  type="url" 
+                  formControlName="imageUrl" 
+                  class="form-input" 
+                  [class.error]="isFieldInvalid('imageUrl')"
+                  [class.valid]="isFieldValid('imageUrl')"
+                  placeholder="https://example.com/image.jpg" 
+                  [readonly]="!product.isActive" 
+                  [attr.disabled]="!product.isActive ? true : null"
+                  maxlength="1000"
+                  aria-describedby="imageUrl-hint" />
+                <app-validation-hint
+                  id="imageUrl-hint"
+                  [control]="editForm.get('imageUrl')!"
+                  fieldName="Image URL"
+                  fieldType="url"
+                  helperText="HTTPS URL only, max 1000 characters (optional)"
+                  *ngIf="product.isActive">
+                </app-validation-hint>
               </div>
               <div class="form-group full-width">
-                <label>Description</label>
-                <textarea [(ngModel)]="editForm.description" class="form-textarea" rows="4" [readonly]="!product.isActive" [disabled]="!product.isActive"></textarea>
+                <label for="description">Description</label>
+                <textarea 
+                  id="description"
+                  formControlName="description" 
+                  class="form-textarea" 
+                  [class.error]="isFieldInvalid('description')"
+                  [class.valid]="isFieldValid('description')"
+                  rows="4" 
+                  [readonly]="!product.isActive" 
+                  [attr.disabled]="!product.isActive ? true : null"
+                  maxlength="500"
+                  aria-describedby="description-hint"></textarea>
+                <div class="char-count" *ngIf="product.isActive">
+                  {{ getTrimmedLength('description') }} / 500 characters
+                  | {{ getWordCount('description') }} words
+                </div>
+                <app-validation-hint
+                  id="description-hint"
+                  [control]="editForm.get('description')!"
+                  fieldName="Description"
+                  fieldType="description"
+                  [minLength]="ValidationConstants.DESCRIPTION_MIN_LENGTH"
+                  [maxLength]="ValidationConstants.DESCRIPTION_MAX_LENGTH"
+                  helperText="20-500 characters, 3-100 words"
+                  *ngIf="product.isActive">
+                </app-validation-hint>
               </div>
             </div>
-          </div>
+          </form>
 
-          <div class="form-section">
+          <form [formGroup]="editForm" class="form-section">
             <h3 class="section-title">Category & Pricing</h3>
             <div class="form-grid">
               <div class="form-group">
-                <label>Category</label>
-                <select [(ngModel)]="editForm.categoryId" class="form-input" [disabled]="!product.isActive">
+                <label for="categoryId">Category</label>
+                <select 
+                  id="categoryId"
+                  formControlName="categoryId" 
+                  class="form-input" 
+                  [class.error]="isFieldInvalid('categoryId')"
+                  [disabled]="!product.isActive">
                   <option value="">Select a category</option>
                   <option *ngFor="let category of categories" [value]="category.id">
                     {{ category.name }}
                   </option>
                 </select>
+                <app-validation-hint
+                  [control]="editForm.get('categoryId')!"
+                  fieldName="Category"
+                  *ngIf="product.isActive">
+                </app-validation-hint>
               </div>
               <div class="form-group">
-                <label>Redemption Cost (Points)</label>
-                <input type="number" [(ngModel)]="editForm.pointsCost" class="form-input" min="100" [readonly]="!product.isActive" [disabled]="!product.isActive" />
-                <small class="form-hint">Enter the redemption cost in points (minimum 100).</small>
+                <label for="pointsCost">Redemption Cost (Points)</label>
+                <input 
+                  id="pointsCost"
+                  type="number" 
+                  formControlName="pointsCost" 
+                  class="form-input" 
+                  [class.error]="isFieldInvalid('pointsCost')"
+                  [class.valid]="isFieldValid('pointsCost')"
+                  min="1" 
+                  max="10000000"
+                  [readonly]="!product.isActive" 
+                  [attr.disabled]="!product.isActive ? true : null"
+                  aria-describedby="pointsCost-hint" />
+                <app-validation-hint
+                  id="pointsCost-hint"
+                  [control]="editForm.get('pointsCost')!"
+                  fieldName="Points cost"
+                  fieldType="number"
+                  [minValue]="ValidationConstants.POINTS_COST_MIN"
+                  [maxValue]="ValidationConstants.POINTS_COST_MAX"
+                  helperText="Whole number from 1 to 10,000,000 (must be positive)"
+                  *ngIf="product.isActive">
+                </app-validation-hint>
               </div>
             </div>
-          </div>
+          </form>
+
+          <!-- Form Errors Summary - Toggle to show all errors -->
+          <app-form-errors-summary
+            [form]="editForm"
+            [fieldLabels]="editFormFieldLabels"
+            *ngIf="product.isActive">
+          </app-form-errors-summary>
 
           <div class="form-actions" *ngIf="product.isActive">
-            <button class="btn btn-primary" (click)="saveChanges()">
+            <button class="btn btn-primary" (click)="saveChanges()" [disabled]="!canSave">
               <i class="fa-solid fa-floppy-disk"></i> Save Changes
             </button>
           </div>
@@ -151,16 +262,37 @@
               <div class="stock-card adjustment-card" *ngIf="product.isActive">
                 <div class="stock-label">Adjustment</div>
                 <div class="stock-adjustment-controls">
-                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount - 1">
+                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount - 1" type="button">
                     <i class="fa-solid fa-minus"></i>
                   </button>
-                  <input type="number" [(ngModel)]="stockAdjustment.amount" class="form-input-center" />
-                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount + 1">
+                  <input 
+                    type="number" 
+                    [(ngModel)]="stockAdjustment.amount" 
+                    class="form-input-center"
+                    [class.error]="stockValidationError"
+                    aria-describedby="stockAmount-hint" />
+                  <button class="btn-stock" (click)="stockAdjustment.amount = stockAdjustment.amount + 1" type="button">
                     <i class="fa-solid fa-plus"></i>
                   </button>
                 </div>
-                <div class="stock-preview">
-                  New stock: {{ product.stockLevel + stockAdjustment.amount }}
+                <div class="stock-preview" [class.warning]="product.stockLevel + stockAdjustment.amount < 0 || (product.stockLevel + stockAdjustment.amount > ValidationConstants.STOCK_MAX)">
+                  New stock: {{ Math.max(0, Math.min(ValidationConstants.STOCK_MAX, product.stockLevel + stockAdjustment.amount)) }}
+                  <span *ngIf="product.stockLevel + stockAdjustment.amount < 0" class="stock-warning">
+                    (Cannot go below 0)
+                  </span>
+                  <span *ngIf="product.stockLevel + stockAdjustment.amount > ValidationConstants.STOCK_MAX" class="stock-warning">
+                    (Max: {{ ValidationConstants.STOCK_MAX | number }})
+                  </span>
+                </div>
+                <!-- Stock Validation Error -->
+                <div class="stock-validation-error" *ngIf="stockValidationError">
+                  <span class="error-icon">✗</span>
+                  <span>{{ stockValidationError }}</span>
+                </div>
+                <!-- Stock Helper Text when no error -->
+                <div class="stock-helper" *ngIf="!stockValidationError && stockAdjustment.amount !== 0">
+                  <span class="success-icon">✓</span>
+                  <span>{{ stockAdjustment.amount > 0 ? 'Will add ' + stockAdjustment.amount + ' to stock' : 'Will remove ' + Math.abs(stockAdjustment.amount) + ' from stock' }}</span>
                 </div>
               </div>
               <div class="stock-card readonly-note" *ngIf="!product.isActive">
@@ -174,13 +306,18 @@
 
             <!-- Reason Input -->
             <div class="form-group reason-group" *ngIf="product.isActive">
-              <label>Reason (optional)</label>
-              <input type="text" [(ngModel)]="stockAdjustment.reason" class="form-input" placeholder="Enter reason for stock adjustment..." />
+              <label for="stockReason">Reason (optional)</label>
+              <input 
+                id="stockReason"
+                type="text" 
+                [(ngModel)]="stockAdjustment.reason" 
+                class="form-input" 
+                placeholder="Enter reason for stock adjustment..." />
             </div>
 
             <!-- Centered Save Button -->
             <div class="form-actions-center" *ngIf="product.isActive">
-              <button class="btn btn-primary" (click)="adjustStock()" [disabled]="stockAdjustment.amount === 0">
+              <button class="btn btn-primary" (click)="adjustStock()" [disabled]="!canAdjustStock">
                 <i class="fa-solid fa-check"></i> Save Stock Adjustment
               </button>
             </div>
@@ -290,4 +427,66 @@
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Deactivation Warning Dialog -->
+  <div *ngIf="showDeactivateDialog && deactivateWarningData" class="dialog-overlay">
+    <div class="dialog-content" role="alertdialog" aria-labelledby="deactivateDialogTitle" aria-modal="true">
+      <div class="dialog-header">
+        <h2 id="deactivateDialogTitle">Deactivation Warnings</h2>
+        <button type="button" class="btn-close" (click)="onDeactivateCancelled()" aria-label="Close dialog">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        <p class="warning-intro">This product has the following conditions that may affect deactivation:</p>
+        
+        <div class="warnings-list">
+          <div *ngIf="deactivateWarningData.stock && deactivateWarningData.stock > 0" class="warning-item">
+            <i class="fa-solid fa-box"></i>
+            <div class="warning-content">
+              <strong>Stock Available:</strong>
+              <p>This product has {{ deactivateWarningData.stock | number }} units in stock. These will become unavailable once deactivated.</p>
+            </div>
+          </div>
+
+          <div *ngIf="(deactivateWarningData.recentRedemptions7d || 0) > 0" class="warning-item">
+            <i class="fa-solid fa-clock"></i>
+            <div class="warning-content">
+              <strong>Recent Activity (Last 7 Days):</strong>
+              <p>{{ deactivateWarningData.recentRedemptions7d | number }} redemptions from {{ deactivateWarningData.uniqueUsers7d || 0 }} users</p>
+            </div>
+          </div>
+
+          <div *ngIf="(deactivateWarningData.recentRedemptions30d || 0) > (deactivateWarningData.recentRedemptions7d || 0)" class="warning-item">
+            <i class="fa-solid fa-chart-line"></i>
+            <div class="warning-content">
+              <strong>Activity (Last 30 Days):</strong>
+              <p>{{ deactivateWarningData.recentRedemptions30d | number }} total redemptions from {{ deactivateWarningData.uniqueUsers30d || 0 }} users</p>
+            </div>
+          </div>
+
+          <div *ngIf="deactivateWarningData.lastRedemptionDate" class="warning-item">
+            <i class="fa-solid fa-calendar"></i>
+            <div class="warning-content">
+              <strong>Last Redemption:</strong>
+              <p>{{ deactivateWarningData.lastRedemptionDate | date:'mediumDate' }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="warning-message">
+          <p>Click "Confirm" to proceed with deactivation despite these warnings.</p>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" (click)="onDeactivateCancelled()">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="onDeactivateConfirmed()" [disabled]="isLoading">
+          <i class="fa-solid fa-check"></i> Confirm Deactivation
+        </button>
+      </div>
+    </div>
+  </div>

@@ -17,10 +17,11 @@ import type { EChartsOption } from 'echarts';
 echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 import { ProductsService } from '../../../services/products.service';
-import { Product, ProductKPI, ProductFilter, ProductCategory, CreateProductRequest } from '../../../models/product.models';
+import { Product, ProductKPI, ProductFilter, ProductCategory, CreateProductRequest, DeactivateProductWarnings, DeactivateProductBlocked } from '../../../models/product.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { ProductFormModalComponent } from './product-form-modal.component';
+import { DeactivateConfirmationDialogComponent, DeactivateWarningData } from './deactivate-confirmation-dialog.component';
 
 // Low stock product interface for chart
 interface LowStockChartProduct {
@@ -35,7 +36,7 @@ interface LowStockChartProduct {
   templateUrl: './product-management.component.html',
   styleUrls: ['./product-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent, DeactivateConfirmationDialogComponent],
   providers: [
     provideEchartsCore({ echarts })
   ]
@@ -66,6 +67,12 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   errorMessage: string | null = null;
   successMessage: string | null = null;
   hasLoadError = false;
+
+  // Deactivation dialog state
+  showDeactivateDialog = false;
+  deactivateWarningData: DeactivateWarningData | null = null;
+  pendingDeactivationProductId: string | null = null;
+  deactivationBlockedMessage: string | null = null;
 
   // Chart state
   selectedChartCategory = 'all';
@@ -118,9 +125,9 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     name: '',
     description: '',
     categoryId: '',
-    pointsCost: 0,
+    pointsCost: 1,
     imageUrl: '',
-    initialStock: 0
+    initialStock: 1
   };
 
   // New Category Form
@@ -516,8 +523,26 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('[ProductMgmt] Error creating product:', error);
-          this.errorMessage = `Failed to create product: ${error?.error?.message || error?.message || 'Unknown error'}`;
-          setTimeout(() => this.errorMessage = null, 5000);
+          // Extract meaningful error message from various error formats
+          let errorMsg = 'Unknown error';
+          if (error?.error?.errors) {
+            // FluentValidation errors
+            const validationErrors: string[] = [];
+            for (const field in error.error.errors) {
+              if (Array.isArray(error.error.errors[field])) {
+                validationErrors.push(...error.error.errors[field]);
+              }
+            }
+            errorMsg = validationErrors.join('. ');
+          } else if (error?.error?.error) {
+            errorMsg = error.error.error;
+          } else if (error?.error?.message) {
+            errorMsg = error.error.message;
+          } else if (error?.message) {
+            errorMsg = error.message;
+          }
+          this.errorMessage = `Failed to create product: ${errorMsg}`;
+          setTimeout(() => this.errorMessage = null, 8000);
         }
       });
   }
@@ -560,9 +585,9 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       name: '',
       description: '',
       categoryId: '',
-      pointsCost: 0,
+      pointsCost: 1,
       imageUrl: '',
-      initialStock: 0
+      initialStock: 1
     };
     this.isSubmitting = false;
     this.resetCategoryForm();
@@ -722,7 +747,8 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Deactivate product
+   * Deactivate product with business rule handling
+   * Handles hard blocks (400) and soft warnings (409)
    */
   deactivateProduct(productId: string, event?: MouseEvent): void {
     if (event) {
@@ -730,25 +756,107 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       event.preventDefault();
     }
     this.activeDropdown = null;
+    this.deactivationBlockedMessage = null;
     
     const product = this.products.find(p => p.id === productId);
     if (!product) return;
     
-    if (confirm(`Are you sure you want to deactivate "${product.name}"?`)) {
-      this.isLoading = true;
-      this.productsService.deactivateProduct(productId).subscribe({
-        next: (response) => {
-          console.log('Product deactivated successfully:', response);
-          this.loadProducts(); // Reload products to reflect changes
-        },
-        error: (error) => {
-          console.error('Error deactivating product:', error);
-          this.isLoading = false;
-          // Handle error appropriately
-          alert('Failed to deactivate product. Please try again.');
+    // First attempt without force - let server check for warnings/blocks
+    this.isLoading = true;
+    this.productsService.deactivateProduct(productId, false).subscribe({
+      next: (response) => {
+        console.log('Product deactivated successfully:', response);
+        this.isLoading = false;
+        this.showSuccess(`Product "${product.name}" deactivated successfully!`);
+        this.loadProducts(); // Reload products to reflect changes
+      },
+      error: (error) => {
+        console.error('Error deactivating product:', error);
+        this.isLoading = false;
+        
+        // Check if it's a soft warning (409 Conflict)
+        if (this.productsService.isDeactivationWarning(error)) {
+          const warnings = error.error as DeactivateProductWarnings;
+          this.pendingDeactivationProductId = productId;
+          this.deactivateWarningData = {
+            productName: product.name,
+            stock: warnings.stock,
+            recentRedemptions7d: warnings.recentRedemptions7d,
+            recentUniqueUsers7d: warnings.recentUniqueUsers7d,
+            recentRedemptions30d: warnings.recentRedemptions30d,
+            recentUniqueUsers30d: warnings.recentUniqueUsers30d,
+            lastRedemptionDate: warnings.lastRedemptionDate
+          };
+          this.showDeactivateDialog = true;
+          this.cdr.detectChanges();
+          return;
         }
-      });
-    }
+        
+        // Check if it's a hard block (400 Bad Request)
+        if (this.productsService.isDeactivationBlocked(error)) {
+          const blocked = error.error as DeactivateProductBlocked;
+          this.deactivationBlockedMessage = `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist. Please resolve these redemptions first.`;
+          this.errorMessage = this.deactivationBlockedMessage;
+          setTimeout(() => {
+            this.errorMessage = null;
+            this.deactivationBlockedMessage = null;
+          }, 8000);
+          return;
+        }
+        
+        // Generic error
+        this.errorMessage = error?.error?.message || 'Failed to deactivate product. Please try again.';
+        setTimeout(() => this.errorMessage = null, 5000);
+      }
+    });
+  }
+
+  /**
+   * Handle confirmation from deactivate warning dialog
+   */
+  onDeactivateConfirmed(): void {
+    if (!this.pendingDeactivationProductId) return;
+    
+    const productId = this.pendingDeactivationProductId;
+    const product = this.products.find(p => p.id === productId);
+    
+    this.showDeactivateDialog = false;
+    this.deactivateWarningData = null;
+    this.isLoading = true;
+    
+    // Retry with force=true to bypass soft warnings
+    this.productsService.deactivateProduct(productId, true).subscribe({
+      next: (response) => {
+        console.log('Product deactivated successfully (forced):', response);
+        this.isLoading = false;
+        this.pendingDeactivationProductId = null;
+        this.showSuccess(`Product "${product?.name}" deactivated successfully!`);
+        this.loadProducts();
+      },
+      error: (error) => {
+        console.error('Error deactivating product (forced):', error);
+        this.isLoading = false;
+        this.pendingDeactivationProductId = null;
+        
+        // Even with force, hard blocks cannot be bypassed
+        if (this.productsService.isDeactivationBlocked(error)) {
+          const blocked = error.error as DeactivateProductBlocked;
+          this.errorMessage = `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist.`;
+        } else {
+          this.errorMessage = error?.error?.message || 'Failed to deactivate product. Please try again.';
+        }
+        setTimeout(() => this.errorMessage = null, 5000);
+      }
+    });
+  }
+
+  /**
+   * Handle cancellation from deactivate warning dialog
+   */
+  onDeactivateCancelled(): void {
+    this.showDeactivateDialog = false;
+    this.deactivateWarningData = null;
+    this.pendingDeactivationProductId = null;
   }
 
   /**

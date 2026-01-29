@@ -244,14 +244,21 @@ export class ProductsService {
   }
 
   /**
-   * Deactivate product
+   * Deactivate product with business rule enforcement
    * BACKEND: POST /api/products/{id}/deactivate
+   * 
+   * @param productId - The product ID to deactivate
+   * @param force - If true, bypasses soft warnings (stock > 0, recent demand) but not hard blocks
+   * @returns Observable that:
+   * - Completes successfully if deactivation succeeds
+   * - Throws error with status 400 and DeactivateProductBlocked if hard blocked
+   * - Throws error with status 409 and DeactivateProductWarnings if soft warnings exist
    */
-  deactivateProduct(productId: string): Observable<any> {
+  deactivateProduct(productId: string, force: boolean = false): Observable<any> {
     const url = `${this.PRODUCTS_API_URL}/${productId}/deactivate`;
-    console.log('[ProductsService] Deactivating product:', productId);
+    console.log('[ProductsService] Deactivating product:', productId, 'force:', force);
 
-    return this.http.post(url, {}).pipe(
+    return this.http.post(url, { force }).pipe(
       timeout(10000),
       tap(response => {
         console.log('[ProductsService] Product deactivated:', response);
@@ -263,6 +270,20 @@ export class ProductsService {
         throw error;
       })
     );
+  }
+
+  /**
+   * Check if error response is a deactivation warning (409 Conflict)
+   */
+  isDeactivationWarning(error: any): boolean {
+    return error?.status === 409 && error?.error?.code === 'DEACTIVATE_WARNINGS';
+  }
+
+  /**
+   * Check if error response is a deactivation block (400 Bad Request)
+   */
+  isDeactivationBlocked(error: any): boolean {
+    return error?.status === 400 && error?.error?.code === 'DEACTIVATE_BLOCKED';
   }
 
   /**

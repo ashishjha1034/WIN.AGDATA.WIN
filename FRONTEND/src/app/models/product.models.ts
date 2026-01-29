@@ -141,3 +141,45 @@ export interface LowStockResponse {
   threshold: number;
   data: LowStockProduct[];
 }
+
+/**
+ * Request body for deactivating a product
+ */
+export interface DeactivateProductRequest {
+  /** If true, bypasses soft warnings (stock > 0, recent demand) but not hard blocks */
+  force: boolean;
+}
+
+/**
+ * Soft warnings that require admin confirmation before deactivation.
+ * Returned with HTTP 409 Conflict.
+ */
+export interface DeactivateProductWarnings {
+  code: 'DEACTIVATE_WARNINGS';
+  stock: number;
+  recentRedemptions7d: number;
+  recentUniqueUsers7d: number;
+  recentRedemptions30d?: number;
+  recentUniqueUsers30d?: number;
+  lastRedemptionDate?: string;
+  message: string;
+}
+
+/**
+ * Hard block preventing deactivation due to active redemptions.
+ * Returned with HTTP 400 Bad Request.
+ */
+export interface DeactivateProductBlocked {
+  code: 'DEACTIVATE_BLOCKED';
+  pending: number;
+  approved: number;
+  message: string;
+}
+
+/**
+ * Result type for deactivation response handling
+ */
+export type DeactivateProductResponse = 
+  | { success: true; message: string }
+  | DeactivateProductWarnings 
+  | DeactivateProductBlocked;

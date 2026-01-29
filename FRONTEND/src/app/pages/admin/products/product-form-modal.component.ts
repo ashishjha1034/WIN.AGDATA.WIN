@@ -9,11 +9,12 @@ import { ProductsService } from '../../../services/products.service';
 import { ValidationService, ValidationResult } from '../../../services/validation.service';
 import { CustomValidators, ValidationConstants } from '../../../shared/validators/custom-validators';
 import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
+import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
 
 @Component({
   selector: 'app-product-form-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ValidationHintComponent],
+  imports: [CommonModule, ReactiveFormsModule, ValidationHintComponent, FormErrorsSummaryComponent],
   template: `
     <div class="modal-overlay" *ngIf="isOpen" (click)="closeModal()"></div>
     <div class="modal" [class.open]="isOpen">
@@ -26,22 +27,36 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
         <!-- Product Name -->
         <div class="form-group">
           <label for="name">Product Name <span class="required">*</span></label>
-          <input
-            id="name"
-            type="text"
-            formControlName="name"
-            placeholder="e.g., Gift Card 50"
-            class="form-input"
-            [class.error]="isFieldInvalid('name')"
-            [class.valid]="isFieldValid('name')"
-            maxlength="50"
-            aria-describedby="name-hint"
-          />
+          <div class="input-with-action">
+            <input
+              id="name"
+              type="text"
+              formControlName="name"
+              placeholder="e.g., Gift Card 50"
+              class="form-input"
+              [class.error]="isFieldInvalid('name') || (productNameResult && !productNameResult.isValid)"
+              [class.valid]="isFieldValid('name') && (!productNameResult || productNameResult.isValid)"
+              maxlength="50"
+              aria-describedby="name-hint"
+            />
+            <button 
+              type="button" 
+              class="check-btn" 
+              (click)="checkProductNameNow()"
+              [disabled]="checkingProductName || !form.get('name')?.value || form.get('name')?.invalid">
+              Check
+            </button>
+          </div>
           <app-validation-hint
             id="name-hint"
             [control]="form.get('name')!"
             fieldName="Product name"
-            helperText="1-4 words, alphanumeric only, 2-50 characters">
+            fieldType="productName"
+            [minLength]="2"
+            [maxLength]="50"
+            helperText="1-4 words, alphanumeric only, 2-50 characters"
+            [checking]="checkingProductName"
+            [uniquenessResult]="productNameResult">
           </app-validation-hint>
         </div>
 
@@ -60,13 +75,16 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             aria-describedby="description-hint"
           ></textarea>
           <div class="char-count">
-            {{ form.get('description')?.value?.length || 0 }} / 500 characters
+            {{ form.get('description')?.value?.trim()?.length || 0 }} / 500 characters
             | {{ getWordCount('description') }} words
           </div>
           <app-validation-hint
             id="description-hint"
             [control]="form.get('description')!"
             fieldName="Description"
+            fieldType="description"
+            [minLength]="20"
+            [maxLength]="500"
             helperText="20-500 characters, 3-100 words">
           </app-validation-hint>
         </div>
@@ -115,14 +133,17 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
                   type="button" 
                   class="check-btn" 
                   (click)="checkCategoryNameNow()"
-                  [disabled]="checkingCategoryName || !form.get('newCategoryName')?.value">
+                  [disabled]="checkingCategoryName || !form.get('newCategoryName')?.value || form.get('newCategoryName')?.invalid">
                   Check
                 </button>
               </div>
               <app-validation-hint
                 [control]="form.get('newCategoryName')!"
                 fieldName="Category name"
-                helperText="1-4 words, alphanumeric only"
+                fieldType="productName"
+                [minLength]="2"
+                [maxLength]="50"
+                helperText="1-4 words, alphanumeric only (must be unique)"
                 [checking]="checkingCategoryName"
                 [uniquenessResult]="categoryNameResult">
               </app-validation-hint>
@@ -148,7 +169,7 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             class="form-input"
             [class.error]="isFieldInvalid('pointsCost')"
             [class.valid]="isFieldValid('pointsCost')"
-            min="0"
+            min="1"
             max="10000000"
             aria-describedby="pointsCost-hint"
           />
@@ -156,13 +177,16 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             id="pointsCost-hint"
             [control]="form.get('pointsCost')!"
             fieldName="Points cost"
-            helperText="Whole number from 0 to 10,000,000">
+            fieldType="number"
+            [minValue]="1"
+            [maxValue]="10000000"
+            helperText="Whole number from 1 to 10,000,000 (must be positive)">
           </app-validation-hint>
         </div>
 
         <!-- Initial Stock -->
         <div class="form-group">
-          <label for="initialStock">Initial Stock</label>
+          <label for="initialStock">Initial Stock <span class="required">*</span></label>
           <input
             id="initialStock"
             type="number"
@@ -171,7 +195,7 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             class="form-input"
             [class.error]="isFieldInvalid('initialStock')"
             [class.valid]="isFieldValid('initialStock')"
-            min="0"
+            min="1"
             max="1000000"
             aria-describedby="initialStock-hint"
           />
@@ -179,7 +203,10 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             id="initialStock-hint"
             [control]="form.get('initialStock')!"
             fieldName="Initial stock"
-            helperText="Whole number from 0 to 1,000,000">
+            fieldType="number"
+            [minValue]="1"
+            [maxValue]="1000000"
+            helperText="Whole number from 1 to 1,000,000">
           </app-validation-hint>
         </div>
 
@@ -201,7 +228,8 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
             id="imageUrl-hint"
             [control]="form.get('imageUrl')!"
             fieldName="Image URL"
-            helperText="HTTPS URL only, max 1000 characters">
+            fieldType="url"
+            helperText="HTTPS URL only, max 1000 characters (optional)">
           </app-validation-hint>
         </div>
 
@@ -209,6 +237,12 @@ import { ValidationHintComponent } from '../../../shared/components/validation-h
         <div class="error-banner" *ngIf="error" role="alert">
           <p>{{ error }}</p>
         </div>
+
+        <!-- Form Errors Summary - Toggle to show all errors -->
+        <app-form-errors-summary
+          [form]="form"
+          [fieldLabels]="formFieldLabels">
+        </app-form-errors-summary>
 
         <!-- Loading State -->
         <div class="loading-banner" *ngIf="isSubmitting" role="status">
@@ -502,6 +536,21 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
   checkingCategoryName = false;
   categoryNameResult: ValidationResult | null = null;
 
+  // Product name uniqueness check
+  checkingProductName = false;
+  productNameResult: ValidationResult | null = null;
+
+  // Field labels for error summary
+  formFieldLabels: { [key: string]: string } = {
+    name: 'Product Name',
+    description: 'Description',
+    categoryId: 'Category',
+    pointsCost: 'Points Cost',
+    initialStock: 'Initial Stock',
+    imageUrl: 'Image URL',
+    newCategoryName: 'New Category Name'
+  };
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -513,6 +562,7 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.initForm();
     this.setupCategoryNameCheck();
+    this.setupProductNameCheck();
   }
 
   private initForm(): void {
@@ -530,13 +580,14 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
         CustomValidators.wordCount(ValidationConstants.DESCRIPTION_MIN_WORDS, ValidationConstants.DESCRIPTION_MAX_WORDS)
       ]],
       categoryId: ['', Validators.required],
-      pointsCost: [0, [
+      pointsCost: [1, [
         Validators.required,
         Validators.min(ValidationConstants.POINTS_COST_MIN),
         Validators.max(ValidationConstants.POINTS_COST_MAX),
         CustomValidators.integer()
       ]],
-      initialStock: [0, [
+      initialStock: [ValidationConstants.STOCK_MIN, [
+        Validators.required,
         Validators.min(ValidationConstants.STOCK_MIN),
         Validators.max(ValidationConstants.STOCK_MAX),
         CustomValidators.integer()
@@ -555,6 +606,49 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
     // Apply initial data if in edit mode
     if (this.initialData) {
       this.form.patchValue(this.initialData);
+    }
+  }
+
+  private setupProductNameCheck(): void {
+    this.form.get('name')?.valueChanges
+      .pipe(
+        takeUntil(this.destroy$),
+        debounceTime(ValidationConstants.DEBOUNCE_TIME_MS),
+        distinctUntilChanged()
+      )
+      .subscribe(name => {
+        if (name && this.form.get('name')?.valid) {
+          this.checkProductName(name);
+        } else {
+          this.productNameResult = null;
+        }
+      });
+  }
+
+  private checkProductName(name: string): void {
+    this.checkingProductName = true;
+    this.productNameResult = null;
+    this.cdr.markForCheck();
+
+    this.validationService.checkProductNameAvailability(name)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: result => {
+          this.productNameResult = result;
+          this.checkingProductName = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.checkingProductName = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  checkProductNameNow(): void {
+    const name = this.form.get('name')?.value;
+    if (name) {
+      this.checkProductName(name);
     }
   }
 
@@ -625,18 +719,19 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
   }
 
   get canSubmit(): boolean {
-    // Check main form fields (exclude newCategoryName)
-    const mainFields = ['name', 'description', 'categoryId', 'pointsCost'];
+    // Check main form fields (including initialStock which is now required)
+    const mainFields = ['name', 'description', 'categoryId', 'pointsCost', 'initialStock'];
     for (const field of mainFields) {
       if (this.form.get(field)?.invalid) return false;
     }
     
     // Check optional fields if they have values
-    const stockControl = this.form.get('initialStock');
-    if (stockControl?.value && stockControl?.invalid) return false;
-    
     const imageControl = this.form.get('imageUrl');
     if (imageControl?.value && imageControl?.invalid) return false;
+
+    // Check product name uniqueness
+    if (this.checkingProductName) return false;
+    if (this.productNameResult && !this.productNameResult.isValid) return false;
 
     if (this.isSubmitting) return false;
 
@@ -657,13 +752,14 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
 
   closeModal(): void {
     this.form.reset({
-      pointsCost: 0,
-      initialStock: 0
+      pointsCost: 1,
+      initialStock: 1
     });
     this.error = null;
     this.isSubmitting = false;
     this.showCategoryForm = false;
     this.categoryNameResult = null;
+    this.productNameResult = null;
     this.closed.emit();
   }
 

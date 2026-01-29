@@ -11,6 +11,7 @@ export const ValidationConstants = {
   EMPLOYEE_ID_LENGTH: 9,
   PASSWORD_MIN_LENGTH: 12,
   CORPORATE_DOMAIN: '@agdata.com',
+  CORPORATE_EMAIL_LOCAL_MIN: 5, // Minimum characters before @
   
   PRODUCT_NAME_MAX_WORDS: 4,
   DESCRIPTION_MIN_LENGTH: 20,
@@ -18,9 +19,9 @@ export const ValidationConstants = {
   DESCRIPTION_MIN_WORDS: 3,
   DESCRIPTION_MAX_WORDS: 100,
   
-  POINTS_COST_MIN: 0,
+  POINTS_COST_MIN: 1,  // Changed from 0 to 1 - must be positive
   POINTS_COST_MAX: 10_000_000,
-  STOCK_MIN: 0,
+  STOCK_MIN: 1,  // Changed from 0 to 1
   STOCK_MAX: 1_000_000,
   IMAGE_URL_MAX_LENGTH: 1000,
   
@@ -55,13 +56,70 @@ export class CustomValidators {
   }
 
   /**
-   * Validates email ends with corporate domain
+   * Validates email ends with corporate domain AND has local-part >= 5 chars
    */
   static corporateEmail(): ValidatorFn {
     return (control: AbstractControl): ValidationErrors | null => {
       if (!control.value) return null;
-      const valid = control.value.toLowerCase().endsWith(ValidationConstants.CORPORATE_DOMAIN);
-      return valid ? null : { corporateEmail: { message: `Email must end with ${ValidationConstants.CORPORATE_DOMAIN}` } };
+      
+      const email = control.value.toLowerCase();
+      const atIndex = email.lastIndexOf('@');
+      
+      // Check domain
+      if (!email.endsWith(ValidationConstants.CORPORATE_DOMAIN)) {
+        return { corporateEmail: { message: `Email must end with ${ValidationConstants.CORPORATE_DOMAIN}` } };
+      }
+      
+      // Check local-part length (before @)
+      const localPart = email.substring(0, atIndex);
+      if (localPart.length < ValidationConstants.CORPORATE_EMAIL_LOCAL_MIN) {
+        return { corporateEmailLocalPart: { message: `Use your corporate email. At least ${ValidationConstants.CORPORATE_EMAIL_LOCAL_MIN} characters before ${ValidationConstants.CORPORATE_DOMAIN}.` } };
+      }
+      
+      return null;
+    };
+  }
+
+  /**
+   * Validates name with real-time feedback for non-alpha characters.
+   * Returns exactly ONE error in priority order: spaces > digits > symbols > min-length > max-length
+   * This enables dynamic, context-aware inline validation messages.
+   */
+  static liveNameValidation(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (!value) return null;
+      
+      // Priority 1: Check for spaces (highest priority - most common mistake)
+      if (/\s/.test(value)) {
+        return { nameHasSpace: { message: 'No spaces allowed' } };
+      }
+      
+      // Priority 2: Check for digits
+      if (/\d/.test(value)) {
+        return { nameHasDigit: { message: 'Numbers are not allowed' } };
+      }
+      
+      // Priority 3: Check for any other non-alpha characters (symbols)
+      if (!/^[a-zA-Z]*$/.test(value)) {
+        return { nameHasSymbol: { message: 'Symbols are not allowed' } };
+      }
+      
+      // Priority 4: Check minimum length with specific message
+      if (value.length < ValidationConstants.NAME_MIN_LENGTH) {
+        const needed = ValidationConstants.NAME_MIN_LENGTH - value.length;
+        if (needed === 1) {
+          return { nameMinLength: { message: 'Enter 1 more character' } };
+        }
+        return { nameMinLength: { message: `At least ${ValidationConstants.NAME_MIN_LENGTH} characters required` } };
+      }
+      
+      // Priority 5: Check maximum length
+      if (value.length > ValidationConstants.NAME_MAX_LENGTH) {
+        return { nameMaxLength: { message: `Maximum ${ValidationConstants.NAME_MAX_LENGTH} characters allowed` } };
+      }
+      
+      return null;
     };
   }
 
@@ -207,33 +265,22 @@ export function calculatePasswordStrength(password: string): {
   label: string;
   requirements: { met: boolean; text: string }[];
 } {
-  if (!password) {
-    return {
-      score: 0,
-      label: 'None',
-      requirements: getPasswordRequirements(password)
-    };
-  }
+  const pwd = password || '';
 
-  let score = 0;
+  // Base score from length (cap at 40)
+  let score = Math.min(40, pwd.length * 3);
 
-  // Length checks
-  if (password.length >= 8) score += 10;
-  if (password.length >= 12) score += 15;
-  if (password.length >= 16) score += 10;
+  // Character variety bonuses
+  if (/[A-Z]/.test(pwd)) score += 10;
+  if (/[a-z]/.test(pwd)) score += 10;
+  if (/[0-9]/.test(pwd)) score += 10;
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) score += 10;
 
-  // Character type checks
-  if (/[A-Z]/.test(password)) score += 15;
-  if (/[a-z]/.test(password)) score += 15;
-  if (/[0-9]/.test(password)) score += 15;
-  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score += 20;
+  // Penalty for spaces
+  if (/\s/.test(pwd)) score -= 15;
 
-  // Bonus for variety
-  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter(r => r.test(password)).length;
-  if (types >= 4) score += 10;
-
-  // Cap at 100
-  score = Math.min(score, 100);
+  // Ensure score stays within 0-100
+  score = Math.max(0, Math.min(100, score));
 
   let label: string;
   if (score < 30) label = 'Weak';
@@ -245,7 +292,7 @@ export function calculatePasswordStrength(password: string): {
   return {
     score,
     label,
-    requirements: getPasswordRequirements(password)
+    requirements: getPasswordRequirements(pwd)
   };
 }
 

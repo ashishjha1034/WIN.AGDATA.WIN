@@ -134,19 +134,20 @@ public class UsersController : ControllerBase
     /// Update user profile information
     /// </summary>
     /// <remarks>
-    /// Update user's personal information like first name, last name, and email.
+    /// Update user's personal information (first name and last name only).
+    /// Email and Employee ID cannot be modified after account creation.
     /// Users can only update their own profile.
-    /// Admins can update any user's profile.
+    /// Admins can update any user's profile (name only).
     /// </remarks>
     /// <param name="id">User ID to update</param>
     /// <param name="request">Updated user information</param>
     /// <returns>Confirmation message</returns>
     /// <response code="200">Profile updated successfully</response>
-    /// <response code="400">Invalid input</response>
+    /// <response code="400">Invalid input or attempt to modify email/employeeId</response>
     /// <response code="403">Forbidden - cannot update other user</response>
     /// <response code="404">User not found</response>
     [HttpPut("{id:guid}")]
-    [SwaggerOperation(Summary = "Update user profile", Description = "Modify user information")]
+    [SwaggerOperation(Summary = "Update user profile", Description = "Modify user information (name only - email and employee ID cannot be changed)")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -168,21 +169,27 @@ public class UsersController : ControllerBase
             if (user == null)
                 return NotFound(new { message = "User not found" });
 
-            // Update basic profile info
-            user.UpdateProfile(request.FirstName, request.LastName);
-
-            // Admin can update email and employeeId
-            if (isAdmin)
+            // Check if client attempted to modify email or employeeId - reject with clear message
+            if (!string.IsNullOrWhiteSpace(request.Email) && 
+                !string.Equals(request.Email.Trim(), user.Email.Value, StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrWhiteSpace(request.Email) && request.Email != user.Email.Value)
-                {
-                    user.UpdateEmail(request.Email);
-                }
-                if (!string.IsNullOrWhiteSpace(request.EmployeeId) && request.EmployeeId != user.EmployeeId)
-                {
-                    user.UpdateEmployeeId(request.EmployeeId);
-                }
+                return BadRequest(new { 
+                    message = "Email cannot be modified after account creation. Contact support if a change is needed.",
+                    field = "email"
+                });
             }
+
+            if (!string.IsNullOrWhiteSpace(request.EmployeeId) && 
+                !string.Equals(request.EmployeeId.Trim(), user.EmployeeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { 
+                    message = "Employee ID cannot be modified after account creation. Contact support if a change is needed.",
+                    field = "employeeId"
+                });
+            }
+
+            // Update only allowed fields: FirstName and LastName
+            user.UpdateProfile(request.FirstName, request.LastName);
 
             await _userRepository.UpdateAsync(user);
             await _unitOfWork.SaveChangesAsync();

@@ -337,4 +337,12 @@
     (categoryCreated)="onCategoryCreated($event)"
     (closed)="closeAddProductModal()"
   ></app-product-form-modal>
+
+  <!-- Deactivate Confirmation Dialog -->
+  <app-deactivate-confirmation-dialog
+    *ngIf="showDeactivateDialog"
+    [data]="deactivateWarningData"
+    (confirm)="onDeactivateConfirmed()"
+    (cancel)="onDeactivateCancelled()"
+  ></app-deactivate-confirmation-dialog>
 </div>

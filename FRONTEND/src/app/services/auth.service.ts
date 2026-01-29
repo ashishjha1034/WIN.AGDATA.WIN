@@ -1,8 +1,8 @@
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, BehaviorSubject, tap, catchError } from 'rxjs';
+import { Injectable, NgZone } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpResponse } from '@angular/common/http';
+import { Observable, BehaviorSubject, tap, catchError, finalize, distinctUntilChanged, map } from 'rxjs';
 import { LoginRequest, LoginResponse, UserInfo } from '../models/auth.models';
-import { HttpErrorService } from './http-error.service';
+import { HttpErrorService, AuthError } from './http-error.service';
 import { API_CONFIG } from '../config/api.config';
 
 @Injectable({
@@ -25,14 +25,20 @@ export class AuthService {
   public roles$ = this.rolesSubject.asObservable();
 
   private loadingSubject = new BehaviorSubject<boolean>(false);
-  public loading$ = this.loadingSubject.asObservable();
+  public loading$ = this.loadingSubject.asObservable().pipe(distinctUntilChanged());
 
-  private errorSubject = new BehaviorSubject<string | null>(null);
+  private errorSubject = new BehaviorSubject<AuthError | null>(null);
   public error$ = this.errorSubject.asObservable();
+
+  // Expose simple error message for backward compatibility
+  public errorMessage$ = this.errorSubject.asObservable().pipe(
+    map(err => err?.message ?? null)
+  );
 
   constructor(
     private http: HttpClient,
-    private errorService: HttpErrorService
+    private errorService: HttpErrorService,
+    private ngZone: NgZone
   ) {
     this.validateTokenOnInit();
     console.log('AuthService initialized with API URL:', this.API_URL);
@@ -45,15 +51,17 @@ export class AuthService {
     const loginUrl = `${this.API_URL}${API_CONFIG.endpoints.auth.login}`;
     console.log('Sending login request to:', loginUrl);
 
-    return this.http.post<LoginResponse>(loginUrl, credentials).pipe(
-      tap(response => {
-        console.log('Login successful:', response);
-        console.log('Storing token:', response.token?.substring(0, 50) + '...');
+    return this.http.post<LoginResponse>(loginUrl, credentials, { observe: 'response' }).pipe(
+      map(response => {
+        // Extract body from HttpResponse
+        const body = response.body as LoginResponse;
+        console.log('Login successful:', body);
+        console.log('Storing token:', body.token?.substring(0, 50) + '...');
         
-        this.storeToken(response.token);
-        this.storeRefreshToken(response.refreshToken);
-        this.storeUser(response.user);
-        this.updateAuthState(response.user);
+        this.storeToken(body.token);
+        this.storeRefreshToken(body.refreshToken);
+        this.storeUser(body.user);
+        this.updateAuthState(body.user);
         
         // Verify token was stored
         const storedToken = localStorage.getItem(this.tokenKey);
@@ -62,14 +70,22 @@ export class AuthService {
           console.log('Stored token preview:', storedToken.substring(0, 50) + '...');
         }
         
-        this.loadingSubject.next(false);
+        return body;
       }),
       catchError((error: HttpErrorResponse) => {
         console.error('Login error response:', error);
-        const errorMessage = this.errorService.getErrorMessage(error);
-        this.errorSubject.next(errorMessage);
-        this.loadingSubject.next(false);
+        // Run inside Angular zone to ensure immediate change detection
+        this.ngZone.run(() => {
+          const authError = this.errorService.parseAuthError(error);
+          this.errorSubject.next(authError);
+        });
         throw error;
+      }),
+      finalize(() => {
+        // Ensure loading is always set to false, regardless of success or error
+        this.ngZone.run(() => {
+          this.loadingSubject.next(false);
+        });
       })
     );
   }
@@ -92,14 +108,19 @@ export class AuthService {
     return this.http.post<any>(forgotUrl, { email }).pipe(
       tap(response => {
         console.log('Forgot password request successful');
-        this.loadingSubject.next(false);
       }),
       catchError((error: HttpErrorResponse) => {
         console.error('Forgot password error:', error);
-        const errorMessage = this.errorService.getErrorMessage(error);
-        this.errorSubject.next(errorMessage);
-        this.loadingSubject.next(false);
+        this.ngZone.run(() => {
+          const authError = this.errorService.parseAuthError(error);
+          this.errorSubject.next(authError);
+        });
         throw error;
+      }),
+      finalize(() => {
+        this.ngZone.run(() => {
+          this.loadingSubject.next(false);
+        });
       })
     );
   }
@@ -114,14 +135,19 @@ export class AuthService {
     return this.http.post<any>(resetUrl, request).pipe(
       tap(response => {
         console.log('Reset password successful');
-        this.loadingSubject.next(false);
       }),
       catchError((error: HttpErrorResponse) => {
         console.error('Reset password error:', error);
-        const errorMessage = this.errorService.getErrorMessage(error);
-        this.errorSubject.next(errorMessage);
-        this.loadingSubject.next(false);
+        this.ngZone.run(() => {
+          const authError = this.errorService.parseAuthError(error);
+          this.errorSubject.next(authError);
+        });
         throw error;
+      }),
+      finalize(() => {
+        this.ngZone.run(() => {
+          this.loadingSubject.next(false);
+        });
       })
     );
   }

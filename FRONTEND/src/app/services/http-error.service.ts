@@ -1,11 +1,128 @@
 import { Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 
+/**
+ * Structured auth error with support for rate limiting and lockout
+ */
+export interface AuthError {
+  code: 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'ACCOUNT_LOCKED' | 'NETWORK_ERROR' | 'SERVER_ERROR' | 'UNKNOWN';
+  message: string;
+  retryAfterSeconds?: number;
+  lockedOut?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class HttpErrorService {
   constructor() { }
+
+  /**
+   * Parse HTTP error into structured AuthError for auth flows
+   */
+  parseAuthError(error: HttpErrorResponse | any): AuthError {
+    console.error('Parsing HTTP Error:', error);
+
+    if (!error) {
+      return { code: 'UNKNOWN', message: 'An unknown error occurred' };
+    }
+
+    // Handle timeout or network errors (status 0)
+    if (error.status === 0) {
+      if (error.error instanceof ProgressEvent) {
+        return { 
+          code: 'NETWORK_ERROR', 
+          message: 'Network timeout or backend not responding. Ensure backend is running on https://localhost:7113' 
+        };
+      }
+      return { 
+        code: 'NETWORK_ERROR', 
+        message: 'Unable to connect to backend server. Ensure it is running on https://localhost:7113' 
+      };
+    }
+
+    // Handle rate limiting (429)
+    if (error.status === 429) {
+      const retryAfter = this.parseRetryAfterHeader(error);
+      return {
+        code: 'RATE_LIMITED',
+        message: this.formatRetryAfterMessage(retryAfter),
+        retryAfterSeconds: retryAfter
+      };
+    }
+
+    // Handle account locked (423 or 401 with lockedOut flag)
+    if (error.status === 423 || (error.status === 401 && error.error?.lockedOut)) {
+      const retryAfter = error.error?.retryAfterSeconds ?? this.parseRetryAfterHeader(error);
+      return {
+        code: 'ACCOUNT_LOCKED',
+        message: error.error?.message || 'Account temporarily locked due to too many failed attempts.',
+        retryAfterSeconds: retryAfter,
+        lockedOut: true
+      };
+    }
+
+    // Handle standard 401 unauthorized
+    if (error.status === 401) {
+      return {
+        code: 'INVALID_CREDENTIALS',
+        message: error.error?.message || 'Invalid email or password'
+      };
+    }
+
+    // Handle 5xx server errors
+    if (error.status >= 500) {
+      return {
+        code: 'SERVER_ERROR',
+        message: error.error?.message || 'Server error. Please try again later.'
+      };
+    }
+
+    // Fallback to generic message extraction
+    return {
+      code: 'UNKNOWN',
+      message: this.getErrorMessage(error)
+    };
+  }
+
+  /**
+   * Parse Retry-After header from HTTP response
+   * Supports both seconds (integer) and HTTP-date formats
+   */
+  private parseRetryAfterHeader(error: HttpErrorResponse): number {
+    const retryAfter = error.headers?.get('Retry-After');
+    if (!retryAfter) {
+      // Default fallback if header is missing
+      return 60;
+    }
+
+    // Check if it's a number (seconds)
+    const seconds = parseInt(retryAfter, 10);
+    if (!isNaN(seconds)) {
+      return seconds;
+    }
+
+    // Try parsing as HTTP-date
+    try {
+      const date = new Date(retryAfter);
+      const now = new Date();
+      const diffSeconds = Math.max(0, Math.floor((date.getTime() - now.getTime()) / 1000));
+      return diffSeconds;
+    } catch {
+      return 60; // Default fallback
+    }
+  }
+
+  /**
+   * Format retry-after duration into human-readable message
+   */
+  private formatRetryAfterMessage(seconds: number): string {
+    if (seconds >= 60) {
+      const minutes = Math.ceil(seconds / 60);
+      return `Too many attempts. Please try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+    }
+    return `Too many attempts. Please try again in ${seconds} second${seconds > 1 ? 's' : ''}.`;
+  }
 
   getErrorMessage(error: HttpErrorResponse | any): string {
     console.error('HTTP Error:', error);
@@ -53,6 +170,8 @@ export class HttpErrorService {
         return error.error?.message || 'Access denied';
       case 404:
         return error.error?.message || 'Resource not found';
+      case 429:
+        return 'Too many requests. Please try again later.';
       case 500:
         return error.error?.message || 'Server error. Please try again later.';
       case 503:

@@ -1,24 +1,31 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { takeUntil, switchMap, finalize } from 'rxjs/operators';
+import { takeUntil, switchMap, finalize, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ProductsService } from '../../../services/products.service';
-import { ProductDetail, ProductCategory, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus } from '../../../models/product.models';
+import { ProductDetail, ProductCategory, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus, DeactivateProductWarnings, DeactivateProductBlocked } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { ValidationService, ValidationResult } from '../../../services/validation.service';
+import { CustomValidators, ValidationConstants } from '../../../shared/validators/custom-validators';
+import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
+import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
 
 @Component({
   selector: 'app-product-detail',
   templateUrl: './product-detail.component.html',
   styleUrls: ['./product-detail.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent]
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, ValidationHintComponent, FormErrorsSummaryComponent]
 })
 export class ProductDetailComponent implements OnInit, OnDestroy {
   // Expose Math and RedemptionStatus for template usage
   public Math = Math;
   public RedemptionStatus = RedemptionStatus;
+  
+  // Expose ValidationConstants for template
+  public ValidationConstants = ValidationConstants;
   
   product: ProductDetail | null = null;
   categories: ProductCategory[] = [];
@@ -38,8 +45,34 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     return this.redemptions.length;
   }
   
-  // Edit form data
-  editForm: UpdateProductRequest = {};
+  // Reactive edit form
+  editForm!: FormGroup;
+  originalName: string = '';
+  
+  // Product name uniqueness check
+  checkingProductName = false;
+  productNameResult: ValidationResult | null = null;
+  
+  // Stock adjustment form
+  stockForm!: FormGroup;
+  
+  // Stock validation error message
+  stockValidationError: string | null = null;
+  
+  // Deactivation dialog state
+  showDeactivateDialog = false;
+  deactivateWarningData: DeactivateProductWarnings | null = null;
+  deactivationBlockedMessage: string | null = null;
+  pendingDeactivationProductId: string | null = null;
+  editFormFieldLabels: { [key: string]: string } = {
+    name: 'Product Name',
+    description: 'Description',
+    categoryId: 'Category',
+    pointsCost: 'Points Cost',
+    imageUrl: 'Image URL'
+  };
+  
+  // Legacy plain object for stock (keep for backward compat)
   stockAdjustment: UpdateStockRequest = {
     amount: 0,
     operation: 'adjust',
@@ -52,12 +85,22 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private productsService: ProductsService,
+    private validationService: ValidationService,
+    private fb: FormBuilder,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    this.initForms();
+  }
 
   ngOnInit(): void {
+    // Initialize forms
+    this.initForms();
+    
     // Load categories for dropdown
     this.loadCategories();
+    
+    // Setup product name uniqueness check
+    this.setupProductNameCheck();
     
     // Subscribe to route params changes to reload on navigation
     this.route.paramMap.pipe(
@@ -78,6 +121,89 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       }
     });
+  }
+
+  private initForms(): void {
+    // Initialize reactive edit form with validators matching create form
+    this.editForm = this.fb.group({
+      name: ['', [
+        Validators.minLength(ValidationConstants.NAME_MIN_LENGTH),
+        Validators.maxLength(ValidationConstants.NAME_MAX_LENGTH),
+        CustomValidators.productNameFormat()
+      ]],
+      description: ['', [
+        Validators.minLength(ValidationConstants.DESCRIPTION_MIN_LENGTH),
+        Validators.maxLength(ValidationConstants.DESCRIPTION_MAX_LENGTH),
+        CustomValidators.wordCount(ValidationConstants.DESCRIPTION_MIN_WORDS, ValidationConstants.DESCRIPTION_MAX_WORDS)
+      ]],
+      categoryId: [''],
+      pointsCost: [null, [
+        Validators.min(ValidationConstants.POINTS_COST_MIN),
+        Validators.max(ValidationConstants.POINTS_COST_MAX),
+        CustomValidators.integer()
+      ]],
+      imageUrl: ['', [
+        Validators.maxLength(ValidationConstants.IMAGE_URL_MAX_LENGTH),
+        CustomValidators.httpsUrl()
+      ]]
+    });
+    
+    // Initialize stock adjustment form
+    this.stockForm = this.fb.group({
+      amount: [0, [
+        Validators.required,
+        CustomValidators.integer()
+      ]],
+      reason: ['']
+    });
+  }
+  
+  private setupProductNameCheck(): void {
+    this.editForm.get('name')?.valueChanges
+      .pipe(
+        takeUntil(this.destroy$),
+        debounceTime(ValidationConstants.DEBOUNCE_TIME_MS),
+        distinctUntilChanged()
+      )
+      .subscribe(name => {
+        // Only check if name is valid and changed from original
+        if (name && 
+            this.editForm.get('name')?.valid && 
+            name.trim() !== this.originalName.trim()) {
+          this.checkProductName(name);
+        } else {
+          this.productNameResult = null;
+          this.checkingProductName = false;
+        }
+      });
+  }
+  
+  private checkProductName(name: string): void {
+    this.checkingProductName = true;
+    this.productNameResult = null;
+    this.cdr.markForCheck();
+
+    // Exclude current product from uniqueness check
+    this.validationService.checkProductNameAvailability(name, this.product?.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: result => {
+          this.productNameResult = result;
+          this.checkingProductName = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.checkingProductName = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+  
+  checkProductNameNow(): void {
+    const name = this.editForm.get('name')?.value;
+    if (name && name.trim() !== this.originalName.trim()) {
+      this.checkProductName(name);
+    }
   }
 
   ngOnDestroy(): void {
@@ -140,14 +266,108 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   initEditForm(): void {
     if (this.product) {
-      this.editForm = {
+      // Store original name for uniqueness comparison
+      this.originalName = this.product.name || '';
+      
+      // Patch reactive form with product data
+      this.editForm.patchValue({
         name: this.product.name,
         description: this.product.description,
         categoryId: this.product.categoryId,
         pointsCost: this.product.pointsCost,
         imageUrl: this.product.imageUrl
-      };
+      });
+      
+      // Mark form as pristine after initial load
+      this.editForm.markAsPristine();
+      this.editForm.markAsUntouched();
+      
+      // Reset uniqueness check
+      this.productNameResult = null;
+      this.checkingProductName = false;
     }
+  }
+  
+  // Helper methods for form validation
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.editForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+
+  isFieldValid(fieldName: string): boolean {
+    const field = this.editForm.get(fieldName);
+    return !!(field && field.valid && field.dirty);
+  }
+  
+  // Get trimmed character count for display
+  getTrimmedLength(fieldName: string): number {
+    const value = this.editForm.get(fieldName)?.value || '';
+    return value.trim().length;
+  }
+  
+  // Get word count for description
+  getWordCount(fieldName: string): number {
+    const value = this.editForm.get(fieldName)?.value || '';
+    return value.split(/\s+/).filter((w: string) => w.length > 0).length;
+  }
+  
+  // Check if form has valid changes
+  get hasValidChanges(): boolean {
+    if (!this.product) return false;
+    
+    const formValue = this.editForm.value;
+    const hasChanges = 
+      (formValue.name?.trim() !== this.product.name) ||
+      (formValue.description?.trim() !== this.product.description) ||
+      (formValue.categoryId !== this.product.categoryId) ||
+      (formValue.pointsCost !== this.product.pointsCost) ||
+      ((formValue.imageUrl?.trim() || '') !== (this.product.imageUrl || ''));
+    
+    return hasChanges && this.editForm.valid;
+  }
+  
+  // Check if save button should be enabled
+  get canSave(): boolean {
+    if (!this.hasValidChanges) return false;
+    if (this.checkingProductName) return false;
+    if (this.productNameResult && !this.productNameResult.isValid) return false;
+    return true;
+  }
+  
+  // Check if stock adjustment can be submitted and validate limits
+  get canAdjustStock(): boolean {
+    if (this.stockAdjustment.amount === 0) {
+      this.stockValidationError = null;
+      return false;
+    }
+    
+    if (!this.product) {
+      this.stockValidationError = null;
+      return false;
+    }
+    
+    const newStock = this.product.stockLevel + this.stockAdjustment.amount;
+    
+    // Check if new stock would be negative
+    if (newStock < 0) {
+      this.stockValidationError = `Cannot reduce stock below 0. Maximum reduction is ${this.product.stockLevel}.`;
+      return false;
+    }
+    
+    // Check if new stock exceeds max limit
+    if (newStock > ValidationConstants.STOCK_MAX) {
+      this.stockValidationError = `Stock cannot exceed ${ValidationConstants.STOCK_MAX.toLocaleString()}. Maximum increase is ${(ValidationConstants.STOCK_MAX - this.product.stockLevel).toLocaleString()}.`;
+      return false;
+    }
+    
+    // Check if amount is a valid integer
+    if (!Number.isInteger(this.stockAdjustment.amount)) {
+      this.stockValidationError = 'Stock adjustment must be a whole number.';
+      return false;
+    }
+    
+    this.stockValidationError = null;
+    return true;
   }
 
   switchTab(tab: 'info' | 'stock' | 'redemptions'): void {
@@ -246,9 +466,39 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   }
 
   saveChanges(): void {
-    if (this.product) {
+    if (this.product && this.canSave) {
+      // Mark all fields as touched to show any validation errors
+      Object.keys(this.editForm.controls).forEach(key => {
+        this.editForm.get(key)?.markAsTouched();
+      });
+      
+      if (!this.editForm.valid) {
+        return;
+      }
+      
       this.isLoading = true;
-      this.productsService.updateProduct(this.product.id, this.editForm)
+      
+      // Build request with only changed, valid fields (trimmed values)
+      const formValue = this.editForm.value;
+      const request: UpdateProductRequest = {};
+      
+      if (formValue.name?.trim() !== this.product.name) {
+        request.name = formValue.name.trim();
+      }
+      if (formValue.description?.trim() !== this.product.description) {
+        request.description = formValue.description.trim();
+      }
+      if (formValue.categoryId !== this.product.categoryId) {
+        request.categoryId = formValue.categoryId;
+      }
+      if (formValue.pointsCost !== this.product.pointsCost) {
+        request.pointsCost = Math.floor(Number(formValue.pointsCost));
+      }
+      if ((formValue.imageUrl?.trim() || '') !== (this.product.imageUrl || '')) {
+        request.imageUrl = formValue.imageUrl?.trim() || undefined;
+      }
+      
+      this.productsService.updateProduct(this.product.id, request)
         .pipe(
           takeUntil(this.destroy$),
           finalize(() => {
@@ -265,7 +515,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             console.error('Error updating product:', error);
-            alert('Failed to update product');
+            alert('Failed to update product: ' + (error?.error?.message || 'Unknown error'));
           }
         });
     }
@@ -299,32 +549,105 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   }
 
   deactivateProduct(): void {
-    if (this.product && confirm(`Are you sure you want to deactivate "${this.product.name}"?`)) {
-      this.isLoading = true;
-      this.productsService.deactivateProduct(this.product.id)
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => {
-            setTimeout(() => {
-              this.isLoading = false;
-              this.cdr.detectChanges();
-            }, 0);
-          })
-        )
-        .subscribe({
-          next: () => {
-            // Update the product status locally to reflect the change
-            if (this.product) {
-              this.product.isActive = false;
-            }
-            alert('Product deactivated successfully');
-          },
-          error: (error) => {
-            console.error('Error deactivating product:', error);
+    if (!this.product) return;
+
+    // First attempt without force
+    this.isLoading = true;
+    this.pendingDeactivationProductId = this.product.id;
+    
+    this.productsService.deactivateProduct(this.product.id, false)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          setTimeout(() => {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          }, 0);
+        })
+      )
+      .subscribe({
+        next: () => {
+          // Success - product deactivated
+          if (this.product) {
+            this.product.isActive = false;
+          }
+          alert('Product deactivated successfully');
+          this.pendingDeactivationProductId = null;
+        },
+        error: (error) => {
+          console.error('Error deactivating product:', error);
+          
+          // Check for warnings (409 Conflict)
+          if (error?.status === 409 && error?.error?.code === 'DEACTIVATE_WARNINGS') {
+            this.deactivateWarningData = error.error;
+            this.showDeactivateDialog = true;
+            this.deactivationBlockedMessage = null;
+          }
+          // Check for hard blocks (400 Bad Request)
+          else if (error?.status === 400 && error?.error?.code === 'DEACTIVATE_BLOCKED') {
+            const blocked: DeactivateProductBlocked = error.error;
+            const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
+            this.deactivationBlockedMessage = message;
+            this.showDeactivateDialog = false;
+            alert(message);
+            this.pendingDeactivationProductId = null;
+          }
+          // Other error
+          else {
+            alert('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+            this.pendingDeactivationProductId = null;
+          }
+        }
+      });
+  }
+
+  onDeactivateConfirmed(): void {
+    if (!this.pendingDeactivationProductId) return;
+
+    this.showDeactivateDialog = false;
+    this.isLoading = true;
+
+    // Retry with force=true
+    this.productsService.deactivateProduct(this.pendingDeactivationProductId, true)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          setTimeout(() => {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          }, 0);
+        })
+      )
+      .subscribe({
+        next: () => {
+          if (this.product) {
+            this.product.isActive = false;
+          }
+          alert('Product deactivated successfully');
+          this.pendingDeactivationProductId = null;
+          this.deactivateWarningData = null;
+        },
+        error: (error) => {
+          console.error('Error deactivating product with force:', error);
+          
+          // Check for hard blocks (even with force=true)
+          if (error?.status === 400 && error?.error?.code === 'DEACTIVATE_BLOCKED') {
+            const blocked: DeactivateProductBlocked = error.error;
+            const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
+            alert(message);
+          } else {
             alert('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
           }
-        });
-    }
+          this.pendingDeactivationProductId = null;
+          this.deactivateWarningData = null;
+        }
+      });
+  }
+
+  onDeactivateCancelled(): void {
+    this.showDeactivateDialog = false;
+    this.pendingDeactivationProductId = null;
+    this.deactivateWarningData = null;
   }
 
   activateProduct(): void {

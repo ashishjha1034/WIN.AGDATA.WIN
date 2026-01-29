@@ -5,6 +5,9 @@ import { UserDetailsResponse, UpdateUserRequest } from '../../../../models/user.
 import { AdminUsersService } from '../../../../services/admin-users.service';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
+import { CustomValidators, ValidationConstants } from '../../../../shared/validators/custom-validators';
+import { ValidationHintComponent } from '../../../../shared/components/validation-hint.component';
+import { FormErrorsSummaryComponent } from '../../../../shared/components/form-errors-summary.component';
 
 export interface DrawerAction {
   type: 'assign-roles' | 'deactivate' | 'close' | 'edit' | 'user-updated';
@@ -14,7 +17,7 @@ export interface DrawerAction {
 @Component({
   selector: 'app-user-detail-drawer',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, ValidationHintComponent, FormErrorsSummaryComponent],
   template: `
     <div class="drawer-overlay" *ngIf="isOpen" (click)="closeDrawer()"></div>
     <div class="drawer" [class.open]="isOpen">
@@ -191,39 +194,98 @@ export interface DrawerAction {
         <div class="drawer-content">
           <form [formGroup]="editForm" (ngSubmit)="saveEdit()" class="edit-form">
             <div class="form-group">
-              <label for="firstName">First Name *</label>
-              <input type="text" id="firstName" formControlName="firstName" class="form-input" />
-              <div *ngIf="editForm.get('firstName')?.invalid && editForm.get('firstName')?.touched" class="error-text">
-                First name is required
+              <div class="label-row">
+                <label for="firstName">First Name *</label>
+                <span class="char-counter" 
+                      [class.warning]="getCharCount('firstName') > 0 && getCharCount('firstName') < minNameLength"
+                      [class.valid]="getCharCount('firstName') >= minNameLength"
+                      aria-live="polite">
+                  {{ getCharCount('firstName') }} / {{ maxNameLength }}
+                </span>
               </div>
+              <input 
+                type="text" 
+                id="firstName" 
+                formControlName="firstName" 
+                class="form-input"
+                [class.error]="editForm.get('firstName')?.invalid && editForm.get('firstName')?.touched"
+                [class.valid]="editForm.get('firstName')?.valid && editForm.get('firstName')?.dirty"
+                [attr.maxlength]="maxNameLength"
+                aria-describedby="edit-firstName-hint"
+              />
+              <app-validation-hint
+                id="edit-firstName-hint"
+                [control]="editForm.get('firstName')!"
+                fieldName="First name"
+                fieldType="name"
+                [minLength]="minNameLength"
+                [maxLength]="maxNameLength">
+              </app-validation-hint>
             </div>
             <div class="form-group">
-              <label for="lastName">Last Name *</label>
-              <input type="text" id="lastName" formControlName="lastName" class="form-input" />
-              <div *ngIf="editForm.get('lastName')?.invalid && editForm.get('lastName')?.touched" class="error-text">
-                Last name is required
+              <div class="label-row">
+                <label for="lastName">Last Name *</label>
+                <span class="char-counter" 
+                      [class.warning]="getCharCount('lastName') > 0 && getCharCount('lastName') < minNameLength"
+                      [class.valid]="getCharCount('lastName') >= minNameLength"
+                      aria-live="polite">
+                  {{ getCharCount('lastName') }} / {{ maxNameLength }}
+                </span>
               </div>
+              <input 
+                type="text" 
+                id="lastName" 
+                formControlName="lastName" 
+                class="form-input"
+                [class.error]="editForm.get('lastName')?.invalid && editForm.get('lastName')?.touched"
+                [class.valid]="editForm.get('lastName')?.valid && editForm.get('lastName')?.dirty"
+                [attr.maxlength]="maxNameLength"
+                aria-describedby="edit-lastName-hint"
+              />
+              <app-validation-hint
+                id="edit-lastName-hint"
+                [control]="editForm.get('lastName')!"
+                fieldName="Last name"
+                fieldType="name"
+                [minLength]="minNameLength"
+                [maxLength]="maxNameLength">
+              </app-validation-hint>
             </div>
             <div class="form-group">
-              <label for="email">Email *</label>
-              <input type="email" id="email" formControlName="email" class="form-input" />
-              <div *ngIf="editForm.get('email')?.invalid && editForm.get('email')?.touched" class="error-text">
-                Valid email is required
-              </div>
+              <label for="email">Email</label>
+              <input 
+                type="email" 
+                id="email" 
+                formControlName="email" 
+                class="form-input disabled-field"
+                readonly
+              />
+              <span class="readonly-hint">Email cannot be changed. Contact support if needed.</span>
             </div>
             <div class="form-group">
-              <label for="employeeId">Employee ID *</label>
-              <input type="text" id="employeeId" formControlName="employeeId" class="form-input" />
-              <div *ngIf="editForm.get('employeeId')?.invalid && editForm.get('employeeId')?.touched" class="error-text">
-                Employee ID is required
-              </div>
+              <label for="employeeId">Employee ID</label>
+              <input 
+                type="text" 
+                id="employeeId" 
+                formControlName="employeeId" 
+                class="form-input disabled-field"
+                readonly
+              />
+              <span class="readonly-hint">Employee ID cannot be changed. Contact support if needed.</span>
             </div>
 
-            <div *ngIf="editError" class="edit-error">{{ editError }}</div>
+            <!-- Form Errors Summary -->
+            <app-form-errors-summary
+              [form]="editForm"
+              [fieldLabels]="editFormFieldLabels"
+              title="Please fix the following errors:">
+            </app-form-errors-summary>
+
+            <div *ngIf="editError" class="edit-error" role="alert">{{ editError }}</div>
 
             <div class="form-actions">
               <button type="button" class="btn-secondary" (click)="cancelEdit()" [disabled]="isSaving">Cancel</button>
-              <button type="submit" class="btn-primary" [disabled]="editForm.invalid || isSaving">
+              <button type="submit" class="btn-primary" [disabled]="!canSaveEdit">
                 {{ isSaving ? 'Saving...' : 'Save Changes' }}
               </button>
             </div>
@@ -782,10 +844,52 @@ export interface DrawerAction {
       box-shadow: 0 0 0 2px rgba(75, 85, 99, 0.1);
     }
 
-    .form-input:disabled {
+    .form-input:disabled,
+    .form-input.disabled-field {
       background: #f3f4f6;
       color: #6b7280;
       cursor: not-allowed;
+    }
+
+    .form-input.error {
+      border-color: #dc2626;
+    }
+
+    .form-input.valid {
+      border-color: #16a34a;
+    }
+
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .label-row label {
+      margin-bottom: 0;
+    }
+
+    .char-counter {
+      font-size: 11px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .char-counter.warning {
+      color: #f59e0b;
+    }
+
+    .char-counter.valid {
+      color: #16a34a;
+    }
+
+    .readonly-hint {
+      display: block;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 4px;
+      font-style: italic;
     }
 
     .error-text {
@@ -851,6 +955,18 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
   editError: string | null = null;
   editForm: FormGroup;
 
+  // Name validation constants
+  readonly minNameLength = ValidationConstants.NAME_MIN_LENGTH;
+  readonly maxNameLength = ValidationConstants.NAME_MAX_LENGTH;
+
+  // Form field labels for error summary
+  readonly editFormFieldLabels: Record<string, string> = {
+    firstName: 'First Name',
+    lastName: 'Last Name',
+    email: 'Email',
+    employeeId: 'Employee ID'
+  };
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -859,11 +975,19 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
   ) {
+    // Initialize form with proper validators
+    // Note: email and employeeId are read-only in edit mode
     this.editForm = this.fb.group({
-      firstName: ['', [Validators.required, Validators.minLength(1)]],
-      lastName: ['', [Validators.required, Validators.minLength(1)]],
-      email: ['', [Validators.required, Validators.email]],
-      employeeId: ['', [Validators.required, Validators.minLength(1)]]
+      firstName: ['', [
+        Validators.required,
+        CustomValidators.liveNameValidation()
+      ]],
+      lastName: ['', [
+        Validators.required,
+        CustomValidators.liveNameValidation()
+      ]],
+      email: [{ value: '', disabled: true }],
+      employeeId: [{ value: '', disabled: true }]
     });
   }
 
@@ -986,9 +1110,29 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     this.actionTriggered.emit({ type });
   }
 
+  /** Get character count for a form field */
+  getCharCount(fieldName: string): number {
+    const value = this.editForm.get(fieldName)?.value;
+    return value ? value.length : 0;
+  }
+
+  /** Check if edit form can be saved */
+  get canSaveEdit(): boolean {
+    // Only firstName and lastName need to be valid (email/employeeId are disabled)
+    const firstName = this.editForm.get('firstName');
+    const lastName = this.editForm.get('lastName');
+    return !this.isSaving && 
+           firstName?.valid === true && 
+           lastName?.valid === true;
+  }
+
   /** Enter edit mode and populate form */
   enterEditMode(): void {
     if (!this.userDetails?.user) return;
+    
+    // Enable all controls briefly to set values, then disable email/employeeId
+    this.editForm.get('email')?.enable();
+    this.editForm.get('employeeId')?.enable();
     
     this.editForm.patchValue({
       firstName: this.userDetails.user.firstName || '',
@@ -996,6 +1140,11 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
       email: this.userDetails.user.email || '',
       employeeId: this.userDetails.user.employeeId || ''
     });
+    
+    // Disable email and employeeId - these cannot be changed
+    this.editForm.get('email')?.disable();
+    this.editForm.get('employeeId')?.disable();
+    
     this.isEditMode = true;
     this.editError = null;
     this.cdr.detectChanges();
@@ -1009,20 +1158,19 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  /** Save edit changes */
+  /** Save edit changes - only firstName and lastName are editable */
   saveEdit(): void {
-    if (this.editForm.invalid || !this.userId) return;
+    if (!this.canSaveEdit || !this.userId) return;
 
     this.isSaving = true;
     this.editError = null;
     this.cdr.detectChanges();
 
-    // Send all fields to backend (admin can edit email and employeeId)
+    // Only send editable fields (firstName and lastName)
+    // Email and EmployeeId are intentionally NOT sent - they cannot be changed
     const request: UpdateUserRequest = {
-      firstName: this.editForm.value.firstName?.trim(),
-      lastName: this.editForm.value.lastName?.trim(),
-      email: this.editForm.value.email?.trim(),
-      employeeId: this.editForm.value.employeeId?.trim() || null
+      firstName: this.editForm.get('firstName')?.value?.trim(),
+      lastName: this.editForm.get('lastName')?.value?.trim()
     };
 
     this.adminUsersService.updateUser(this.userId, request).pipe(

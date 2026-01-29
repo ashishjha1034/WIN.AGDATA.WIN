@@ -56,4 +56,60 @@ public class RedemptionRepository : Repository<Redemption>, IRedemptionRepositor
 
     public async Task SaveChangesAsync() =>
         await _context.SaveChangesAsync();
+
+    /// <summary>
+    /// Gets the count of pending and approved redemptions for a specific product.
+    /// Used to check hard blockers for product deactivation.
+    /// </summary>
+    public async Task<PendingApprovedCounts> GetPendingAndApprovedCountsForProductAsync(Guid productId)
+    {
+        var counts = await _context.Redemptions
+            .Where(r => r.ProductId == productId && 
+                       (r.Status == RedemptionStatus.Pending || r.Status == RedemptionStatus.Approved))
+            .GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var pendingCount = counts.FirstOrDefault(c => c.Status == RedemptionStatus.Pending)?.Count ?? 0;
+        var approvedCount = counts.FirstOrDefault(c => c.Status == RedemptionStatus.Approved)?.Count ?? 0;
+
+        return new PendingApprovedCounts(pendingCount, approvedCount);
+    }
+
+    /// <summary>
+    /// Gets recent redemption statistics for a product within the specified number of days.
+    /// Used to display soft warnings during product deactivation.
+    /// </summary>
+    public async Task<RecentRedemptionStats> GetRecentRedemptionStatsForProductAsync(Guid productId, int days)
+    {
+        var cutoffDate = DateTime.UtcNow.AddDays(-days);
+
+        var stats = await _context.Redemptions
+            .Where(r => r.ProductId == productId && r.CreatedAt >= cutoffDate)
+            .GroupBy(r => 1) // Group all into one
+            .Select(g => new
+            {
+                TotalRedemptions = g.Count(),
+                UniqueUsers = g.Select(r => r.UserId).Distinct().Count(),
+                LastRedemptionDate = g.Max(r => (DateTime?)r.CreatedAt)
+            })
+            .FirstOrDefaultAsync();
+
+        if (stats == null)
+        {
+            // No redemptions in the time period - check for last redemption date ever
+            var lastRedemption = await _context.Redemptions
+                .Where(r => r.ProductId == productId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => (DateTime?)r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            return new RecentRedemptionStats(0, 0, lastRedemption);
+        }
+
+        return new RecentRedemptionStats(
+            stats.TotalRedemptions,
+            stats.UniqueUsers,
+            stats.LastRedemptionDate);
+    }
 }

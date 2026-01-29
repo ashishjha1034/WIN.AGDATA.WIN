@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Mail;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
@@ -8,6 +9,7 @@ namespace WIN.AGDATA.WIN.Infrastructure.Services;
 public class SmtpEmailService : IEmailService
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<SmtpEmailService> _logger;
     private readonly string? _smtpHost;
     private readonly int _smtpPort;
     private readonly bool _useSsl;
@@ -15,16 +17,19 @@ public class SmtpEmailService : IEmailService
     private readonly string? _smtpPassword;
     private readonly string? _fromEmail;
     private readonly string? _fromName;
+    private readonly bool _failSilently;
 
-    public SmtpEmailService(IConfiguration configuration)
+    public SmtpEmailService(IConfiguration configuration, ILogger<SmtpEmailService> logger)
     {
         _configuration = configuration;
+        _logger = logger;
         _smtpHost = _configuration["Smtp:Host"];
         _useSsl = bool.TryParse(_configuration["Smtp:UseSsl"], out var ssl) && ssl;
         _fromEmail = _configuration["Smtp:FromEmail"];
         _fromName = _configuration["Smtp:FromName"] ?? "WIN.AGDATA Support";
         _smtpUsername = _configuration["Smtp:Username"];
         _smtpPassword = _configuration["Smtp:Password"];
+        _failSilently = bool.TryParse(_configuration["Smtp:FailSilently"], out var fs) ? fs : true; // default true to avoid enumeration issues
 
         if (!int.TryParse(_configuration["Smtp:Port"], out var port))
             _smtpPort = _useSsl ? 587 : 25; // Default to TLS port or standard SMTP
@@ -40,9 +45,8 @@ public class SmtpEmailService : IEmailService
     {
         if (string.IsNullOrWhiteSpace(_smtpHost))
         {
-            // Log warning that SMTP is not configured
-            Console.WriteLine("??  SMTP is not configured. Password reset email not sent.");
-            return true; // Return success to avoid breaking the flow
+            _logger.LogWarning("SMTP is not configured. Password reset email not sent.");
+            return _failSilently ? true : false;
         }
 
         try
@@ -55,9 +59,8 @@ public class SmtpEmailService : IEmailService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Failed to send password reset email: {ex.Message}");
-            // Log the error but don't throw - let the password reset process complete
-            return true;
+            _logger.LogError(ex, "Failed to send password reset email to {ToEmail}", toEmail);
+            return _failSilently ? true : false;
         }
     }
 
@@ -69,8 +72,8 @@ public class SmtpEmailService : IEmailService
     {
         if (string.IsNullOrWhiteSpace(_smtpHost))
         {
-            Console.WriteLine("??  SMTP is not configured. Invitation email not sent.");
-            return true;
+            _logger.LogWarning("SMTP is not configured. Invitation email not sent.");
+            return _failSilently ? true : false;
         }
 
         try
@@ -83,8 +86,8 @@ public class SmtpEmailService : IEmailService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Failed to send invitation email: {ex.Message}");
-            return true;
+            _logger.LogError(ex, "Failed to send invitation email to {ToEmail}", toEmail);
+            return _failSilently ? true : false;
         }
     }
 
@@ -99,12 +102,15 @@ public class SmtpEmailService : IEmailService
         {
             EnableSsl = _useSsl,
             DeliveryMethod = SmtpDeliveryMethod.Network,
-            UseDefaultCredentials = string.IsNullOrWhiteSpace(_smtpUsername)
+            UseDefaultCredentials = false
         };
 
+        // Gmail and most providers require explicit credentials
         if (!string.IsNullOrWhiteSpace(_smtpUsername) && !string.IsNullOrWhiteSpace(_smtpPassword))
         {
-            client.Credentials = new NetworkCredential(_smtpUsername, _smtpPassword);
+            // App passwords from Google are shown with spaces; configuration should store without spaces
+            var pwd = _smtpPassword.Replace(" ", string.Empty);
+            client.Credentials = new NetworkCredential(_smtpUsername, pwd);
         }
 
         using var message = new MailMessage
@@ -118,7 +124,7 @@ public class SmtpEmailService : IEmailService
         message.To.Add(new MailAddress(toEmail, toName));
 
         await client.SendMailAsync(message, cancellationToken);
-        Console.WriteLine($"? Email sent to {toEmail}");
+        _logger.LogInformation("Email sent to {ToEmail}", toEmail);
     }
 
     private string BuildPasswordResetEmailBody(string userName, string resetLink)

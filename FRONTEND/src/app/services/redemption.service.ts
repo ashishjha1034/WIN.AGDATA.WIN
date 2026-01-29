@@ -16,7 +16,7 @@ import {
   providedIn: 'root'
 })
 export class RedemptionService {
-  private apiUrl = `${environment.apiUrl}api/admin/redemptions`;
+  private apiUrl = `${environment.apiUrl}/admin/redemptions`;
 
   constructor(private http: HttpClient) {
     console.log('[RedemptionService] Initialized with apiUrl:', this.apiUrl);

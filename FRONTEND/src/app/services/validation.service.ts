@@ -87,6 +87,27 @@ export class ValidationService {
   }
 
   /**
+   * Check product name availability with debouncing
+   */
+  checkProductNameAvailability(name: string, excludeProductId?: string): Observable<ValidationResult> {
+    if (!name || name.trim().length === 0) {
+      return of({ isValid: false, message: 'Product name is required' });
+    }
+
+    let params = new HttpParams().set('name', name.trim());
+    if (excludeProductId) {
+      params = params.set('excludeProductId', excludeProductId);
+    }
+
+    return this.http.get<ValidationResult>(`${this.apiUrl}/validation/check-product-name`, { params }).pipe(
+      catchError(error => {
+        console.error('Product name validation error:', error);
+        return of({ isValid: true, message: '' }); // Fail open - let backend validate
+      })
+    );
+  }
+
+  /**
    * Creates a debounced uniqueness checker that can be used with forms
    * Returns an observable that emits checking state and results
    */

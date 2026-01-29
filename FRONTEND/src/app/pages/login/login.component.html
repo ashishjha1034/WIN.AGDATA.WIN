@@ -9,9 +9,31 @@
     <div class="login-box">
       <h1>Sign in</h1>
 
-      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
-        <!-- Error Message -->
-        <div *ngIf="error" class="error-message" role="alert">
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" [attr.aria-busy]="loading">
+        <!-- Rate Limit Warning -->
+        <div *ngIf="isRateLimited && !isLockedOut" class="warning-message rate-limit-warning" role="alert" aria-live="assertive">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+          </svg>
+          <div class="warning-content">
+            <strong>Too many attempts</strong>
+            <span>Please wait <span class="countdown">{{ countdownDisplay }}</span> before trying again.</span>
+          </div>
+        </div>
+
+        <!-- Account Locked Warning -->
+        <div *ngIf="isLockedOut" class="warning-message lockout-warning" role="alert" aria-live="assertive">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+          </svg>
+          <div class="warning-content">
+            <strong>Account temporarily locked</strong>
+            <span>Too many failed attempts. Try again in <span class="countdown">{{ countdownDisplay }}</span>.</span>
+          </div>
+        </div>
+
+        <!-- General Error Message -->
+        <div *ngIf="error && !isRateLimited && !isLockedOut" class="error-message" role="alert" aria-live="assertive">
           <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
           </svg>
@@ -34,10 +56,11 @@
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
             </svg>
           </div>
-          <div *ngIf="emailControl?.invalid && emailControl?.touched" class="error-text">
+          <div *ngIf="emailControl?.invalid && emailControl?.touched" class="error-text" role="alert" aria-live="polite">
             <span *ngIf="emailControl?.hasError('required')">Email is required</span>
-            <span *ngIf="emailControl?.hasError('email') && !emailControl?.hasError('corporateEmail')">Please enter a valid email</span>
-            <span *ngIf="emailControl?.hasError('corporateEmail')">Email must end with @agdata.com</span>
+            <span *ngIf="emailControl?.hasError('email') && !emailControl?.hasError('corporateEmail') && !emailControl?.hasError('corporateEmailLocalPart')">Please enter a valid email</span>
+            <span *ngIf="emailControl?.hasError('corporateEmail')">Email must end with &#64;agdata.com</span>
+            <span *ngIf="emailControl?.hasError('corporateEmailLocalPart')">Use your corporate email. At least 5 characters before &#64;agdata.com.</span>
           </div>
         </div>
 
@@ -70,9 +93,9 @@
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
             </svg>
           </div>
-          <div *ngIf="passwordControl?.invalid && passwordControl?.touched" class="error-text">
+          <div *ngIf="passwordControl?.invalid && passwordControl?.touched" class="error-text" aria-live="polite">
             <span *ngIf="passwordControl?.hasError('required')">Password is required</span>
-            <span *ngIf="passwordControl?.hasError('minlength')">Password must be at least 6 characters</span>
+            <span *ngIf="passwordControl?.hasError('minlength')">Password must be at least 12 characters</span>
           </div>
         </div>
 
@@ -93,14 +116,18 @@
         <button
           type="submit"
           class="btn-signin"
-          [disabled]="loginForm.invalid || loading"
-          [attr.aria-disabled]="loginForm.invalid || loading"
-          [title]="loginForm.invalid ? 'Please fill in all fields correctly' : ''"
+          [disabled]="loginForm.invalid || loading || isBlocked"
+          [attr.aria-disabled]="loginForm.invalid || loading || isBlocked"
+          [title]="blockedTooltip"
         >
-          <span *ngIf="!loading">Sign in</span>
+          <span *ngIf="!loading && !isBlocked">Sign in</span>
           <span *ngIf="loading" class="spinner">
             <span class="spinner-dot"></span>
             Signing in...
+          </span>
+          <span *ngIf="isBlocked && !loading">
+            <span *ngIf="isLockedOut">Locked ({{ countdownDisplay }})</span>
+            <span *ngIf="isRateLimited && !isLockedOut">Wait ({{ countdownDisplay }})</span>
           </span>
         </button>
 

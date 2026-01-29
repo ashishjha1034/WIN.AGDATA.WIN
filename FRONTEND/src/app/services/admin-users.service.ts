@@ -174,14 +174,33 @@ export class AdminUsersService {
     if (error.error instanceof ErrorEvent) {
       errorMessage = error.error.message;
     } else {
-      if (error.error?.message) {
+      // Handle FluentValidation errors (object with field names)
+      if (error.error?.errors) {
+        const validationErrors = error.error.errors;
+        const errorMessages: string[] = [];
+        for (const field in validationErrors) {
+          if (Array.isArray(validationErrors[field])) {
+            errorMessages.push(...validationErrors[field]);
+          }
+        }
+        if (errorMessages.length > 0) {
+          errorMessage = errorMessages.join('. ');
+        }
+      } else if (error.error?.message) {
         errorMessage = error.error.message;
+      } else if (error.error?.title) {
+        // ASP.NET Core validation error format
+        errorMessage = error.error.title;
+      } else if (typeof error.error === 'string') {
+        errorMessage = error.error;
       } else if (error.status === 404) {
         errorMessage = 'User not found';
       } else if (error.status === 403) {
         errorMessage = 'Forbidden - Admin access required';
       } else if (error.status === 401) {
         errorMessage = 'Unauthorized - Please login';
+      } else if (error.status === 400) {
+        errorMessage = 'Invalid request - Please check all fields';
       }
     }
 

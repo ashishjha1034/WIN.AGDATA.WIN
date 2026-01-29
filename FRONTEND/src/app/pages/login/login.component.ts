@@ -1,18 +1,20 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { AuthError } from '../../services/http-error.service';
+import { Subject, interval, Subscription } from 'rxjs';
+import { takeUntil, finalize, take } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
-import { CustomValidators } from '../../shared/validators/custom-validators';
+import { RouterModule } from '@angular/router';
+import { CustomValidators, ValidationConstants } from '../../shared/validators/custom-validators';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule]
+  imports: [CommonModule, ReactiveFormsModule, RouterModule]
 })
 export class LoginComponent implements OnInit, OnDestroy {
   loginForm!: FormGroup;
@@ -20,6 +22,13 @@ export class LoginComponent implements OnInit, OnDestroy {
   error: string | null = null;
   returnUrl: string = '';
   showPassword = false;
+  
+  // Rate limiting and lockout state
+  isRateLimited = false;
+  isLockedOut = false;
+  countdownSeconds = 0;
+  countdownDisplay = '';
+  private countdownSubscription?: Subscription;
 
   private destroy$ = new Subject<void>();
 
@@ -27,7 +36,9 @@ export class LoginComponent implements OnInit, OnDestroy {
     private formBuilder: FormBuilder,
     private authService: AuthService,
     private router: Router,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) { }
 
   ngOnInit(): void {
@@ -38,7 +49,7 @@ export class LoginComponent implements OnInit, OnDestroy {
         Validators.email,
         CustomValidators.corporateEmail()
       ]],
-      password: ['', [Validators.required, Validators.minLength(6)]]
+      password: ['', [Validators.required, Validators.minLength(12)]]
     });
 
     // Get return URL from route parameters or default to '/user/dashboard'
@@ -64,16 +75,123 @@ export class LoginComponent implements OnInit, OnDestroy {
     // Subscribe to loading and error states
     this.authService.loading$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(loading => this.loading = loading);
+      .subscribe(loading => {
+        this.loading = loading;
+        this.cdr.detectChanges();
+      });
 
     this.authService.error$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(error => {
-        if (error) {
-          this.error = error;
-          console.error('Auth error:', error);
+      .subscribe((authError: AuthError | null) => {
+        if (authError) {
+          this.ngZone.run(() => {
+            this.error = authError.message;
+            this.handleAuthError(authError);
+            this.cdr.detectChanges();
+          });
+          console.error('Auth error:', authError);
         }
       });
+  }
+
+  /**
+   * Handle structured auth errors for rate limiting and lockout
+   */
+  private handleAuthError(authError: AuthError): void {
+    // Clear any existing countdown
+    this.stopCountdown();
+
+    if (authError.code === 'RATE_LIMITED') {
+      this.isRateLimited = true;
+      this.isLockedOut = false;
+      if (authError.retryAfterSeconds) {
+        this.startCountdown(authError.retryAfterSeconds);
+      }
+    } else if (authError.code === 'ACCOUNT_LOCKED') {
+      this.isLockedOut = true;
+      this.isRateLimited = false;
+      if (authError.retryAfterSeconds) {
+        this.startCountdown(authError.retryAfterSeconds);
+      }
+    } else {
+      this.isRateLimited = false;
+      this.isLockedOut = false;
+    }
+  }
+
+  /**
+   * Start countdown timer for rate limiting or lockout
+   */
+  private startCountdown(seconds: number): void {
+    this.countdownSeconds = seconds;
+    this.updateCountdownDisplay();
+
+    this.countdownSubscription = interval(1000)
+      .pipe(
+        takeUntil(this.destroy$),
+        take(seconds)
+      )
+      .subscribe({
+        next: () => {
+          this.countdownSeconds--;
+          this.updateCountdownDisplay();
+          this.cdr.detectChanges();
+        },
+        complete: () => {
+          this.countdownSeconds = 0;
+          this.isRateLimited = false;
+          this.isLockedOut = false;
+          this.error = null;
+          this.countdownDisplay = '';
+          this.cdr.detectChanges();
+        }
+      });
+  }
+
+  /**
+   * Stop countdown timer
+   */
+  private stopCountdown(): void {
+    if (this.countdownSubscription) {
+      this.countdownSubscription.unsubscribe();
+      this.countdownSubscription = undefined;
+    }
+  }
+
+  /**
+   * Format countdown seconds into human-readable display
+   */
+  private updateCountdownDisplay(): void {
+    if (this.countdownSeconds >= 60) {
+      const minutes = Math.floor(this.countdownSeconds / 60);
+      const secs = this.countdownSeconds % 60;
+      this.countdownDisplay = `${minutes}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      this.countdownDisplay = `${this.countdownSeconds}s`;
+    }
+  }
+
+  /**
+   * Check if form submission is blocked due to rate limiting or lockout
+   */
+  get isBlocked(): boolean {
+    return this.isRateLimited || this.isLockedOut;
+  }
+
+  /**
+   * Get tooltip text for submit button when blocked
+   */
+  get blockedTooltip(): string {
+    if (this.isLockedOut) {
+      return `Account locked. Try again in ${this.countdownDisplay}`;
+    }
+    if (this.isRateLimited) {
+      return `Too many attempts. Try again in ${this.countdownDisplay}`;
+    }
+    if (this.loginForm.invalid) {
+      return 'Please fill in all fields correctly';
+    }
+    return '';
   }
 
   get emailControl() {
@@ -89,17 +207,25 @@ export class LoginComponent implements OnInit, OnDestroy {
   }
 
   onSubmit(): void {
-    if (this.loginForm.invalid) {
+    if (this.loginForm.invalid || this.isBlocked) {
       return;
     }
 
     this.authService.clearError();
+    this.error = null;
     const { email, password } = this.loginForm.value;
 
     console.log('Attempting login with:', email);
 
     this.authService.login({ email, password })
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          // Safety net: ensure loading is false even if service finalize fails
+          this.loading = false;
+          this.cdr.detectChanges();
+        })
+      )
       .subscribe({
         next: (response) => {
           console.log('Login successful. Response:', response);
@@ -126,15 +252,19 @@ export class LoginComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Login failed:', error);
-          // Error is already handled by the service
+          // Error is already handled by the service and subscription above
+          // Set local error as fallback if service didn't provide one
           if (!this.error) {
             this.error = error?.error?.message || error?.error?.title || 'An error occurred during login';
           }
+          this.loading = false;
+          this.cdr.detectChanges();
         }
       });
   }
 
   ngOnDestroy(): void {
+    this.stopCountdown();
     this.destroy$.next();
     this.destroy$.complete();
   }
