@@ -5,6 +5,7 @@ import { AuthService } from '../../services/auth.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
+import { CustomValidators } from '../../shared/validators/custom-validators';
 
 @Component({
   selector: 'app-forgot-password',
@@ -30,7 +31,11 @@ export class ForgotPasswordComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.forgotForm = this.formBuilder.group({
-      email: ['', [Validators.required, Validators.email]]
+      email: ['', [
+        Validators.required, 
+        Validators.email,
+        CustomValidators.corporateEmail()
+      ]]
     });
 
     if (this.authService.isAuthenticated()) {

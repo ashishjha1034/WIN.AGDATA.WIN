@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Users;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Users;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
@@ -14,15 +15,21 @@ public class AuthController : ControllerBase
     private readonly IMediator _mediator;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IUserRepository _userRepository;
+    private readonly IPasswordResetTokenRepository _passwordResetTokenRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
     public AuthController(
         IMediator mediator,
         IJwtTokenService jwtTokenService,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IPasswordResetTokenRepository passwordResetTokenRepository,
+        IUnitOfWork unitOfWork)
     {
         _mediator = mediator;
         _jwtTokenService = jwtTokenService;
         _userRepository = userRepository;
+        _passwordResetTokenRepository = passwordResetTokenRepository;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -64,6 +71,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("LoginRateLimit")]
     public async Task<ActionResult> Login([FromBody] LoginRequest request)
     {
         if (!ModelState.IsValid)
@@ -73,13 +81,36 @@ public class AuthController : ControllerBase
         {
             var user = await _userRepository.GetByEmailAsync(request.Email);
 
+            // Generic error message to prevent user enumeration
+            const string genericError = "Invalid email or password";
+
             if (user == null)
-                return Unauthorized(new { message = "Invalid email or password" });
+                return Unauthorized(new { message = genericError });
+
+            // Check if account is locked out
+            if (user.IsLockedOut())
+            {
+                var remaining = user.GetRemainingLockoutTime();
+                // Return generic message to prevent enumeration
+                return Unauthorized(new { message = genericError });
+            }
 
             var passwordValid = user.VerifyPassword(request.Password);
 
             if (!passwordValid)
-                return Unauthorized(new { message = "Invalid email or password" });
+            {
+                // Record failed attempt and potentially lock account
+                user.RecordFailedLogin();
+                await _userRepository.UpdateAsync(user);
+                await _unitOfWork.SaveChangesAsync();
+                
+                return Unauthorized(new { message = genericError });
+            }
+
+            // Reset failed login count on successful login
+            user.ResetFailedLoginCount();
+            await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             if (!user.IsActive)
                 return Unauthorized(new { message = "User account is inactive" });
@@ -264,6 +295,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("ForgotPasswordRateLimit")]
     public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         if (!ModelState.IsValid)

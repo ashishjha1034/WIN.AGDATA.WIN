@@ -22,7 +22,7 @@ import { UserListItem, UserFilterCriteria, InviteUserRequest } from '../../../mo
 
 import { UserTableComponent, UserTableAction } from './components/user-table.component';
 import { UserDetailDrawerComponent, DrawerAction } from './components/user-detail-drawer.component';
-import { AddUserModalComponent } from './components/add-user-modal.component';
+import { AddUserModalComponent } from './components/add-user-modal-v2.component';
 
 // Sort options type
 type SortField = 'name' | 'email' | 'balance' | 'createdAt';

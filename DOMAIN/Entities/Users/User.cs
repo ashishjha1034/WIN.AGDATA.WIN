@@ -15,6 +15,10 @@ public class User : AuditableEntity<Guid>, IActivatable
     public bool MustChangePassword { get; private set; } = false;
     public DateTime? LastPasswordChangedAt { get; private set; }
 
+    // Lockout fields for security
+    public int FailedLoginCount { get; private set; } = 0;
+    public DateTime? LockoutEndUtc { get; private set; }
+
     public UserPointsAccount PointsAccount { get; private set; } = new();
     public ICollection<UserRoleAssignment> Roles { get; private set; } = new List<UserRoleAssignment>();
 
@@ -121,6 +125,56 @@ public class User : AuditableEntity<Guid>, IActivatable
             throw new InvalidOperationException("Employee ID cannot be empty");
 
         EmployeeId = employeeId;
+    }
+
+    // Lockout methods
+    private const int MaxFailedAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// Checks if the account is currently locked out
+    /// </summary>
+    public bool IsLockedOut()
+    {
+        if (LockoutEndUtc == null) return false;
+        if (DateTime.UtcNow >= LockoutEndUtc)
+        {
+            // Lockout expired, will be reset on next successful login
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Records a failed login attempt and locks account if threshold exceeded
+    /// </summary>
+    public void RecordFailedLogin()
+    {
+        FailedLoginCount++;
+        
+        if (FailedLoginCount >= MaxFailedAttempts)
+        {
+            LockoutEndUtc = DateTime.UtcNow.Add(LockoutDuration);
+        }
+    }
+
+    /// <summary>
+    /// Resets failed login counter on successful login
+    /// </summary>
+    public void ResetFailedLoginCount()
+    {
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+    }
+
+    /// <summary>
+    /// Gets the remaining lockout time, if any
+    /// </summary>
+    public TimeSpan? GetRemainingLockoutTime()
+    {
+        if (LockoutEndUtc == null) return null;
+        var remaining = LockoutEndUtc.Value - DateTime.UtcNow;
+        return remaining > TimeSpan.Zero ? remaining : null;
     }
 
 }

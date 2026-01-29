@@ -6,6 +6,7 @@ public interface IPasswordResetTokenRepository
 {
     Task<PasswordResetToken?> GetByTokenAsync(string token);
     Task<IReadOnlyList<PasswordResetToken>> GetByUserIdAsync(Guid userId);
+    Task<int> CountTokensInLast24HoursAsync(Guid userId);
     void Add(PasswordResetToken token);
     Task UpdateAsync(PasswordResetToken token);
     Task DeleteAsync(PasswordResetToken token);

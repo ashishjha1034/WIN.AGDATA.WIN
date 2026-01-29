@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +21,9 @@ public static class ServiceCollectionExtensions
 
         // ✅ Add AutoMapper for DTO mapping
         services.AddAutoMapper(typeof(ServiceCollectionExtensions).Assembly);
+
+        // ✅ Add FluentValidation validators
+        services.AddValidatorsFromAssembly(typeof(ServiceCollectionExtensions).Assembly);
 
         return services;
     }

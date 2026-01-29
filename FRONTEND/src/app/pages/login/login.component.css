@@ -178,6 +178,26 @@ form {
   font: var(--ag-typo-body-02);
 }
 
+.validation-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.info-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
 .error-icon {
   width: 20px;
   height: 20px;

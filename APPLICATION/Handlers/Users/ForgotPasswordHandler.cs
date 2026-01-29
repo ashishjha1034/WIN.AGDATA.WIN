@@ -35,6 +35,17 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool
 
         if (user != null && user.IsActive)
         {
+            // Check per-user daily cap (max 3 reset emails per 24 hours)
+            const int maxResetEmailsPerDay = 3;
+            var tokensInLast24Hours = await _tokenRepository.CountTokensInLast24HoursAsync(user.Id);
+            
+            if (tokensInLast24Hours >= maxResetEmailsPerDay)
+            {
+                // Rate limit reached - return success without sending email (prevent enumeration)
+                Console.WriteLine($"[ForgotPassword] Daily limit reached for user {user.Id}");
+                return true;
+            }
+
             // Generate secure random token (32 bytes = 256 bits entropy)
             var tokenBytes = new byte[32];
             using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
@@ -62,7 +73,7 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool
                 resetLink,
                 cancellationToken);
 
-            Console.WriteLine($"? Password reset token created for user {user.Id}");
+            Console.WriteLine($"✓ Password reset token created for user {user.Id}");
         }
 
         // Always return success to avoid email enumeration attacks

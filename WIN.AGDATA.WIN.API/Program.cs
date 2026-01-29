@@ -1,10 +1,14 @@
-﻿using Humanizer;
+﻿using FluentValidation;
+using FluentValidation.AspNetCore;
+using Humanizer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Threading.RateLimiting;
 using WIN.AGDATA.WIN.API.Extensions;
 using WIN.AGDATA.WIN.API.Middleware;
 using WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
@@ -18,6 +22,46 @@ var builder = WebApplication.CreateBuilder(args);
 // =======================================================
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// =======================================================
+// FluentValidation - Auto validation with ModelState
+// =======================================================
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddFluentValidationClientsideAdapters();
+
+// =======================================================
+// Rate Limiting - Auth Endpoints Protection
+// =======================================================
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    
+    // Login endpoint: 10 requests per 5 minutes per IP
+    options.AddPolicy("LoginRateLimit", context =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+                SegmentsPerWindow = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+    
+    // Forgot Password endpoint: 5 requests per 10 minutes per IP
+    options.AddPolicy("ForgotPasswordRateLimit", context =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
+                SegmentsPerWindow = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+});
 
 // =======================================================
 // JWT Configuration
@@ -221,6 +265,9 @@ else
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// Rate Limiting (before auth)
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

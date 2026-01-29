@@ -5,6 +5,7 @@ import { AuthService } from '../../services/auth.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
+import { CustomValidators } from '../../shared/validators/custom-validators';
 
 @Component({
   selector: 'app-login',
@@ -30,9 +31,13 @@ export class LoginComponent implements OnInit, OnDestroy {
   ) { }
 
   ngOnInit(): void {
-    // Create the form
+    // Create the form with corporate email validation
     this.loginForm = this.formBuilder.group({
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [
+        Validators.required, 
+        Validators.email,
+        CustomValidators.corporateEmail()
+      ]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
 

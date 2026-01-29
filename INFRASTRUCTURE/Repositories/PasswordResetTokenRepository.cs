@@ -29,6 +29,14 @@ public class PasswordResetTokenRepository : IPasswordResetTokenRepository
             .ToListAsync();
     }
 
+    public async Task<int> CountTokensInLast24HoursAsync(Guid userId)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        return await _context.PasswordResetTokens
+            .Where(p => p.UserId == userId && p.CreatedAt >= cutoff)
+            .CountAsync();
+    }
+
     public void Add(PasswordResetToken token)
     {
         _context.PasswordResetTokens.Add(token);

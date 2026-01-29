@@ -5,13 +5,15 @@ import { AuthService } from '../../services/auth.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
+import { CustomValidators, ValidationConstants, calculatePasswordStrength } from '../../shared/validators/custom-validators';
+import { PasswordStrengthComponent } from '../../shared/components/password-strength.component';
 
 @Component({
   selector: 'app-reset-password',
   templateUrl: './reset-password.component.html',
   styleUrls: ['./reset-password.component.css'],
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule]
+  imports: [CommonModule, ReactiveFormsModule, PasswordStrengthComponent]
 })
 export class ResetPasswordComponent implements OnInit, OnDestroy {
   resetForm!: FormGroup;
@@ -42,11 +44,12 @@ export class ResetPasswordComponent implements OnInit, OnDestroy {
         }
       });
 
+    // Strong password validation - min 12 chars, upper/lower/digit/special, no spaces
     this.resetForm = this.formBuilder.group({
       newPassword: ['', [
         Validators.required,
-        Validators.minLength(8),
-        Validators.pattern(/(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])/)
+        Validators.minLength(ValidationConstants.PASSWORD_MIN_LENGTH),
+        CustomValidators.strongPassword()
       ]],
       confirmPassword: ['', Validators.required]
     }, { validators: this.passwordMatchValidator });

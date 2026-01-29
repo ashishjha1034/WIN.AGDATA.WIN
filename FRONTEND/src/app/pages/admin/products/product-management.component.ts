@@ -20,6 +20,7 @@ import { ProductsService } from '../../../services/products.service';
 import { Product, ProductKPI, ProductFilter, ProductCategory, CreateProductRequest } from '../../../models/product.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { ProductFormModalComponent } from './product-form-modal.component';
 
 // Low stock product interface for chart
 interface LowStockChartProduct {
@@ -34,7 +35,7 @@ interface LowStockChartProduct {
   templateUrl: './product-management.component.html',
   styleUrls: ['./product-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent],
   providers: [
     provideEchartsCore({ echarts })
   ]
@@ -494,6 +495,64 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Handle product created from modal
+   */
+  onProductCreated(request: CreateProductRequest): void {
+    this.isSubmitting = true;
+
+    this.productsService.createProduct(request)
+      .pipe(
+        finalize(() => {
+          this.isSubmitting = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (newProduct) => {
+          console.log('[ProductMgmt] Product created successfully:', newProduct);
+          this.closeAddProductModal();
+          this.loadProducts();
+          this.showSuccess(`Product "${newProduct.name}" created successfully!`);
+        },
+        error: (error) => {
+          console.error('[ProductMgmt] Error creating product:', error);
+          this.errorMessage = `Failed to create product: ${error?.error?.message || error?.message || 'Unknown error'}`;
+          setTimeout(() => this.errorMessage = null, 5000);
+        }
+      });
+  }
+
+  /**
+   * Handle category created from modal
+   */
+  onCategoryCreated(data: { name: string; description?: string }): void {
+    const request = {
+      name: data.name,
+      description: data.description,
+      displayOrder: this.categories.length
+    };
+
+    this.productsService.createCategory(request)
+      .pipe(
+        finalize(() => {
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (newCategory) => {
+          console.log('[ProductMgmt] Category created successfully:', newCategory);
+          this.loadCategories();
+          this.showSuccess(`Category "${newCategory.name}" created successfully!`);
+        },
+        error: (error) => {
+          console.error('[ProductMgmt] Error creating category:', error);
+          this.errorMessage = error?.error?.message || 'Failed to create category';
+          setTimeout(() => this.errorMessage = null, 5000);
+        }
+      });
+  }
+
+  /**
    * Reset new product form
    */
   resetNewProductForm(): void {
@@ -626,14 +685,6 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       this.successMessage = null;
       this.cdr.markForCheck();
     }, 3000);
-  }
-
-  /**
-   * Handle product created
-   */
-  onProductCreated(): void {
-    this.closeAddProductModal();
-    this.loadProducts();
   }
 
   /**
