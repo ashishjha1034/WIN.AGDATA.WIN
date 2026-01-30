@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { EventService } from '../../../services/event.service';
 import { Event, EventStatus } from '../../../models/event.models';
-import { Subject, forkJoin } from 'rxjs';
+import { Subject, forkJoin, interval, Subscription } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -44,6 +44,10 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   isRegistering = false;
   searchQuery = '';
   selectedSort: SortOption = 'dateNewest';
+  
+  // Countdown timer
+  countdownMap: Map<string, string> = new Map();
+  private countdownSubscription: Subscription | null = null;
   
   tabs: Tab[] = [
     { label: 'All', status: 'All', count: 0 },
@@ -119,6 +123,9 @@ export class UserEventsComponent implements OnInit, OnDestroy {
         if (this.filteredEvents.length > 0) {
           this.selectEvent(this.filteredEvents[0]);
         }
+        
+        // Start countdown timer for upcoming/live events
+        this.startCountdownTimer();
         
         this.cdr.detectChanges();
       },
@@ -350,7 +357,13 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   formatDate(dateStr: string): string {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
 
   formatDateTime(dateStr: string): string {
@@ -363,6 +376,109 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       hour: 'numeric',
       minute: '2-digit'
     });
+  }
+
+  // ==================== COUNTDOWN ====================
+
+  /**
+   * Start countdown timer that updates every second
+   */
+  startCountdownTimer(): void {
+    this.stopCountdownTimer();
+    
+    this.countdownSubscription = interval(1000)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.updateCountdowns();
+        this.cdr.detectChanges();
+      });
+    
+    // Initial update
+    this.updateCountdowns();
+  }
+
+  /**
+   * Stop countdown timer
+   */
+  stopCountdownTimer(): void {
+    if (this.countdownSubscription) {
+      this.countdownSubscription.unsubscribe();
+      this.countdownSubscription = null;
+    }
+  }
+
+  /**
+   * Update countdowns for all relevant events
+   */
+  updateCountdowns(): void {
+    const now = new Date().getTime();
+    
+    this.allEvents.forEach(event => {
+      const isRegistered = this.isUserRegistered(event.id);
+      let targetDate: Date | null = null;
+      let label = '';
+      
+      if (event.status === 'Upcoming') {
+        if (!isRegistered && event.registrationEndDateUtc) {
+          // Show countdown to registration close
+          targetDate = new Date(event.registrationEndDateUtc);
+          label = 'Registration closes in';
+        } else if (isRegistered) {
+          // Show countdown to event start
+          targetDate = new Date(event.eventDate);
+          label = 'Event starts in';
+        }
+      } else if (event.status === 'Live' && isRegistered) {
+        // Show that event is live
+        this.countdownMap.set(event.id, '🔴 Event is LIVE');
+        return;
+      }
+      
+      if (targetDate) {
+        const diff = targetDate.getTime() - now;
+        if (diff <= 0) {
+          this.countdownMap.set(event.id, label === 'Registration closes in' ? 'Registration closed' : 'Started');
+        } else {
+          this.countdownMap.set(event.id, `${label}: ${this.formatCountdown(diff)}`);
+        }
+      } else {
+        this.countdownMap.delete(event.id);
+      }
+    });
+  }
+
+  /**
+   * Format countdown time in human-readable format
+   */
+  formatCountdown(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  /**
+   * Get countdown display for an event
+   */
+  getCountdown(eventId: string): string {
+    return this.countdownMap.get(eventId) || '';
+  }
+
+  /**
+   * Check if event has a countdown to display
+   */
+  hasCountdown(eventId: string): boolean {
+    return this.countdownMap.has(eventId);
   }
 
   getStatusBadgeClass(status: EventStatus): string {
@@ -409,6 +525,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopCountdownTimer();
     this.destroy$.next();
     this.destroy$.complete();
   }

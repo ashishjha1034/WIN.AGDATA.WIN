@@ -76,6 +76,11 @@ export interface PoolStatus {
   };
 }
 
+/**
+ * Distribution mode for bulk awards
+ */
+export type DistributionMode = 'Manual' | 'EqualSplit' | 'RankBased';
+
 export interface BulkAwardItem {
   participantId: string;
   points: number;
@@ -84,6 +89,12 @@ export interface BulkAwardItem {
 
 export interface BulkAwardRequest {
   awards: BulkAwardItem[];
+  /** Distribution mode: Manual (default), EqualSplit, or RankBased */
+  mode?: DistributionMode;
+  /** When true, consumes the entire remaining pool */
+  consumeEntirePool?: boolean;
+  /** Points for each rank position (used only in RankBased mode) */
+  rankPoints?: number[];
 }
 
 export interface BulkAwardResponse {

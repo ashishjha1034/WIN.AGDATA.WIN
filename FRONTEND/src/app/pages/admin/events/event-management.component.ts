@@ -582,6 +582,22 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Format UTC datetime string for datetime-local input (YYYY-MM-DDTHH:mm)
+   */
+  formatDatetimeForInput(utcDateStr: string): string {
+    if (!utcDateStr) return '';
+    // Parse UTC date and convert to local timezone
+    const date = new Date(utcDateStr);
+    // Format as YYYY-MM-DDTHH:mm (datetime-local format)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  /**
    * Open Edit Event modal with prefilled data
    */
   openEditEventModal(event: Event): void {
@@ -589,11 +605,11 @@ export class EventManagementComponent implements OnInit, OnDestroy {
     this.newEvent = {
       name: event.name,
       description: event.description || '',
-      eventDate: event.eventDate ? event.eventDate.split('T')[0] : '',
+      eventDate: event.eventDate ? this.formatDatetimeForInput(event.eventDate) : '',
       location: event.location || '',
       maxParticipants: event.maxParticipants,
       totalPointsPool: event.totalPointsPool || 0,
-      registrationEndDateUtc: event.registrationEndDateUtc ? event.registrationEndDateUtc.split('T')[0] : ''
+      registrationEndDateUtc: event.registrationEndDateUtc ? this.formatDatetimeForInput(event.registrationEndDateUtc) : ''
     };
     this.showEditEventModal = true;
     this.showCreateEventModal = false;
@@ -615,11 +631,14 @@ export class EventManagementComponent implements OnInit, OnDestroy {
    * Reset the event form
    */
   resetEventForm(): void {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16); // YYYY-MM-DDTHH:mm format for datetime-local
     this.newEvent = {
       name: '',
       description: '',
-      eventDate: today,
+      eventDate: localDatetime,
       location: '',
       maxParticipants: undefined,
       totalPointsPool: 0,
@@ -629,8 +648,17 @@ export class EventManagementComponent implements OnInit, OnDestroy {
 
   /**
    * Validate event form
+   * 
+   * Validation Rules:
+   * - Name: at least 3 characters
+   * - Description: at least 10 characters  
+   * - Event date: required
+   * - Registration end date: required, must be STRICTLY EARLIER than event start
+   * - Points pool: at least 1
    */
   validateEventForm(): boolean {
+    this.showErrorAlert = false;
+    
     if (!this.newEvent.name || this.newEvent.name.length < 3) {
       this.errorMessage = 'Event name must be at least 3 characters';
       this.showErrorAlert = true;
@@ -657,11 +685,12 @@ export class EventManagementComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    // Validate dates
+    // Validate dates - Registration end must be STRICTLY EARLIER than event start
+    // Same day is allowed as long as registration time < event time
     const eventDate = new Date(this.newEvent.eventDate);
     const regEndDate = new Date(this.newEvent.registrationEndDateUtc);
-    if (regEndDate > eventDate) {
-      this.errorMessage = 'Registration deadline must be before or on event date';
+    if (regEndDate >= eventDate) {
+      this.errorMessage = 'Registration deadline must be strictly earlier than event start time. Same day is allowed if times differ.';
       this.showErrorAlert = true;
       return false;
     }
@@ -681,7 +710,16 @@ export class EventManagementComponent implements OnInit, OnDestroy {
 
     this.isSubmittingEvent = true;
     
-    this.eventService.createEvent(this.newEvent)
+    // Convert datetime-local format to ISO UTC
+    const eventPayload = {
+      ...this.newEvent,
+      eventDate: new Date(this.newEvent.eventDate).toISOString(),
+      registrationEndDateUtc: this.newEvent.registrationEndDateUtc 
+        ? new Date(this.newEvent.registrationEndDateUtc).toISOString()
+        : undefined
+    };
+    
+    this.eventService.createEvent(eventPayload)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (event) => {
@@ -701,7 +739,9 @@ export class EventManagementComponent implements OnInit, OnDestroy {
         error: (error) => {
           console.error('[EventMgmt] Error creating event:', error);
           this.isSubmittingEvent = false;
-          this.errorMessage = 'Failed to create event. Please try again.';
+          
+          // Extract validation error message from ProblemDetails or response
+          this.errorMessage = this.extractErrorMessage(error, 'Failed to create event');
           this.showErrorAlert = true;
           this.cdr.markForCheck();
         }
@@ -720,14 +760,17 @@ export class EventManagementComponent implements OnInit, OnDestroy {
 
     this.isSubmittingEvent = true;
     
+    // Convert datetime-local format to ISO UTC
     const updateRequest: UpdateEventRequest = {
       name: this.newEvent.name,
       description: this.newEvent.description,
-      eventDate: this.newEvent.eventDate,
+      eventDate: new Date(this.newEvent.eventDate).toISOString(),
       location: this.newEvent.location || undefined,
       maxParticipants: this.newEvent.maxParticipants,
       totalPointsPool: this.newEvent.totalPointsPool,
       registrationEndDateUtc: this.newEvent.registrationEndDateUtc
+        ? new Date(this.newEvent.registrationEndDateUtc).toISOString()
+        : undefined
     };
     
     this.eventService.updateEvent(this.editingEventId, updateRequest)
@@ -750,11 +793,56 @@ export class EventManagementComponent implements OnInit, OnDestroy {
         error: (error) => {
           console.error('[EventMgmt] Error updating event:', error);
           this.isSubmittingEvent = false;
-          this.errorMessage = 'Failed to update event. Please try again.';
+          
+          // Extract validation error message from ProblemDetails or response
+          this.errorMessage = this.extractErrorMessage(error, 'Failed to update event');
           this.showErrorAlert = true;
           this.cdr.markForCheck();
         }
       });
+  }
+
+  /**
+   * Extract error message from HTTP error response.
+   * Handles ProblemDetails format, message property, and generic errors.
+   */
+  private extractErrorMessage(error: any, fallbackMessage: string): string {
+    if (!error) return fallbackMessage;
+    
+    const errorBody = error.error;
+    
+    // ProblemDetails format (RFC 7807)
+    if (errorBody?.detail) {
+      return errorBody.detail;
+    }
+    
+    // Standard message property
+    if (errorBody?.message) {
+      return errorBody.message;
+    }
+    
+    // Errors dictionary (validation errors)
+    if (errorBody?.errors) {
+      const errorMessages: string[] = [];
+      for (const key of Object.keys(errorBody.errors)) {
+        const fieldErrors = errorBody.errors[key];
+        if (Array.isArray(fieldErrors)) {
+          errorMessages.push(...fieldErrors);
+        } else if (typeof fieldErrors === 'string') {
+          errorMessages.push(fieldErrors);
+        }
+      }
+      if (errorMessages.length > 0) {
+        return errorMessages.join('. ');
+      }
+    }
+    
+    // Status text from HTTP response
+    if (error.statusText && error.statusText !== 'OK') {
+      return `${fallbackMessage}: ${error.statusText}`;
+    }
+    
+    return fallbackMessage + '. Please try again.';
   }
 
   /**

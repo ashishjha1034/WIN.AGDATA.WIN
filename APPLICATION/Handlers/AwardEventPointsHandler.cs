@@ -87,6 +87,12 @@ public class AwardEventPointsHandler : IRequestHandler<AwardEventPointsCommand>
 
         _transactionRepository.Add(transaction);
 
+        // Auto-complete event when pool is fully exhausted
+        if (@event.RemainingPoints == 0)
+        {
+            @event.CompleteEvent(currentUserId);
+        }
+
         await _unitOfWork.SaveChangesAsync(ct);
     }
 }

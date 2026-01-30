@@ -309,10 +309,10 @@
           <!-- Event Date -->
           <div class="form-group">
             <label class="form-label" for="eventDate">
-              Event Date <span class="required">*</span>
+              Event Date & Time <span class="required">*</span>
             </label>
             <input 
-              type="date" 
+              type="datetime-local" 
               id="eventDate"
               class="form-input"
               [(ngModel)]="newEvent.eventDate"
@@ -327,7 +327,7 @@
               Registration Deadline <span class="required">*</span>
             </label>
             <input 
-              type="date" 
+              type="datetime-local" 
               id="registrationEndDate"
               class="form-input"
               [(ngModel)]="newEvent.registrationEndDateUtc"

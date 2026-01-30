@@ -279,6 +279,108 @@
           </div>
         </div>
       </div>
+
+      <!-- 4. Allocate Entire Prize Pool Section -->
+      <div class="card pool-allocation-card" *ngIf="!isPoolUnlimited() && getRemainingPoints() > 0">
+        <h3 class="card-title"><i class="fa-solid fa-sack-dollar"></i> Allocate Entire Prize Pool</h3>
+        <p class="section-description">
+          Distribute all <strong>{{ getRemainingPoints() | number }}</strong> remaining points to selected participants.
+          This action will exhaust the pool and auto-complete the event.
+        </p>
+
+        <!-- Distribution Mode Toggle -->
+        <div class="mode-toggle">
+          <button 
+            class="mode-btn"
+            [class.active]="poolAllocationMode === 'EqualSplit'"
+            (click)="poolAllocationMode = 'EqualSplit'"
+          >
+            <i class="fa-solid fa-equals"></i> Equal Split
+          </button>
+          <button 
+            class="mode-btn"
+            [class.active]="poolAllocationMode === 'RankBased'"
+            (click)="poolAllocationMode = 'RankBased'"
+          >
+            <i class="fa-solid fa-ranking-star"></i> Rank-Based
+          </button>
+        </div>
+
+        <!-- Rank Points Input (only for RankBased) -->
+        <div class="form-group" *ngIf="poolAllocationMode === 'RankBased'">
+          <label class="input-label">Points per Rank (comma-separated)</label>
+          <input 
+            type="text" 
+            class="form-input"
+            [(ngModel)]="rankPointsInput"
+            placeholder="e.g., 500, 300, 150 (last rank auto-calculated)"
+          />
+          <p class="input-hint">
+            Enter points for Rank 1, 2, 3, etc. The last participant(s) will receive the remaining points automatically.
+          </p>
+        </div>
+
+        <!-- Participant Selection (reuses bulk selection) -->
+        <div class="selection-info">
+          <span *ngIf="getSelectedCount() === 0" class="text-muted">
+            <i class="fa-solid fa-arrow-up"></i> Select participants from the Bulk Points section above
+          </span>
+          <span *ngIf="getSelectedCount() > 0" class="text-success">
+            <i class="fa-solid fa-check-circle"></i> {{ getSelectedCount() }} participants selected
+          </span>
+        </div>
+
+        <!-- Preview -->
+        <div class="allocation-preview" *ngIf="getSelectedCount() > 0 && canSubmitPoolAllocation()">
+          <h4 class="preview-title">Distribution Preview</h4>
+          <div class="preview-table-container">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th *ngIf="poolAllocationMode === 'RankBased'">Rank</th>
+                  <th>Participant</th>
+                  <th>Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let item of getPoolAllocationPreview()">
+                  <td *ngIf="poolAllocationMode === 'RankBased'">
+                    <span class="rank-badge">#{{ item.rank }}</span>
+                  </td>
+                  <td>{{ item.name }}</td>
+                  <td class="points-cell">{{ item.points | number }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td [attr.colspan]="poolAllocationMode === 'RankBased' ? 2 : 1"><strong>Total</strong></td>
+                  <td class="points-cell"><strong>{{ getRemainingPoints() | number }}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Validation errors -->
+        <div class="validation-error" *ngIf="poolAllocationMode === 'RankBased' && parseRankPoints().length > 0">
+          <ng-container *ngIf="getRankPointsSum() > getRemainingPoints()">
+            <i class="fa-solid fa-triangle-exclamation"></i> 
+            Sum of rank points ({{ getRankPointsSum() | number }}) exceeds remaining pool ({{ getRemainingPoints() | number }})
+          </ng-container>
+        </div>
+
+        <div class="pool-allocation-actions">
+          <button 
+            class="btn btn-warning"
+            (click)="submitPoolAllocation()"
+            [disabled]="!canSubmitPoolAllocation() || isAllocatingPool"
+          >
+            <i class="fa-solid fa-bolt" *ngIf="!isAllocatingPool"></i>
+            <i class="fa-solid fa-spinner fa-spin" *ngIf="isAllocatingPool"></i>
+            {{ isAllocatingPool ? 'Allocating...' : 'Allocate Entire Pool' }}
+          </button>
+        </div>
+      </div>
     </ng-container>
 
     <!-- 4. Rank History Section -->

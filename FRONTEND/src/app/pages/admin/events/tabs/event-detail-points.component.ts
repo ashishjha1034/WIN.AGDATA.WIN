@@ -11,6 +11,7 @@ import {
   BulkAwardRequest,
   BulkAwardItem,
   RankAwardRequest,
+  DistributionMode,
   getRemainingPoints 
 } from '../../../../models/event.models';
 
@@ -38,14 +39,22 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
   isLoading = false;
   isBulkAwarding = false;
   isRankAwarding = false;
+  isAllocatingPool = false;
   errorMessage = '';
   successMessage = '';
+  
+  // Distribution Mode
+  distributionMode: DistributionMode = 'Manual';
   
   // Bulk Award Section
   bulkAwardAmount: number = 0;
   bulkSearchText: string = '';
   selectedParticipantIds: Set<string> = new Set();
   selectAll: boolean = false;
+  
+  // Pool Allocation (EqualSplit/RankBased)
+  poolAllocationMode: 'EqualSplit' | 'RankBased' = 'EqualSplit';
+  rankPointsInput: string = ''; // Comma-separated rank points
   
   // Rank Award Section
   rankSearchText: string = '';
@@ -343,6 +352,157 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
           const errMsg = error.error?.message || error.message || 'Failed to award points. Please try again.';
           this.errorMessage = errMsg;
           this.loadData(); // Refresh data on error
+        }
+      });
+  }
+
+  // ==================== POOL ALLOCATION (EqualSplit / RankBased) ====================
+
+  /**
+   * Validate if pool allocation can be submitted
+   */
+  canSubmitPoolAllocation(): boolean {
+    if (!this.canAwardPoints()) return false;
+    if (this.isPoolUnlimited()) return false;
+    if (this.getRemainingPoints() <= 0) return false;
+    if (this.getSelectedCount() === 0) return false;
+    
+    if (this.poolAllocationMode === 'RankBased') {
+      const rankPointsArray = this.parseRankPoints();
+      if (rankPointsArray.length === 0) return false;
+      // Sum of rank points must not exceed pool
+      const sum = rankPointsArray.reduce((a, b) => a + b, 0);
+      if (sum > this.getRemainingPoints()) return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Parse comma-separated rank points input
+   */
+  parseRankPoints(): number[] {
+    if (!this.rankPointsInput.trim()) return [];
+    return this.rankPointsInput
+      .split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => !isNaN(n) && n > 0);
+  }
+
+  /**
+   * Get sum of parsed rank points (for template use)
+   */
+  getRankPointsSum(): number {
+    return this.parseRankPoints().reduce((a, b) => a + b, 0);
+  }
+
+  /**
+   * Preview points distribution for pool allocation
+   */
+  getPoolAllocationPreview(): { participantId: string; name: string; points: number; rank?: number }[] {
+    const selectedParticipants = this.getFilteredEligibleParticipants()
+      .filter(p => this.selectedParticipantIds.has(p.userId));
+    
+    if (selectedParticipants.length === 0) return [];
+    
+    const remaining = this.getRemainingPoints();
+    const count = selectedParticipants.length;
+    
+    if (this.poolAllocationMode === 'EqualSplit') {
+      const basePoints = Math.floor(remaining / count);
+      const remainder = remaining % count;
+      
+      return selectedParticipants.map((p, idx) => ({
+        participantId: p.userId,
+        name: p.name,
+        points: basePoints + (idx < remainder ? 1 : 0)
+      }));
+    } else {
+      // RankBased
+      const rankPointsArray = this.parseRankPoints();
+      const specifiedCount = Math.min(rankPointsArray.length, count - 1);
+      const specifiedSum = rankPointsArray.slice(0, specifiedCount).reduce((a, b) => a + b, 0);
+      const remainingForLast = remaining - specifiedSum;
+      
+      return selectedParticipants.map((p, idx) => {
+        const rank = idx + 1;
+        let points: number;
+        
+        if (idx < specifiedCount) {
+          points = rankPointsArray[idx];
+        } else {
+          // Last rank(s) get remaining
+          const lastCount = count - specifiedCount;
+          if (lastCount === 1) {
+            points = remainingForLast;
+          } else {
+            const lastIdx = idx - specifiedCount;
+            const baseLastPoints = Math.floor(remainingForLast / lastCount);
+            const lastRemainder = remainingForLast % lastCount;
+            points = baseLastPoints + (lastIdx < lastRemainder ? 1 : 0);
+          }
+        }
+        
+        return {
+          participantId: p.userId,
+          name: p.name,
+          points,
+          rank
+        };
+      });
+    }
+  }
+
+  /**
+   * Submit pool allocation (entire pool distribution)
+   */
+  submitPoolAllocation(): void {
+    if (!this.canSubmitPoolAllocation()) return;
+
+    // Build awards from preview
+    const preview = this.getPoolAllocationPreview();
+    const awards: BulkAwardItem[] = preview.map(p => ({
+      participantId: p.participantId,
+      points: p.points,
+      rank: p.rank
+    }));
+
+    const request: BulkAwardRequest = {
+      awards,
+      mode: this.poolAllocationMode,
+      consumeEntirePool: true,
+      rankPoints: this.poolAllocationMode === 'RankBased' ? this.parseRankPoints() : undefined
+    };
+
+    this.isAllocatingPool = true;
+    this.errorMessage = '';
+
+    this.eventService.bulkAwardPoints(this.eventId, request)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.isAllocatingPool = false))
+      )
+      .subscribe({
+        next: (response) => {
+          console.log('[Points] Pool allocation successful:', response);
+          const mode = this.poolAllocationMode === 'EqualSplit' ? 'Equal Split' : 'Rank-Based';
+          this.successMessage = `${mode} allocation complete! Awarded ${response.participantsAwarded} participants with ${response.totalPointsAwarded.toLocaleString()} total points.`;
+          
+          if (response.remainingPoolPoints === 0) {
+            this.successMessage += ' Event auto-completed (pool exhausted).';
+          }
+          
+          this.selectedParticipantIds.clear();
+          this.selectAll = false;
+          this.rankPointsInput = '';
+          this.loadData();
+          this.pointsAwarded.emit();
+          setTimeout(() => this.successMessage = '', 8000);
+        },
+        error: (error) => {
+          console.error('[Points] Pool allocation error:', error);
+          this.errorMessage = error.error?.message || error.message || 'Failed to allocate pool. Please try again.';
+          this.loadData();
         }
       });
   }

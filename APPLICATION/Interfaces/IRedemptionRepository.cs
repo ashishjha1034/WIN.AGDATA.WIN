@@ -38,4 +38,16 @@ public interface IRedemptionRepository
     /// Used to display soft warnings during product deactivation.
     /// </summary>
     Task<RecentRedemptionStats> GetRecentRedemptionStatsForProductAsync(Guid productId, int days);
+
+    /// <summary>
+    /// Gets the count of pending and approved redemptions for a specific user.
+    /// Used to check hard blockers for user deactivation.
+    /// </summary>
+    Task<PendingApprovedCounts> GetPendingAndApprovedCountsForUserAsync(Guid userId);
+
+    /// <summary>
+    /// Gets the count of completed (fulfilled/delivered) redemptions for a user.
+    /// Used to display soft warnings during user deactivation.
+    /// </summary>
+    Task<int> GetCompletedRedemptionsCountForUserAsync(Guid userId);
 }

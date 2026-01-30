@@ -5,7 +5,6 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Products;
 
 public class Product : AuditableEntity<Guid>, IActivatable
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
     public string Name { get; private set; } = null!;
     public string? Description { get; private set; }
     public Guid CategoryId { get; private set; }

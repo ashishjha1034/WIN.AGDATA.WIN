@@ -18,11 +18,12 @@ echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleCo
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AuthService } from '../../../services/auth.service';
-import { UserListItem, UserFilterCriteria, InviteUserRequest } from '../../../models/user.models';
+import { UserListItem, UserFilterCriteria, InviteUserRequest, DeactivateUserWarnings, DeactivateUserBlocked, DeactivateUserWarningData } from '../../../models/user.models';
 
 import { UserTableComponent, UserTableAction } from './components/user-table.component';
 import { UserDetailDrawerComponent, DrawerAction } from './components/user-detail-drawer.component';
 import { AddUserModalComponent } from './components/add-user-modal-v2.component';
+import { UserDeactivateConfirmationDialogComponent } from './components/user-deactivate-confirmation-dialog.component';
 
 // Sort options type
 type SortField = 'name' | 'email' | 'balance' | 'createdAt';
@@ -49,7 +50,8 @@ interface TopUser {
     NgxEchartsDirective,
     UserTableComponent,
     UserDetailDrawerComponent,
-    AddUserModalComponent
+    AddUserModalComponent,
+    UserDeactivateConfirmationDialogComponent
   ],
   providers: [
     provideEchartsCore({ echarts })
@@ -182,6 +184,12 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   isAddUserModalOpen = false;
   isDrawerOpen = false;
   selectedUserId: string | null = null;
+
+  // User Deactivation Dialog states
+  showDeactivateDialog = false;
+  deactivateWarningData: DeactivateUserWarningData | null = null;
+  pendingDeactivationUserId: string | null = null;
+  deactivationBlockedMessage: string | null = null;
 
   // Chart options
   chartOption: EChartsOption = {};
@@ -561,49 +569,163 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
 
   /**
    * Toggle user status
+   * For deactivation: initiates the business rule validation flow
+   * For activation: simple toggle
    */
   private toggleUserStatus(user: UserListItem): void {
-    const action = user.isActive ? 'deactivate' : 'activate';
-    if (confirm(`Are you sure you want to ${action} this user?`)) {
-      const request$ = user.isActive
-        ? this.adminUsersService.deactivateUser(user.id)
-        : this.adminUsersService.activateUser(user.id);
-
-      request$.pipe(
-        takeUntil(this.destroy$)
-      ).subscribe({
-        next: () => {
-          this.showSuccess(`User ${action}d successfully!`);
-          this.loadUsers();
-          if (this.isDrawerOpen) {
-            this.closeDrawer();
+    if (user.isActive) {
+      // Deactivating - use the business rule flow
+      this.deactivateUser(user.id);
+    } else {
+      // Activating - simple confirm and activate
+      if (confirm(`Are you sure you want to activate this user?`)) {
+        this.adminUsersService.activateUser(user.id).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
+          next: () => {
+            this.showSuccess('User activated successfully!');
+            this.loadUsers();
+            if (this.isDrawerOpen) {
+              this.closeDrawer();
+            }
+          },
+          error: () => {
+            this.showError('Failed to activate user');
           }
-        },
-        error: () => {
-          this.showError(`Failed to ${action} user`);
-        }
-      });
+        });
+      }
     }
   }
 
   /**
-   * Deactivate user
+   * Deactivate user with business rule handling
+   * Handles hard blocks (422) and soft warnings (409)
    */
   private deactivateUser(userId: string): void {
-    if (confirm('Are you sure you want to deactivate this user?')) {
-      this.adminUsersService.deactivateUser(userId).pipe(
-        takeUntil(this.destroy$)
-      ).subscribe({
-        next: () => {
-          this.showSuccess('User deactivated successfully!');
-          this.closeDrawer();
-          this.loadUsers();
-        },
-        error: () => {
-          this.showError('Failed to deactivate user');
+    this.deactivationBlockedMessage = null;
+    
+    const user = this.usersSignal().find(u => u.id === userId);
+    if (!user) return;
+    
+    // First attempt without force - let server check for warnings/blocks
+    this.isLoading = true;
+    this.cdr.markForCheck();
+    
+    this.adminUsersService.deactivateUser(userId, false).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        console.log('User deactivated successfully:', response);
+        this.isLoading = false;
+        this.showSuccess(`User "${user.firstName} ${user.lastName}" deactivated successfully!`);
+        this.closeDrawer();
+        this.loadUsers();
+      },
+      error: (error) => {
+        console.error('Error deactivating user:', error);
+        this.isLoading = false;
+        this.cdr.markForCheck();
+        
+        // Check if it's a soft warning (409 Conflict)
+        if (this.adminUsersService.isDeactivationWarning(error)) {
+          const warnings = error.error as DeactivateUserWarnings;
+          this.pendingDeactivationUserId = userId;
+          this.deactivateWarningData = {
+            userName: `${user.firstName} ${user.lastName}`,
+            userId: userId,
+            pointsBalance: warnings.pointsBalance,
+            completedEventsCount: warnings.completedEventsCount,
+            completedRedemptionsCount: warnings.completedRedemptionsCount,
+            lastActivityDate: warnings.lastActivityDate,
+            daysSinceLastActivity: warnings.daysSinceLastActivity
+          };
+          this.showDeactivateDialog = true;
+          this.cdr.markForCheck();
+          return;
         }
-      });
-    }
+        
+        // Check if it's a hard block (422 Unprocessable Entity)
+        if (this.adminUsersService.isDeactivationBlocked(error)) {
+          const blocked = error.error as DeactivateUserBlocked;
+          // Show blocking reasons in error message
+          const reasons = blocked.reasons?.length > 0 
+            ? blocked.reasons.join(' ') 
+            : blocked.message;
+          this.deactivationBlockedMessage = reasons;
+          this.error = reasons;
+          setTimeout(() => {
+            this.error = null;
+            this.deactivationBlockedMessage = null;
+            this.cdr.markForCheck();
+          }, 8000);
+          this.cdr.markForCheck();
+          return;
+        }
+        
+        // Generic error
+        this.showError(error?.error?.message || 'Failed to deactivate user. Please try again.');
+      }
+    });
+  }
+
+  /**
+   * Handle confirmation from deactivate warning dialog
+   */
+  onDeactivateConfirmed(): void {
+    if (!this.pendingDeactivationUserId) return;
+    
+    const userId = this.pendingDeactivationUserId;
+    const user = this.usersSignal().find(u => u.id === userId);
+    
+    this.showDeactivateDialog = false;
+    this.deactivateWarningData = null;
+    this.isLoading = true;
+    this.cdr.markForCheck();
+    
+    // Retry with force=true to bypass soft warnings
+    this.adminUsersService.deactivateUser(userId, true).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        console.log('User deactivated successfully (forced):', response);
+        this.isLoading = false;
+        this.pendingDeactivationUserId = null;
+        this.showSuccess(`User "${user?.firstName} ${user?.lastName}" deactivated successfully!`);
+        this.closeDrawer();
+        this.loadUsers();
+      },
+      error: (error) => {
+        console.error('Error deactivating user (forced):', error);
+        this.isLoading = false;
+        this.pendingDeactivationUserId = null;
+        this.cdr.markForCheck();
+        
+        // Even with force, hard blocks cannot be bypassed
+        if (this.adminUsersService.isDeactivationBlocked(error)) {
+          const blocked = error.error as DeactivateUserBlocked;
+          const reasons = blocked.reasons?.length > 0 
+            ? blocked.reasons.join(' ') 
+            : blocked.message;
+          this.error = reasons;
+        } else {
+          this.error = error?.error?.message || 'Failed to deactivate user. Please try again.';
+        }
+        setTimeout(() => {
+          this.error = null;
+          this.cdr.markForCheck();
+        }, 5000);
+      }
+    });
+  }
+
+  /**
+   * Handle cancellation from deactivate warning dialog
+   */
+  onDeactivateCancelled(): void {
+    this.showDeactivateDialog = false;
+    this.deactivateWarningData = null;
+    this.pendingDeactivationUserId = null;
+    this.cdr.markForCheck();
   }
 
   /**

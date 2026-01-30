@@ -44,18 +44,46 @@ public class EventController : ControllerBase
     /// Retrieve list of all events including upcoming and past events.
     /// No authentication required.
     /// Status values: "Created" (Draft), "Active", "Completed", "Cancelled".
+    /// 
+    /// **Automated Transitions (computed on read):**
+    /// - Draft → Active: When event start time (EventDate) arrives
+    /// - Draft → Cancelled: When registration deadline passes with 0 registrations
     /// </remarks>
     /// <returns>List of events</returns>
     /// <response code="200">Events retrieved successfully</response>
     [HttpGet]
     [AllowAnonymous]
-    [SwaggerOperation(Summary = "Get all events", Description = "List all events")]
+    [SwaggerOperation(Summary = "Get all events", Description = "List all events with automated status computation")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetEvents()
     {
         try
         {
             var events = await _eventRepository.GetAllAsync();
+            var nowUtc = DateTime.UtcNow;
+            
+            // Apply compute-on-read: automated transitions for Draft events
+            var transitionsApplied = false;
+            foreach (var @event in events)
+            {
+                if (@event.ApplyAutomatedTransitions(nowUtc))
+                    transitionsApplied = true;
+            }
+            
+            // Persist any status changes (fire-and-forget save)
+            if (transitionsApplied)
+            {
+                try
+                {
+                    await _eventRepository.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the read - background service will catch up
+                    // In a real system, use ILogger here
+                    Console.WriteLine($"Warning: Failed to persist automated transitions: {ex.Message}");
+                }
+            }
 
             return Ok(new
             {
@@ -77,6 +105,10 @@ public class EventController : ControllerBase
     /// Retrieve detailed information for a specific event.
     /// No authentication required.
     /// Status values: "Created" (Draft), "Active", "Completed", "Cancelled".
+    /// 
+    /// **Automated Transitions (computed on read):**
+    /// - Draft → Active: When event start time (EventDate) arrives
+    /// - Draft → Cancelled: When registration deadline passes with 0 registrations
     /// </remarks>
     /// <param name="id">Event ID</param>
     /// <returns>Event details with participant count</returns>
@@ -84,7 +116,7 @@ public class EventController : ControllerBase
     /// <response code="404">Event not found</response>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
-    [SwaggerOperation(Summary = "Get event by ID", Description = "Retrieve specific event details")]
+    [SwaggerOperation(Summary = "Get event by ID", Description = "Retrieve specific event details with automated status computation")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     public async Task<ActionResult> GetEvent(Guid id)
@@ -95,6 +127,20 @@ public class EventController : ControllerBase
 
             if (@event == null)
                 return NotFound(new { message = "Event not found" });
+
+            // Apply compute-on-read: automated transitions for Draft events
+            var nowUtc = DateTime.UtcNow;
+            if (@event.ApplyAutomatedTransitions(nowUtc))
+            {
+                try
+                {
+                    await _eventRepository.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Failed to persist automated transition: {ex.Message}");
+                }
+            }
 
             return Ok(new
             {
@@ -219,6 +265,18 @@ public class EventController : ControllerBase
             var result = await _mediator.Send(command);
             return CreatedAtAction(nameof(GetEvent), new { id = result.Id }, result);
         }
+        catch (ValidationException ex)
+        {
+            // Return ProblemDetails for validation errors
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Validation Error",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = ex.Message,
+                Instance = HttpContext.Request.Path,
+                Extensions = { ["errors"] = ex.Errors }
+            });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -290,6 +348,18 @@ public class EventController : ControllerBase
 
             var result = await _mediator.Send(command);
             return Ok(result);
+        }
+        catch (ValidationException ex)
+        {
+            // Return ProblemDetails for validation errors
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Validation Error",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = ex.Message,
+                Instance = HttpContext.Request.Path,
+                Extensions = { ["errors"] = ex.Errors, ["eventId"] = id }
+            });
         }
         catch (InvalidOperationException ex)
         {
@@ -762,7 +832,7 @@ public class EventController : ControllerBase
     /// <response code="409">Concurrency conflict - retry request</response>
     [HttpPost("{eventId:guid}/bulk-award-points")]
     [Authorize(Policy = "AdminOnly")]
-    [SwaggerOperation(Summary = "Bulk award event points", Description = "Admin only. Award points to multiple participants. All-or-nothing semantics. Pool enforcement.")]
+    [SwaggerOperation(Summary = "Bulk award event points", Description = "Admin only. Award points to multiple participants. All-or-nothing semantics. Pool enforcement. Supports distribution modes: Manual, EqualSplit, RankBased.")]
     [ProducesResponseType(typeof(BulkAwardPointsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -778,13 +848,21 @@ public class EventController : ControllerBase
                 .Select(a => new ParticipantAward(a.ParticipantId, a.Points, a.Rank))
                 .ToList();
 
-            var command = new BulkAwardEventPointsCommand(eventId, awards);
+            var command = new BulkAwardEventPointsCommand(
+                EventId: eventId, 
+                Awards: awards,
+                Mode: request.Mode,
+                ConsumeEntirePool: request.ConsumeEntirePool,
+                RankPoints: request.RankPoints
+            );
             var result = await _mediator.Send(command);
 
             return Ok(new BulkAwardPointsResponse
             {
                 Success = result.Success,
-                Message = "Bulk award completed successfully",
+                Message = result.RemainingPoolPoints == 0 
+                    ? "Bulk award completed successfully. Event auto-completed (pool exhausted)."
+                    : "Bulk award completed successfully",
                 EventId = eventId,
                 TotalPointsAwarded = result.TotalPointsAwarded,
                 ParticipantsAwarded = result.ParticipantsAwarded,

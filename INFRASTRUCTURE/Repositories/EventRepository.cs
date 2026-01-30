@@ -55,4 +55,35 @@ public class EventRepository : Repository<Event>, IEventRepository
         _dbSet.Update(@event);
         await _context.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// Get user event registration statistics for deactivation checks.
+    /// Returns count of active (Draft/Active) and completed events.
+    /// </summary>
+    public async Task<(int ActiveEventRegistrations, int CompletedEventCount)> GetUserEventRegistrationStatsAsync(Guid userId)
+    {
+        var stats = await _context.EventParticipants
+            .Where(ep => ep.UserId == userId)
+            .Include(ep => ep.Event)
+            .GroupBy(_ => true)
+            .Select(g => new
+            {
+                ActiveCount = g.Count(ep => 
+                    ep.Event.Status == Domain.Enums.EventStatus.Draft || 
+                    ep.Event.Status == Domain.Enums.EventStatus.Active),
+                CompletedCount = g.Count(ep => ep.Event.Status == Domain.Enums.EventStatus.Completed)
+            })
+            .FirstOrDefaultAsync();
+
+        return (
+            ActiveEventRegistrations: stats?.ActiveCount ?? 0,
+            CompletedEventCount: stats?.CompletedCount ?? 0
+        );
+    }
+
+    /// <inheritdoc />
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        await _context.SaveChangesAsync(ct);
+    }
 }

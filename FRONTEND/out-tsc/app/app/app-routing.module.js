@@ -1,0 +1,167 @@
+import { NgModule } from '@angular/core';
+import { RouterModule } from '@angular/router';
+import { LoginComponent } from './pages/login/login.component';
+import { ForgotPasswordComponent } from './pages/forgot-password/forgot-password.component';
+import { ResetPasswordComponent } from './pages/reset-password/reset-password.component';
+import { AdminDashboardComponent } from './pages/admin/admin-dashboard/admin-dashboard.component';
+import { AdminUsersComponent } from './pages/admin/users/admin-users.component';
+import { EventManagementComponent } from './pages/admin/events/event-management.component';
+import { EventDetailComponent } from './pages/admin/events/event-detail.component';
+import { EventCreateComponent } from './pages/admin/events/event-create.component';
+import { EventEditComponent } from './pages/admin/events/event-edit.component';
+import { ProductManagementComponent } from './pages/admin/products/product-management.component';
+import { ProductDetailComponent } from './pages/admin/products/product-detail.component';
+import { RedemptionManagementComponent } from './pages/admin/redemptions/redemption-management.component';
+import { TransactionManagementComponent } from './pages/admin/transactions/transaction-management.component';
+import { EmployeeDashboardComponent } from './pages/employee-dashboard/employee-dashboard.component';
+import { UserDashboardComponent } from './pages/user/user-dashboard/user-dashboard.component';
+import { UserEventsComponent } from './pages/user/events/user-events.component';
+import { UserProductsComponent } from './pages/user/products/user-products.component';
+import { UserRedemptionsComponent } from './pages/user/redemptions/user-redemptions.component';
+import { UserTransactionsComponent } from './pages/user/transactions/user-transactions.component';
+import { UnauthorizedComponent } from './pages/unauthorized/unauthorized.component';
+import { AuthGuard } from './services/auth.guard';
+import * as i0 from "@angular/core";
+import * as i1 from "@angular/router";
+export const appRoutes = [
+    {
+        path: '',
+        redirectTo: '/login',
+        pathMatch: 'full'
+    },
+    {
+        path: 'login',
+        component: LoginComponent
+    },
+    {
+        path: 'forgot-password',
+        component: ForgotPasswordComponent
+    },
+    {
+        path: 'reset-password',
+        component: ResetPasswordComponent
+    },
+    {
+        path: 'admin/dashboard',
+        component: AdminDashboardComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/users',
+        component: AdminUsersComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/products',
+        component: ProductManagementComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/products/:id',
+        component: ProductDetailComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/events',
+        component: EventManagementComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/events/new',
+        component: EventCreateComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/events/:id/edit',
+        component: EventEditComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/events/:id',
+        component: EventDetailComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/redemptions',
+        component: RedemptionManagementComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'admin/transactions',
+        component: TransactionManagementComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Admin'] }
+    },
+    {
+        path: 'user/dashboard',
+        component: UserDashboardComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'user/events',
+        component: UserEventsComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'user/products',
+        component: UserProductsComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'user/redemptions',
+        component: UserRedemptionsComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'user/transactions',
+        component: UserTransactionsComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'employee/dashboard',
+        component: EmployeeDashboardComponent,
+        canActivate: [AuthGuard],
+        data: { roles: ['Employee', 'Admin'] }
+    },
+    {
+        path: 'dashboard',
+        redirectTo: '/user/dashboard',
+        pathMatch: 'full'
+    },
+    {
+        path: 'unauthorized',
+        component: UnauthorizedComponent
+    },
+    {
+        path: '**',
+        redirectTo: '/login'
+    }
+];
+export class AppRoutingModule {
+    static { this.ɵfac = function AppRoutingModule_Factory(__ngFactoryType__) { return new (__ngFactoryType__ || AppRoutingModule)(); }; }
+    static { this.ɵmod = /*@__PURE__*/ i0.ɵɵdefineNgModule({ type: AppRoutingModule }); }
+    static { this.ɵinj = /*@__PURE__*/ i0.ɵɵdefineInjector({ imports: [RouterModule.forRoot(appRoutes), RouterModule] }); }
+}
+(() => { (typeof ngDevMode === "undefined" || ngDevMode) && i0.ɵsetClassMetadata(AppRoutingModule, [{
+        type: NgModule,
+        args: [{
+                imports: [RouterModule.forRoot(appRoutes)],
+                exports: [RouterModule]
+            }]
+    }], null, null); })();
+(function () { (typeof ngJitMode === "undefined" || ngJitMode) && i0.ɵɵsetNgModuleScope(AppRoutingModule, { imports: [i1.RouterModule], exports: [RouterModule] }); })();
+//# sourceMappingURL=app-routing.module.js.map

@@ -179,15 +179,25 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   editEvent(): void {
     if (!this.event) return;
     
+    // Format dates for datetime-local input (YYYY-MM-DDTHH:mm)
+    const formatForInput = (dateStr: string | undefined): string => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      // Adjust for local timezone
+      const offset = date.getTimezoneOffset() * 60000;
+      const localDate = new Date(date.getTime() - offset);
+      return localDate.toISOString().slice(0, 16);
+    };
+    
     // Populate form with current event data
     this.editForm = {
       name: this.event.name || '',
       description: this.event.description || '',
-      eventDate: this.event.eventDate ? this.event.eventDate.split('T')[0] : '',
+      eventDate: formatForInput(this.event.eventDate),
       location: this.event.location || '',
       maxParticipants: this.event.maxParticipants,
       totalPointsPool: this.event.totalPointsPool || 0,
-      registrationEndDateUtc: this.event.registrationEndDateUtc ? this.event.registrationEndDateUtc.split('T')[0] : ''
+      registrationEndDateUtc: formatForInput(this.event.registrationEndDateUtc)
     };
     
     this.showEditEventModal = true;
@@ -407,19 +417,21 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Format date
+   * Format date with time
    */
   formatDate(date: string): string {
     if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   }
 
   /**
-   * Format datetime
+   * Format datetime (same as formatDate - shows date + time)
    */
   formatDateTime(date: string): string {
     if (!date) return '—';

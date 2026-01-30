@@ -6,7 +6,6 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Users;
 
 public class User : AuditableEntity<Guid>, IActivatable
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
     public string EmployeeId { get; private set; } = null!;
     public EmailAddress Email { get; private set; } = null!;
     public string FirstName { get; private set; } = null!;

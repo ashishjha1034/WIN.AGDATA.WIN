@@ -372,6 +372,24 @@
   color: var(--ag-color-text-secondary);
 }
 
+/* Event Countdown */
+.event-countdown {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(135deg, rgba(79, 138, 107, 0.1), rgba(79, 138, 107, 0.05));
+  border-radius: 6px;
+  border-left: 3px solid var(--ag-button-primary);
+}
+
+.countdown-text {
+  font: var(--ag-typo-body-02);
+  font-weight: 600;
+  color: var(--ag-button-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Empty State in List */
 .empty-state {
   flex: 1;

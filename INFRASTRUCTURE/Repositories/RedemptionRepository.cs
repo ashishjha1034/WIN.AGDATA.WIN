@@ -112,4 +112,34 @@ public class RedemptionRepository : Repository<Redemption>, IRedemptionRepositor
             stats.UniqueUsers,
             stats.LastRedemptionDate);
     }
+
+    /// <summary>
+    /// Gets the count of pending and approved redemptions for a specific user.
+    /// Used to check hard blockers for user deactivation.
+    /// </summary>
+    public async Task<PendingApprovedCounts> GetPendingAndApprovedCountsForUserAsync(Guid userId)
+    {
+        var counts = await _context.Redemptions
+            .Where(r => r.UserId == userId &&
+                       (r.Status == RedemptionStatus.Pending || r.Status == RedemptionStatus.Approved))
+            .GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var pendingCount = counts.FirstOrDefault(c => c.Status == RedemptionStatus.Pending)?.Count ?? 0;
+        var approvedCount = counts.FirstOrDefault(c => c.Status == RedemptionStatus.Approved)?.Count ?? 0;
+
+        return new PendingApprovedCounts(pendingCount, approvedCount);
+    }
+
+    /// <summary>
+    /// Gets the count of completed (delivered) redemptions for a user.
+    /// Used to display soft warnings during user deactivation.
+    /// </summary>
+    public async Task<int> GetCompletedRedemptionsCountForUserAsync(Guid userId)
+    {
+        return await _context.Redemptions
+            .Where(r => r.UserId == userId && r.Status == RedemptionStatus.Delivered)
+            .CountAsync();
+    }
 }

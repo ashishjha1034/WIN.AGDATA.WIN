@@ -116,6 +116,11 @@
                 <span>{{ event.totalPointsPool }} pts</span>
               </div>
             </div>
+
+            <!-- Countdown Timer -->
+            <div class="event-countdown" *ngIf="hasCountdown(event.id)">
+              <span class="countdown-text">{{ getCountdown(event.id) }}</span>
+            </div>
           </div>
         </div>
 

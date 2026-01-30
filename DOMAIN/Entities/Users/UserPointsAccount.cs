@@ -10,7 +10,6 @@ public class UserPointsAccount : Entity<Guid>
     public int TotalEarned { get; private set; } = 0;
     public int TotalRedeemed { get; private set; } = 0;
     public DateTime LastUpdatedAt { get; private set; }
-    public Guid? UpdatedBy { get; private set; }
 
     // Navigation
     public User User { get; private set; } = null!;
@@ -19,8 +18,8 @@ public class UserPointsAccount : Entity<Guid>
     internal UserPointsAccount() { }
 
     public UserPointsAccount(Guid userId)
+        : base(Guid.NewGuid())
     {
-        Id = Guid.NewGuid();
         UserId = userId;
         CurrentBalance = 0;
         TotalEarned = 0;

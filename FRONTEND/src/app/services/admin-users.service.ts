@@ -110,16 +110,42 @@ export class AdminUsersService {
   }
 
   /**
-   * Deactivate a user - uses /api/users endpoint
+   * Deactivate a user with business rule enforcement
+   * BACKEND: POST /api/users/{id}/deactivate
+   * 
+   * @param userId - The user ID to deactivate
+   * @param force - If true, bypasses soft warnings (points > 0, recent activity) but not hard blocks
+   * @returns Observable that:
+   * - Completes successfully if deactivation succeeds
+   * - Throws error with status 422 and DeactivateUserBlocked if hard blocked
+   * - Throws error with status 409 and DeactivateUserWarnings if soft warnings exist
    */
-  deactivateUser(userId: string): Observable<any> {
+  deactivateUser(userId: string, force: boolean = false): Observable<any> {
     this.setLoading(true);
     this.clearError();
 
-    return this.http.post(`${this.USERS_API_URL}/${userId}/deactivate`, {}).pipe(
+    return this.http.post(`${this.USERS_API_URL}/${userId}/deactivate`, { force }).pipe(
       tap(() => this.setLoading(false)),
-      catchError(error => this.handleError(error))
+      catchError(error => {
+        this.setLoading(false);
+        // Don't transform 409/422 errors - let the caller handle them
+        throw error;
+      })
     );
+  }
+
+  /**
+   * Check if error response is a deactivation warning (409 Conflict)
+   */
+  isDeactivationWarning(error: any): boolean {
+    return error?.status === 409 && error?.error?.code === 'DEACTIVATE_USER_WARNINGS';
+  }
+
+  /**
+   * Check if error response is a deactivation block (422 Unprocessable Entity)
+   */
+  isDeactivationBlocked(error: any): boolean {
+    return error?.status === 422 && error?.error?.code === 'DEACTIVATE_USER_BLOCKED';
   }
 
   /**

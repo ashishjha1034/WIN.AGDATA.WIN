@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace WIN.AGDATA.WIN.Domain.Exceptions
 {
@@ -14,6 +15,33 @@ namespace WIN.AGDATA.WIN.Domain.Exceptions
 
         public DomainException(string message, Exception innerException) : base(message, innerException)
         {
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when validation fails. Contains field-level error details
+    /// that can be mapped to ProblemDetails for API responses.
+    /// </summary>
+    public class ValidationException : DomainException
+    {
+        public string FieldName { get; }
+        public IDictionary<string, string[]> Errors { get; }
+
+        public ValidationException(string fieldName, string message)
+            : base(message)
+        {
+            FieldName = fieldName;
+            Errors = new Dictionary<string, string[]>
+            {
+                { fieldName, new[] { message } }
+            };
+        }
+
+        public ValidationException(IDictionary<string, string[]> errors)
+            : base("One or more validation errors occurred.")
+        {
+            FieldName = string.Empty;
+            Errors = errors;
         }
     }
 

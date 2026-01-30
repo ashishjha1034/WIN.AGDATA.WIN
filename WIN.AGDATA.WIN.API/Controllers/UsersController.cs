@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Users;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Transactions;
+using WIN.AGDATA.WIN.APPLICATION.Commands.Users;
 using AutoMapper;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
@@ -22,19 +24,22 @@ public class UsersController : ControllerBase
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITransactionRepository _transactionRepository;
     private readonly IMapper _mapper;
+    private readonly IMediator _mediator;
 
     public UsersController(
         IUserRepository userRepository,
         ICurrentUserService currentUserService,
         IUnitOfWork unitOfWork,
         ITransactionRepository transactionRepository,
-        IMapper mapper)
+        IMapper mapper,
+        IMediator mediator)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
         _unitOfWork = unitOfWork;
         _transactionRepository = transactionRepository;
         _mapper = mapper;
+        _mediator = mediator;
     }
 
     /// <summary>
@@ -257,33 +262,68 @@ public class UsersController : ControllerBase
     /// Deactivate user account
     /// </summary>
     /// <remarks>
-    /// Deactivate a user account. Admin only operation.
-    /// Deactivated users cannot login or use the system.
+    /// Deactivate a user account with comprehensive business rule validation. Admin only operation.
+    /// 
+    /// **Hard blocks (cannot be bypassed):**
+    /// - Self-deactivation is not allowed
+    /// - Cannot deactivate another admin
+    /// - User has pending or approved redemptions
+    /// - User is registered in active (Draft/Active) events
+    /// 
+    /// **Soft warnings (can be bypassed with force=true):**
+    /// - User has points balance > 0
+    /// - User has completed events
+    /// - User has completed redemptions
+    /// - User has recent activity (within 30 days)
+    /// 
+    /// **Sample request body:**
+    /// { "force": false }
     /// </remarks>
     /// <param name="id">User ID to deactivate</param>
-    /// <returns>Confirmation message</returns>
+    /// <param name="request">Deactivation request with optional force flag</param>
+    /// <returns>Confirmation message or warning/error details</returns>
     /// <response code="200">User deactivated successfully</response>
     /// <response code="403">Forbidden - admin only</response>
     /// <response code="404">User not found</response>
+    /// <response code="409">Deactivation has warnings, requires confirmation with force=true</response>
+    /// <response code="422">Deactivation blocked due to hard constraints</response>
     [HttpPost("{id:guid}/deactivate")]
-    [Authorize(Roles = "Admin")]
-    [SwaggerOperation(Summary = "Deactivate user", Description = "Disable user account (admin only)")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Deactivate user", Description = "Disable user account (admin only). Enforces business rules.")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult> DeactivateUser(Guid id)
+    [ProducesResponseType(typeof(DeactivateUserWarnings), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(DeactivateUserBlocked), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult> DeactivateUser(Guid id, [FromBody] DeactivateUserRequest? request = null)
     {
         try
         {
-            var user = await _userRepository.GetByIdAsync(id);
-            if (user == null)
-                return NotFound(new { message = "User not found" });
+            var actingAdminId = _currentUserService.GetCurrentUserId();
+            var command = new DeactivateUserCommand(id, actingAdminId, request?.Force ?? false);
+            var result = await _mediator.Send(command);
 
-            user.Deactivate("User deactivated by admin");
-            await _userRepository.UpdateAsync(user);
-            await _unitOfWork.SaveChangesAsync();
+            if (result.Success)
+            {
+                return Ok(new { message = "User deactivated successfully", userId = id });
+            }
 
-            return Ok(new { message = "User deactivated successfully", userId = id });
+            if (result.IsBlocked)
+            {
+                return UnprocessableEntity(result.Blocked);
+            }
+
+            if (result.HasWarnings)
+            {
+                return Conflict(result.Warnings);
+            }
+
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Unexpected deactivation result" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {

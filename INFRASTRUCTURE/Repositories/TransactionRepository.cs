@@ -253,4 +253,18 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
     {
         _dbSet.Add(transaction);
     }
+
+    /// <summary>
+    /// Gets the most recent transaction date for a user.
+    /// Used as a proxy for "last activity" in user deactivation warnings.
+    /// </summary>
+    public async Task<DateTime?> GetLastTransactionDateForUserAsync(Guid userId)
+    {
+        return await _context.UserPointsTransactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId)
+            .OrderByDescending(t => t.Timestamp)
+            .Select(t => (DateTime?)t.Timestamp)
+            .FirstOrDefaultAsync();
+    }
 }

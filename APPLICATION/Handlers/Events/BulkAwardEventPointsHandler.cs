@@ -1,6 +1,8 @@
 using MediatR;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Events;
+using WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Events;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 using WIN.AGDATA.WIN.Domain.Enums;
 using WIN.AGDATA.WIN.Domain.Exceptions;
@@ -10,6 +12,7 @@ namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Events;
 /// <summary>
 /// Handler for bulk awarding points to multiple participants.
 /// Implements all-or-nothing semantics with pool enforcement.
+/// Supports distribution modes: Manual, EqualSplit, RankBased.
 /// </summary>
 public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsCommand, BulkAwardResult>
 {
@@ -35,13 +38,6 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
 
     public async Task<BulkAwardResult> Handle(BulkAwardEventPointsCommand request, CancellationToken ct)
     {
-        // Validate request
-        if (request.Awards == null || request.Awards.Count == 0)
-            throw new InvalidOperationException("At least one award is required.");
-
-        if (request.Awards.Any(a => a.Points <= 0))
-            throw new InvalidOperationException("All points values must be positive.");
-
         // Load event with participants in single query
         var @event = await _eventRepository.GetByIdWithParticipantsAsync(request.EventId)
                      ?? throw new InvalidOperationException("Event not found");
@@ -51,14 +47,24 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             throw new InvalidOperationException($"Cannot award points. Event status is {@event.Status}. Points can only be awarded when event is Active.");
 
         var currentUserId = _currentUserService.GetCurrentUserId();
-        var totalPointsRequested = request.Awards.Sum(a => a.Points);
+
+        // Build computed awards based on distribution mode
+        var computedAwards = ComputeAwards(request, @event);
+
+        // Validate request
+        if (computedAwards.Count == 0)
+            throw new InvalidOperationException("At least one award is required.");
+
+        if (computedAwards.Any(a => a.Points <= 0))
+            throw new InvalidOperationException("All points values must be positive.");
+
         var errors = new List<string>();
 
         // Pre-validate all participants before making any changes (fail-fast)
         var participantMap = @event.Participants.ToDictionary(p => p.UserId);
         var usersToLoad = new List<Guid>();
 
-        foreach (var award in request.Awards)
+        foreach (var award in computedAwards)
         {
             if (!participantMap.TryGetValue(award.ParticipantId, out var participant))
             {
@@ -87,6 +93,8 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             throw new InvalidOperationException($"Bulk award failed. Ineligible participants: {string.Join("; ", errors)}");
         }
 
+        var totalPointsRequested = computedAwards.Sum(a => a.Points);
+
         // Pool enforcement: validate total requested points against remaining pool
         if (!@event.CanDistributePoints(totalPointsRequested))
         {
@@ -101,7 +109,7 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
         // Apply all awards - all validation passed, proceed with single transaction
         @event.ReservePoints(totalPointsRequested);
 
-        foreach (var award in request.Awards)
+        foreach (var award in computedAwards)
         {
             var participant = participantMap[award.ParticipantId];
             var user = userMap[participant.UserId];
@@ -127,14 +135,127 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             _transactionRepository.Add(transaction);
         }
 
+        // Auto-complete event when pool is fully exhausted
+        if (@event.RemainingPoints == 0)
+        {
+            @event.CompleteEvent(currentUserId);
+        }
+
         // Single save with optimistic concurrency on Event.RowVersion
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new BulkAwardResult(
             Success: true,
             TotalPointsAwarded: totalPointsRequested,
-            ParticipantsAwarded: request.Awards.Count,
+            ParticipantsAwarded: computedAwards.Count,
             RemainingPoolPoints: @event.RemainingPoints
         );
+    }
+
+    /// <summary>
+    /// Computes award items based on the distribution mode.
+    /// </summary>
+    private List<ParticipantAward> ComputeAwards(BulkAwardEventPointsCommand request, Event @event)
+    {
+        // Default to Manual mode - use provided awards as-is
+        if (request.Mode == DistributionMode.Manual || !request.ConsumeEntirePool)
+        {
+            return request.Awards?.ToList() ?? new List<ParticipantAward>();
+        }
+
+        var remainingPoints = @event.RemainingPoints ?? 0;
+        if (remainingPoints <= 0)
+            throw new InvalidOperationException("No remaining points in the pool to distribute.");
+
+        var participantIds = request.Awards?.Select(a => a.ParticipantId).ToList() ?? new List<Guid>();
+        if (participantIds.Count == 0)
+            throw new InvalidOperationException("At least one participant must be selected for distribution.");
+
+        return request.Mode switch
+        {
+            DistributionMode.EqualSplit => ComputeEqualSplitAwards(participantIds, remainingPoints),
+            DistributionMode.RankBased => ComputeRankBasedAwards(participantIds, remainingPoints, request.RankPoints),
+            _ => request.Awards?.ToList() ?? new List<ParticipantAward>()
+        };
+    }
+
+    /// <summary>
+    /// Computes equal split distribution across all participants.
+    /// Uses deterministic remainder handling: first N participants get floor+1, rest get floor.
+    /// </summary>
+    private List<ParticipantAward> ComputeEqualSplitAwards(List<Guid> participantIds, int totalPoints)
+    {
+        var count = participantIds.Count;
+        var basePoints = totalPoints / count;
+        var remainder = totalPoints % count;
+
+        var awards = new List<ParticipantAward>();
+        for (int i = 0; i < count; i++)
+        {
+            // First 'remainder' participants get one extra point (deterministic)
+            var points = basePoints + (i < remainder ? 1 : 0);
+            awards.Add(new ParticipantAward(participantIds[i], points, null));
+        }
+
+        return awards;
+    }
+
+    /// <summary>
+    /// Computes rank-based distribution.
+    /// Admin specifies points for top N-1 ranks, last rank gets remainder.
+    /// </summary>
+    private List<ParticipantAward> ComputeRankBasedAwards(List<Guid> participantIds, int totalPoints, IReadOnlyList<int>? rankPoints)
+    {
+        if (rankPoints == null || rankPoints.Count == 0)
+            throw new InvalidOperationException("RankPoints must be specified for RankBased distribution mode.");
+
+        var count = participantIds.Count;
+        if (count == 0)
+            throw new InvalidOperationException("At least one participant must be selected.");
+
+        // Calculate sum of specified rank points
+        var specifiedRanksCount = Math.Min(rankPoints.Count, count - 1);
+        var specifiedPointsSum = rankPoints.Take(specifiedRanksCount).Sum();
+
+        // Last rank(s) get the remaining points
+        var remainingForLastRank = totalPoints - specifiedPointsSum;
+        if (remainingForLastRank < 0)
+            throw new InvalidOperationException(
+                $"Sum of specified rank points ({specifiedPointsSum}) exceeds total pool ({totalPoints}). " +
+                "Reduce rank points or select fewer participants.");
+
+        var awards = new List<ParticipantAward>();
+        for (int i = 0; i < count; i++)
+        {
+            int points;
+            int rank = i + 1;
+
+            if (i < specifiedRanksCount)
+            {
+                // Use specified points for this rank
+                points = rankPoints[i];
+            }
+            else
+            {
+                // Last rank position(s) - divide remaining equally
+                var remainingParticipants = count - specifiedRanksCount;
+                if (remainingParticipants == 1)
+                {
+                    points = remainingForLastRank;
+                }
+                else
+                {
+                    // Multiple participants for "last rank" - split equally
+                    var lastRankIdx = i - specifiedRanksCount;
+                    var baseLastPoints = remainingForLastRank / remainingParticipants;
+                    var lastRemainder = remainingForLastRank % remainingParticipants;
+                    points = baseLastPoints + (lastRankIdx < lastRemainder ? 1 : 0);
+                }
+            }
+
+            awards.Add(new ParticipantAward(participantIds[i], points, rank));
+        }
+
+        return awards;
     }
 }

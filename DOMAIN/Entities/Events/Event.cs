@@ -5,7 +5,6 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
 public class Event : AuditableEntity<Guid>
 {
-    public Guid Id { get; private set; }
     public string Name { get; private set; } = null!;
     public string Description { get; private set; } = null!;
     public DateTime EventDate { get; private set; }
@@ -43,8 +42,8 @@ public class Event : AuditableEntity<Guid>
         int? maxParticipants = null,
         DateTime? registrationEndDate = null,
         string? bannerImageUrl = null)
+        : base(Guid.NewGuid())
     {
-        Id = Guid.NewGuid();
         Name = name;
         Description = description;
         EventDate = eventDate;
@@ -84,8 +83,9 @@ public class Event : AuditableEntity<Guid>
 
     /// <summary>
     /// Determines if the event can be cancelled.
+    /// Cancel is only allowed in Draft (Upcoming) status.
     /// </summary>
-    public bool CanCancel() => Status == EventStatus.Draft || Status == EventStatus.Active;
+    public bool CanCancel() => Status == EventStatus.Draft;
 
     /// <summary>
     /// Determines if points can be awarded to participants.
@@ -128,16 +128,92 @@ public class Event : AuditableEntity<Guid>
     }
 
     /// <summary>
-    /// Cancels the event. Can be cancelled from Draft or Active states.
+    /// Cancels the event. Can only be cancelled from Draft state.
     /// </summary>
     /// <param name="adminId">ID of the admin cancelling the event</param>
     public void CancelEvent(Guid adminId)
     {
         if (!CanCancel())
-            throw new DomainException($"Cannot cancel event. Current status is {Status}. Only Draft or Active events can be cancelled.");
+            throw new DomainException($"Cannot cancel event. Current status is {Status}. Only Draft (Upcoming) events can be cancelled.");
 
         Status = EventStatus.Cancelled;
     }
+
+    /// <summary>
+    /// Auto-Cancels the event when registration deadline passes with 0 participants.
+    /// This is called by the background service or compute-on-read.
+    /// </summary>
+    public void AutoCancel()
+    {
+        if (Status != EventStatus.Draft)
+            return; // Silently ignore if not in Draft state
+
+        Status = EventStatus.Cancelled;
+    }
+
+    /// <summary>
+    /// Auto-Activates the event when the event start time arrives.
+    /// This is called by the background service or compute-on-read.
+    /// </summary>
+    public void AutoActivate()
+    {
+        if (Status != EventStatus.Draft)
+            return; // Silently ignore if not in Draft state
+
+        Status = EventStatus.Active;
+    }
+
+    /// <summary>
+    /// Applies automated state transitions based on the current time.
+    /// Call this on read paths to ensure status is up-to-date ("compute-on-read").
+    /// 
+    /// Rules:
+    /// 1. If nowUtc >= EventDate AND Status == Draft → Auto-Go-Live (Active)
+    /// 2. If nowUtc >= RegistrationEndDate AND Status == Draft AND ParticipantCount == 0 → Auto-Cancel
+    /// 
+    /// Note: Rule 1 takes precedence - if event start time has passed, go live regardless of registrations.
+    /// </summary>
+    /// <param name="nowUtc">Current UTC time</param>
+    /// <returns>True if a state transition occurred</returns>
+    public bool ApplyAutomatedTransitions(DateTime nowUtc)
+    {
+        if (Status != EventStatus.Draft)
+            return false;
+
+        // Rule 1: Auto-Go-Live when event start time arrives
+        if (nowUtc >= EventDate)
+        {
+            AutoActivate();
+            return true;
+        }
+
+        // Rule 2: Auto-Cancel when registration deadline passes with 0 registrations
+        if (RegistrationEndDate.HasValue && nowUtc >= RegistrationEndDate.Value && _participants.Count == 0)
+        {
+            AutoCancel();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines if the event should auto-cancel (registration passed with 0 participants).
+    /// Used by background services for batch processing.
+    /// </summary>
+    public bool ShouldAutoCancel(DateTime nowUtc) =>
+        Status == EventStatus.Draft &&
+        RegistrationEndDate.HasValue &&
+        nowUtc >= RegistrationEndDate.Value &&
+        _participants.Count == 0;
+
+    /// <summary>
+    /// Determines if the event should auto-go-live (event start time arrived).
+    /// Used by background services for batch processing.
+    /// </summary>
+    public bool ShouldAutoActivate(DateTime nowUtc) =>
+        Status == EventStatus.Draft &&
+        nowUtc >= EventDate;
 
     #endregion
 

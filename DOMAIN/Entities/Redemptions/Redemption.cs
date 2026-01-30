@@ -7,7 +7,6 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 
 public class Redemption : AuditableEntity<Guid>
 {
-    public Guid Id { get; private set; } = Guid.NewGuid();
     public Guid UserId { get; private set; }
     public Guid ProductId { get; private set; }
     public int PointsSpent { get; private set; }

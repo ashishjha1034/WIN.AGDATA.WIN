@@ -61,7 +61,7 @@ namespace IdentityTests.Domain.Exceptions
         {
             // Arrange
             var message = "Test domain exception";
-            DomainException caughtException = null;
+            DomainException? caughtException = null;
 
             // Act
             try

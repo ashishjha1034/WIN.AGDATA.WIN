@@ -14,6 +14,7 @@ using WIN.AGDATA.WIN.API.Middleware;
 using WIN.AGDATA.WIN.APPLICATION.DependencyInjection;
 using WIN.AGDATA.WIN.Infrastructure.Data;
 using WIN.AGDATA.WIN.Infrastructure.DependencyInjection;
+using WIN.AGDATA.WIN.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,11 @@ var builder = WebApplication.CreateBuilder(args);
 // =======================================================
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// =======================================================
+// Background Services - Event Lifecycle Automation
+// =======================================================
+builder.Services.AddHostedService<EventLifecycleBackgroundService>();
 
 // =======================================================
 // FluentValidation - Auto validation with ModelState
@@ -318,7 +324,9 @@ using (var scope = app.Services.CreateScope())
 	catch (Exception ex)
 	{
 		Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
-		throw;
+		Console.WriteLine("Database migration failed during startup. To avoid the application crashing during development, the exception will not be rethrown.\n" +
+			"Please ensure your database is available or run migrations manually. Check the connection string in appsettings.json (DefaultConnection).");
+		// Do not rethrow here to allow the app (and Swagger) to start for debugging purposes.
 	}
 }
 

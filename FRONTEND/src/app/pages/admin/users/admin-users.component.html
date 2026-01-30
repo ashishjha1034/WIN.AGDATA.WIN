@@ -204,4 +204,12 @@
     (closed)="closeAddUserModal()"
     (userCreated)="onUserCreated($event)"
   ></app-add-user-modal>
+
+  <!-- User Deactivate Confirmation Dialog -->
+  <app-user-deactivate-confirmation-dialog
+    *ngIf="showDeactivateDialog"
+    [data]="deactivateWarningData"
+    (confirm)="onDeactivateConfirmed()"
+    (cancel)="onDeactivateCancelled()"
+  ></app-user-deactivate-confirmation-dialog>
 </div>

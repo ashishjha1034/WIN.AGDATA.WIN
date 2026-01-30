@@ -45,4 +45,10 @@ public interface ITransactionRepository
     Task<int> GetTotalAdjustedAsync();
     Task<IReadOnlyList<(int Month, int Year, int PointsEarned, int PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6);
     void Add(UserPointsTransaction transaction);
+
+    /// <summary>
+    /// Gets the most recent transaction date for a user.
+    /// Used as a proxy for "last activity" in user deactivation warnings.
+    /// </summary>
+    Task<DateTime?> GetLastTransactionDateForUserAsync(Guid userId);
 }

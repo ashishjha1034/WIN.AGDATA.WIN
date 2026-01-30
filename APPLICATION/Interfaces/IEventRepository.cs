@@ -13,4 +13,10 @@ public interface IEventRepository
     Task AddParticipantAsync(Guid eventId, Guid userId);
     void Add(Event @event);
     Task UpdateAsync(Event @event);
+    Task<(int ActiveEventRegistrations, int CompletedEventCount)> GetUserEventRegistrationStatsAsync(Guid userId);
+    
+    /// <summary>
+    /// Saves changes to the database. Used for compute-on-read automated transitions.
+    /// </summary>
+    Task SaveChangesAsync(CancellationToken ct = default);
 }

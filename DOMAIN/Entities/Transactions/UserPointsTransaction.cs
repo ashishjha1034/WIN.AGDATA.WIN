@@ -7,7 +7,6 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Transactions;
 
 public class UserPointsTransaction : Entity<Guid>
 {
-    public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
     public int Points { get; private set; } // positive = earn, negative = spend
     public PointsTransactionType TransactionType { get; private set; }
@@ -31,8 +30,8 @@ public class UserPointsTransaction : Entity<Guid>
         string description,
         int balanceAfter,
         Guid processedBy)
+        : base(Guid.NewGuid())
     {
-        Id = Guid.NewGuid();
         UserId = userId;
         Points = points;
         TransactionType = type;

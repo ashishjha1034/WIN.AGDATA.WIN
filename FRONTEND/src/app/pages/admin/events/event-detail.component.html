@@ -51,7 +51,7 @@
           </div>
           
           <div class="header-actions">
-            <!-- Edit Button - Circular Icon -->
+            <!-- Edit Button - Only in Upcoming (Draft) status -->
             <div class="action-btn-group" *ngIf="event?.status === 'Upcoming'">
               <button class="action-btn action-btn-edit" (click)="editEvent()" title="Edit Event">
                 <i class="fa-solid fa-pen"></i>
@@ -59,24 +59,8 @@
               <span class="action-label">Edit</span>
             </div>
             
-            <!-- Go Live Button - Circular Icon -->
+            <!-- Cancel Button - Only in Upcoming (Draft) status -->
             <div class="action-btn-group" *ngIf="event?.status === 'Upcoming' && isAdmin()">
-              <button class="action-btn action-btn-primary" (click)="activateEvent()" title="Activate Event">
-                <i class="fa-solid fa-bolt"></i>
-              </button>
-              <span class="action-label">Go Live</span>
-            </div>
-            
-            <!-- Complete Button - Circular Icon -->
-            <div class="action-btn-group" *ngIf="event?.status === 'Live' && isAdmin()">
-              <button class="action-btn action-btn-complete" (click)="completeEvent()" title="Complete Event">
-                <i class="fa-solid fa-flag-checkered"></i>
-              </button>
-              <span class="action-label">Complete</span>
-            </div>
-            
-            <!-- Cancel Button - Circular Icon -->
-            <div class="action-btn-group" *ngIf="(event?.status === 'Upcoming' || event?.status === 'Live') && isAdmin()">
               <button class="action-btn action-btn-danger" (click)="cancelEvent()" title="Cancel Event">
                 <i class="fa-solid fa-xmark"></i>
               </button>
@@ -287,10 +271,10 @@
             <!-- Event Date -->
             <div class="form-group">
               <label class="form-label" for="editEventDate">
-                Event Date <span class="required">*</span>
+                Event Date & Time <span class="required">*</span>
               </label>
               <input 
-                type="date" 
+                type="datetime-local" 
                 id="editEventDate"
                 class="form-input"
                 [(ngModel)]="editForm.eventDate"
@@ -305,7 +289,7 @@
                 Registration Deadline <span class="required">*</span>
               </label>
               <input 
-                type="date" 
+                type="datetime-local" 
                 id="editRegistrationEndDate"
                 class="form-input"
                 [(ngModel)]="editForm.registrationEndDateUtc"
