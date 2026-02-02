@@ -5,7 +5,7 @@ import { UserListItem } from '../../../../models/user.models';
 import { PaginationComponent } from '../../../../shared/components/pagination.component';
 
 export interface UserTableAction {
-  type: 'view' | 'edit' | 'transactions' | 'reset-password' | 'toggle-status' | 'delete';
+  type: 'view' | 'edit' | 'reset-password' | 'toggle-status' | 'delete';
   userId: string;
   user: UserListItem;
 }
@@ -80,26 +80,19 @@ export interface UserTableAction {
               <div class="balance-info">
                 <div class="balance-amount">{{ user.points?.current ?? 0 | number }}</div>
                 <div class="balance-detail">
-                  <span class="earned">+{{ user.points?.earned ?? 0 | number }}</span> / 
-                  <span class="redeemed">-{{ user.points?.redeemed ?? 0 | number }}</span>
+                  <span class="earned">{{ formatPointsValue(user.points?.earned ?? 0, 'earned') }}</span> / 
+                  <span class="redeemed">{{ formatPointsValue(user.points?.redeemed ?? 0, 'redeemed') }}</span>
                 </div>
               </div>
             </td>
             <td class="actions-col">
               <div class="action-menu">
                 <button class="menu-btn" (click)="toggleMenu($event, user.id)">⋯</button>
-                <div class="menu-dropdown" *ngIf="activeMenuId === user.id" @fadeInOut>
+                <div class="menu-dropdown" *ngIf="activeMenuId === user.id" @fadeInOut [class.open-up]="shouldOpenUp(user)">
                   <button (click)="onAction('view', user)">View Details</button>
                   <button (click)="onAction('edit', user)">Edit</button>
-                  <button (click)="onAction('transactions', user)">Transactions</button>
                   <button (click)="onAction('reset-password', user)">Reset Password</button>
                   <div class="menu-divider"></div>
-                  <button
-                    [class.deactivate]="user.isActive"
-                    (click)="onAction('toggle-status', user)"
-                  >
-                    {{ user.isActive ? 'Deactivate' : 'Activate' }}
-                  </button>
                   <button class="delete" (click)="onAction('delete', user)">Delete</button>
                 </div>
               </div>
@@ -288,8 +281,15 @@ export interface UserTableAction {
       border-radius: 6px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       min-width: 160px;
-      z-index: 10;
-      overflow: hidden;
+      z-index: 1000;
+      overflow: visible;
+    }
+
+    /* Open upward for bottom rows to prevent clipping */
+    .menu-dropdown.open-up {
+      top: auto;
+      bottom: 100%;
+      margin-bottom: 4px;
     }
 
     .menu-dropdown button {
@@ -472,5 +472,31 @@ export class UserTableComponent {
 
   onPageChange(page: number): void {
     this.pageChanged.emit(page);
+  }
+
+  /**
+   * Format points value with proper sign, show just 0 if zero
+   */
+  formatPointsValue(value: number, type: 'earned' | 'redeemed'): string {
+    const num = value ?? 0;
+    // Show just 0 if zero
+    if (num === 0) return '0';
+    // Add sign prefix
+    if (type === 'earned') {
+      return `+${num.toLocaleString()}`;
+    } else {
+      return `-${Math.abs(num).toLocaleString()}`;
+    }
+  }
+
+  /**
+   * Determine if dropdown should open upward to prevent clipping
+   * Returns true for the last 2 rows in the table
+   */
+  shouldOpenUp(user: UserListItem): boolean {
+    const userIndex = this.users.findIndex(u => u.id === user.id);
+    const totalUsers = this.users.length;
+    // Open upward for the last 2 rows to prevent viewport clipping
+    return userIndex >= totalUsers - 2;
   }
 }

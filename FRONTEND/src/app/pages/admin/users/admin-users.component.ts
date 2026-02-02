@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, signal, computed, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, debounceTime, finalize, catchError } from 'rxjs/operators';
 
@@ -24,7 +25,6 @@ import { DialogService } from '../../../services/dialog.service';
 import { UserTableComponent, UserTableAction } from './components/user-table.component';
 import { UserDetailDrawerComponent, DrawerAction } from './components/user-detail-drawer.component';
 import { AddUserModalComponent } from './components/add-user-modal-v2.component';
-import { UserDeactivateConfirmationDialogComponent } from './components/user-deactivate-confirmation-dialog.component';
 
 // Sort options type
 type SortField = 'name' | 'email' | 'balance' | 'createdAt';
@@ -51,8 +51,7 @@ interface TopUser {
     NgxEchartsDirective,
     UserTableComponent,
     UserDetailDrawerComponent,
-    AddUserModalComponent,
-    UserDeactivateConfirmationDialogComponent
+    AddUserModalComponent
   ],
   providers: [
     provideEchartsCore({ echarts })
@@ -186,11 +185,17 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   isDrawerOpen = false;
   selectedUserId: string | null = null;
 
-  // User Deactivation Dialog states
+  // User Deactivation Dialog states (matches Product pattern)
   showDeactivateDialog = false;
+  isDeactivating = false;
   deactivateWarningData: DeactivateUserWarningData | null = null;
   pendingDeactivationUserId: string | null = null;
   deactivationBlockedMessage: string | null = null;
+
+  // Context Switcher (Admin View / Employee View)
+  viewingContext: 'admin' | 'employee' = 'admin';
+  isContextDropdownOpen: boolean = false;
+  private readonly VIEWING_CONTEXT_KEY = 'agdata_viewing_context';
 
   // Chart options
   chartOption: EChartsOption = {};
@@ -201,6 +206,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   constructor(
     private adminUsersService: AdminUsersService,
     private authService: AuthService,
+    private router: Router,
     private cdr: ChangeDetectorRef,
     private dialogService: DialogService
   ) {
@@ -411,14 +417,8 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
       case 'edit':
         this.openDrawerForEdit(action.userId);
         break;
-      case 'transactions':
-        this.openDrawerForTransactions(action.userId);
-        break;
       case 'reset-password':
         this.resetUserPassword(action.userId);
-        break;
-      case 'toggle-status':
-        this.toggleUserStatus(action.user);
         break;
       case 'delete':
         this.deleteUser(action.userId);
@@ -482,11 +482,44 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
           this.deactivateUser(this.selectedUserId);
         }
         break;
+      case 'toggle-role':
+        if (action.data?.userId) {
+          this.toggleUserRole(action.data.userId, action.data.newRole);
+        }
+        break;
       case 'user-updated':
         this.loadUsers();
         this.showSuccess('User updated successfully!');
         break;
     }
+  }
+
+  /**
+   * Toggle user role between Admin and Employee
+   */
+  private toggleUserRole(userId: string, newRole: string): void {
+    this.isLoading = true;
+    this.cdr.markForCheck();
+    
+    this.adminUsersService.toggleUserRole(userId, newRole).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.isLoading = false;
+        this.showSuccess(`User role changed to ${newRole}!`);
+        this.loadUsers();
+        // Refresh drawer if still open
+        if (this.drawerComponent && this.isDrawerOpen) {
+          this.drawerComponent.retryLoad();
+        }
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        this.isLoading = false;
+        this.showError(err.error?.message || 'Failed to change user role');
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   /**
@@ -577,45 +610,9 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Toggle user status
-   * For deactivation: initiates the business rule validation flow
-   * For activation: simple toggle
-   */
-  private toggleUserStatus(user: UserListItem): void {
-    if (user.isActive) {
-      // Deactivating - use the business rule flow
-      this.deactivateUser(user.id);
-    } else {
-      // Activating - simple confirm and activate
-      this.dialogService.confirm(
-        'Are you sure you want to activate this user?',
-        'Activate User',
-        'Activate',
-        'Cancel'
-      ).subscribe(result => {
-        if (result.confirmed) {
-          this.adminUsersService.activateUser(user.id).pipe(
-            takeUntil(this.destroy$)
-          ).subscribe({
-            next: () => {
-              this.showSuccess('User activated successfully!');
-              this.loadUsers();
-              if (this.isDrawerOpen) {
-                this.closeDrawer();
-              }
-            },
-            error: () => {
-              this.showError('Failed to activate user');
-            }
-          });
-        }
-      });
-    }
-  }
-
-  /**
    * Deactivate user with business rule handling
    * Handles hard blocks (422) and soft warnings (409)
+   * Now uses drawer instead of modal dialog
    */
   private deactivateUser(userId: string): void {
     this.deactivationBlockedMessage = null;
@@ -628,21 +625,29 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     
     this.adminUsersService.deactivateUser(userId, false).pipe(
-      takeUntil(this.destroy$)
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      })
     ).subscribe({
       next: (response) => {
         console.log('User deactivated successfully:', response);
-        this.isLoading = false;
+        // Update local state instead of reloading
+        user.isActive = false;
+        this.usersSignal.set([...this.usersSignal()]);
+        // Refresh drawer if open
+        if (this.drawerComponent && this.isDrawerOpen) {
+          this.drawerComponent.retryLoad();
+        }
         this.showSuccess(`User "${user.firstName} ${user.lastName}" deactivated successfully!`);
-        this.closeDrawer();
-        this.loadUsers();
       },
       error: (error) => {
         console.error('Error deactivating user:', error);
         this.isLoading = false;
         this.cdr.markForCheck();
         
-        // Check if it's a soft warning (409 Conflict)
+        // Check if it's a soft warning (409 Conflict) - show dialog overlay
         if (this.adminUsersService.isDeactivationWarning(error)) {
           const warnings = error.error as DeactivateUserWarnings;
           this.pendingDeactivationUserId = userId;
@@ -656,25 +661,18 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
             daysSinceLastActivity: warnings.daysSinceLastActivity
           };
           this.showDeactivateDialog = true;
+          this.deactivationBlockedMessage = null;
           this.cdr.markForCheck();
           return;
         }
         
-        // Check if it's a hard block (422 Unprocessable Entity)
+        // Check if it's a hard block (422 Unprocessable Entity) - show toast
         if (this.adminUsersService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateUserBlocked;
-          // Show blocking reasons in error message
-          const reasons = blocked.reasons?.length > 0 
+          const message = blocked.reasons?.length > 0 
             ? blocked.reasons.join(' ') 
-            : blocked.message;
-          this.deactivationBlockedMessage = reasons;
-          this.error = reasons;
-          setTimeout(() => {
-            this.error = null;
-            this.deactivationBlockedMessage = null;
-            this.cdr.markForCheck();
-          }, 8000);
-          this.cdr.markForCheck();
+            : blocked.message || 'Cannot deactivate user due to active dependencies.';
+          this.dialogService.error(message);
           return;
         }
         
@@ -685,7 +683,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle confirmation from deactivate warning dialog
+   * Handle confirmation from deactivate warning drawer
    */
   onDeactivateConfirmed(): void {
     if (!this.pendingDeactivationUserId) return;
@@ -693,55 +691,95 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     const userId = this.pendingDeactivationUserId;
     const user = this.usersSignal().find(u => u.id === userId);
     
+    this.isDeactivating = true;
     this.showDeactivateDialog = false;
-    this.deactivateWarningData = null;
-    this.isLoading = true;
     this.cdr.markForCheck();
     
     // Retry with force=true to bypass soft warnings
     this.adminUsersService.deactivateUser(userId, true).pipe(
-      takeUntil(this.destroy$)
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isDeactivating = false;
+        this.cdr.markForCheck();
+      })
     ).subscribe({
       next: (response) => {
         console.log('User deactivated successfully (forced):', response);
-        this.isLoading = false;
+        this.deactivateWarningData = null;
         this.pendingDeactivationUserId = null;
+        // Update local state instead of reloading
+        if (user) {
+          user.isActive = false;
+          this.usersSignal.set([...this.usersSignal()]);
+        }
+        // Refresh drawer if open
+        if (this.drawerComponent && this.isDrawerOpen) {
+          this.drawerComponent.retryLoad();
+        }
         this.showSuccess(`User "${user?.firstName} ${user?.lastName}" deactivated successfully!`);
-        this.closeDrawer();
-        this.loadUsers();
       },
       error: (error) => {
         console.error('Error deactivating user (forced):', error);
-        this.isLoading = false;
-        this.pendingDeactivationUserId = null;
-        this.cdr.markForCheck();
         
-        // Even with force, hard blocks cannot be bypassed
+        // Even with force, hard blocks cannot be bypassed - use toast
         if (this.adminUsersService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateUserBlocked;
-          const reasons = blocked.reasons?.length > 0 
+          const message = blocked.reasons?.length > 0 
             ? blocked.reasons.join(' ') 
-            : blocked.message;
-          this.error = reasons;
+            : blocked.message || 'Cannot deactivate user due to active dependencies.';
+          this.dialogService.error(message);
         } else {
-          this.error = error?.error?.message || 'Failed to deactivate user. Please try again.';
+          this.showError(error?.error?.message || 'Failed to deactivate user. Please try again.');
         }
-        setTimeout(() => {
-          this.error = null;
-          this.cdr.markForCheck();
-        }, 5000);
+        this.pendingDeactivationUserId = null;
+        this.deactivateWarningData = null;
       }
     });
   }
 
   /**
-   * Handle cancellation from deactivate warning dialog
+   * Handle cancellation from deactivate warning drawer
    */
   onDeactivateCancelled(): void {
     this.showDeactivateDialog = false;
     this.deactivateWarningData = null;
     this.pendingDeactivationUserId = null;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Activate user
+   */
+  private activateUser(userId: string): void {
+    const user = this.usersSignal().find(u => u.id === userId);
+    if (!user) return;
+    
+    this.isLoading = true;
+    this.cdr.markForCheck();
+    
+    this.adminUsersService.activateUser(userId).pipe(
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
+      next: (response) => {
+        console.log('User activated successfully:', response);
+        // Update local state instead of reloading
+        user.isActive = true;
+        this.usersSignal.set([...this.usersSignal()]);
+        // Refresh drawer if open
+        if (this.drawerComponent && this.isDrawerOpen) {
+          this.drawerComponent.retryLoad();
+        }
+        this.showSuccess(`User "${user.firstName} ${user.lastName}" activated successfully!`);
+      },
+      error: (error) => {
+        console.error('Error activating user:', error);
+        this.showError(error?.error?.message || 'Failed to activate user. Please try again.');
+      }
+    });
   }
 
   /**
@@ -768,6 +806,31 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         });
       }
     });
+  }
+
+  /**
+   * Toggle context switcher dropdown
+   */
+  toggleContextDropdown(event: Event): void {
+    event.stopPropagation();
+    this.isContextDropdownOpen = !this.isContextDropdownOpen;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Switch viewing context between Admin and Employee
+   */
+  switchContext(context: 'admin' | 'employee'): void {
+    this.viewingContext = context;
+    localStorage.setItem(this.VIEWING_CONTEXT_KEY, context);
+    this.isContextDropdownOpen = false;
+    
+    // Navigate to the appropriate dashboard
+    if (context === 'admin') {
+      this.router.navigateByUrl('/admin/dashboard');
+    } else {
+      this.router.navigateByUrl('/user/dashboard');
+    }
   }
 
   ngOnDestroy(): void {

@@ -2,22 +2,13 @@
   <app-user-sidebar></app-user-sidebar>
 
   <main class="user-dashboard-main">
-    <!-- Page Header -->
-    <header class="page-header">
-      <h1 class="page-title">Dashboard</h1>
-      <div class="user-info">
-        <div class="user-avatar">{{ currentUser?.firstName?.charAt(0) || 'U' }}</div>
-        <div class="user-details">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="role-badge">Employee</span>
-        </div>
-      </div>
-    </header>
+    <!-- Page Header - Uses shared component with admin-style header -->
+    <app-user-page-header pageTitle="Dashboard"></app-user-page-header>
 
     <!-- Main Content Area -->
     <div class="main-content">
       <!-- Error Message -->
-      <div *ngIf="errorMessage" class="error-alert">
+      <div *ngIf="errorMessage" class="error-alert" role="alert">
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span>{{ errorMessage }}</span>
       </div>
@@ -29,11 +20,16 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- KPI Stats Grid -->
-        <section class="kpi-section" *ngIf="stats">
+        <!-- KPI Stats Grid - Clickable with navigation -->
+        <section class="kpi-section" *ngIf="stats" aria-label="Key Performance Indicators">
           <div class="kpi-grid">
-            <!-- Current Balance Card - Primary -->
-            <div class="kpi-card primary">
+            <!-- Current Balance Card - Primary (Clickable) -->
+            <div class="kpi-card primary clickable" 
+                 (click)="navigateToBalance()" 
+                 tabindex="0" 
+                 role="button"
+                 aria-label="View all transactions - Current Balance: {{ stats.currentBalance }} points"
+                 (keydown.enter)="navigateToBalance()">
               <div class="kpi-icon">
                 <i class="fa-solid fa-wallet"></i>
               </div>
@@ -42,10 +38,16 @@
                 <div class="kpi-label">Current Balance</div>
                 <span class="kpi-unit">Points</span>
               </div>
+              <i class="fa-solid fa-chevron-right kpi-arrow"></i>
             </div>
 
-            <!-- Points Earned Card -->
-            <div class="kpi-card">
+            <!-- Points Earned Card (Clickable) -->
+            <div class="kpi-card clickable" 
+                 (click)="navigateToEarned()" 
+                 tabindex="0" 
+                 role="button"
+                 aria-label="View earned transactions - Points Earned: {{ stats.pointsEarned }} points"
+                 (keydown.enter)="navigateToEarned()">
               <div class="kpi-icon earned">
                 <i class="fa-solid fa-arrow-trend-up"></i>
               </div>
@@ -54,10 +56,16 @@
                 <div class="kpi-label">Points Earned</div>
                 <span class="kpi-unit">Points</span>
               </div>
+              <i class="fa-solid fa-chevron-right kpi-arrow"></i>
             </div>
 
-            <!-- Points Redeemed Card -->
-            <div class="kpi-card">
+            <!-- Points Redeemed Card (Clickable) -->
+            <div class="kpi-card clickable" 
+                 (click)="navigateToRedeemed()" 
+                 tabindex="0" 
+                 role="button"
+                 aria-label="View redeemed transactions - Points Redeemed: {{ stats.pointsRedeemed }} points"
+                 (keydown.enter)="navigateToRedeemed()">
               <div class="kpi-icon redeemed">
                 <i class="fa-solid fa-arrow-trend-down"></i>
               </div>
@@ -66,10 +74,16 @@
                 <div class="kpi-label">Points Redeemed</div>
                 <span class="kpi-unit">Points</span>
               </div>
+              <i class="fa-solid fa-chevron-right kpi-arrow"></i>
             </div>
 
-            <!-- Events Registered Card -->
-            <div class="kpi-card">
+            <!-- Events Registered Card (Clickable) -->
+            <div class="kpi-card clickable" 
+                 (click)="navigateToEventsRegistered()" 
+                 tabindex="0" 
+                 role="button"
+                 aria-label="View registered events - {{ stats.eventsRegistered }} events"
+                 (keydown.enter)="navigateToEventsRegistered()">
               <div class="kpi-icon events">
                 <i class="fa-solid fa-calendar-check"></i>
               </div>
@@ -78,29 +92,34 @@
                 <div class="kpi-label">Events Registered</div>
                 <span class="kpi-unit">Events</span>
               </div>
+              <i class="fa-solid fa-chevron-right kpi-arrow"></i>
             </div>
           </div>
         </section>
 
         <!-- Middle Grid: Transactions & Events -->
         <section class="dashboard-grid">
-          <!-- Recent Transactions -->
+          <!-- Recent Transactions Card with View All -->
           <div class="dashboard-card">
             <div class="card-header">
               <h2 class="card-title">
                 <i class="fa-solid fa-receipt"></i>
                 Recent Transactions
               </h2>
+              <a class="view-all-link" (click)="viewAllTransactions()" tabindex="0" (keydown.enter)="viewAllTransactions()">
+                View All
+                <i class="fa-solid fa-arrow-right"></i>
+              </a>
             </div>
             <div class="card-body">
               <div class="transactions-list" *ngIf="recentTransactions && recentTransactions.length > 0; else noTransactions">
                 <div class="transaction-item" *ngFor="let transaction of recentTransactions">
                   <div class="transaction-info">
-                    <i class="fa-solid fa-circle-dot transaction-dot" [ngClass]="getTransactionClass(transaction.points)"></i>
+                    <i class="fa-solid fa-circle-dot transaction-dot" [ngClass]="getTransactionPointsClass(transaction)"></i>
                     <span class="transaction-desc">{{ transaction.description || transaction.type }}</span>
                   </div>
-                  <span class="transaction-points" [ngClass]="getTransactionClass(transaction.points)">
-                    {{ transaction.points >= 0 ? '+' : '' }}{{ transaction.points | number }}
+                  <span class="transaction-points" [ngClass]="getTransactionPointsClass(transaction)">
+                    {{ formatTransactionPoints(transaction) }}
                   </span>
                 </div>
               </div>
@@ -111,25 +130,28 @@
                 </div>
               </ng-template>
             </div>
-            <div class="card-footer">
-              <button class="btn-link" (click)="viewAllTransactions()">
-                View All
-                <i class="fa-solid fa-arrow-right"></i>
-              </button>
-            </div>
           </div>
 
-          <!-- Upcoming Events -->
+          <!-- Upcoming Events Card with View All and Deep Links -->
           <div class="dashboard-card">
             <div class="card-header">
               <h2 class="card-title">
                 <i class="fa-solid fa-calendar-days"></i>
                 Upcoming Events
               </h2>
+              <a class="view-all-link" (click)="viewAllEvents()" tabindex="0" (keydown.enter)="viewAllEvents()">
+                View All
+                <i class="fa-solid fa-arrow-right"></i>
+              </a>
             </div>
             <div class="card-body">
               <div class="events-list" *ngIf="upcomingEvents && upcomingEvents.length > 0; else noEvents">
-                <div class="event-item" *ngFor="let event of upcomingEvents">
+                <div class="event-item clickable" 
+                     *ngFor="let event of upcomingEvents" 
+                     (click)="navigateToEvent(event)"
+                     tabindex="0"
+                     role="button"
+                     (keydown.enter)="navigateToEvent(event)">
                   <div class="event-icon">
                     <i class="fa-solid fa-calendar"></i>
                   </div>
@@ -151,43 +173,75 @@
                 </div>
               </ng-template>
             </div>
-            <div class="card-footer">
-              <button class="btn-link" (click)="viewAllEvents()">
-                See All
-                <i class="fa-solid fa-arrow-right"></i>
-              </button>
-            </div>
           </div>
         </section>
 
-        <!-- Bottom Grid: Rewards & Redemptions -->
-        <section class="dashboard-grid-bottom">
-          <!-- Top Rewards Available -->
-          <div class="dashboard-card rewards-card">
-            <div class="rewards-content">
-              <div class="rewards-icon">
+        <!-- Bottom Grid: Top Rewards & Redemption Status (2x2 with above) -->
+        <section class="dashboard-grid">
+          <!-- Top Rewards Card -->
+          <div class="dashboard-card" *ngIf="topProducts && topProducts.length > 0">
+            <div class="card-header">
+              <h2 class="card-title">
                 <i class="fa-solid fa-gift"></i>
+                Top Rewards Available
+              </h2>
+              <a class="view-all-link" (click)="browseRewards()" tabindex="0" (keydown.enter)="browseRewards()">
+                View All
+                <i class="fa-solid fa-arrow-right"></i>
+              </a>
+            </div>
+            <div class="card-body carousel-body">
+              <div class="carousel-container" 
+                   (mouseenter)="onCarouselMouseEnter()" 
+                   (mouseleave)="onCarouselMouseLeave()"
+                   role="region"
+                   aria-label="Top rewards carousel"
+                   aria-live="polite">
+                <div class="carousel-track" [style.transform]="getCarouselTransform()">
+                  <!-- Render items multiple times for infinite loop -->
+                  <div class="carousel-item" *ngFor="let product of topProducts; let i = index">
+                    <div class="product-image-container">
+                      <img 
+                        *ngIf="product.imageUrl" 
+                        [src]="product.imageUrl" 
+                        [alt]="product.name"
+                        class="product-image"
+                        (error)="product.imageUrl = undefined" />
+                      <div class="placeholder-image" *ngIf="!product.imageUrl">
+                        <i class="fa-solid fa-gift"></i>
+                      </div>
+                    </div>
+                    <div class="product-info">
+                      <h4 class="product-name">{{ product.name }}</h4>
+                      <span class="product-category">{{ product.categoryName }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <h2 class="rewards-title">Top Rewards Available</h2>
-              <p class="rewards-subtitle">Browse and redeem exciting rewards with your points</p>
-              <button class="btn-primary" (click)="browseRewards()">
-                <i class="fa-solid fa-store"></i>
-                Browse Rewards
-              </button>
             </div>
           </div>
 
-          <!-- Redemption Status -->
-          <div class="dashboard-card" *ngIf="redemptionCounts">
+          <!-- Redemption Status Card -->
+          <div class="dashboard-card">
             <div class="card-header">
               <h2 class="card-title">
                 <i class="fa-solid fa-box"></i>
                 Redemption Status
               </h2>
+              <a class="view-all-link" (click)="viewRedemptions()" tabindex="0" (keydown.enter)="viewRedemptions()">
+                View All
+                <i class="fa-solid fa-arrow-right"></i>
+              </a>
             </div>
             <div class="card-body">
-              <div class="redemption-status-grid">
-                <div class="status-item">
+              <div class="redemption-status-grid" *ngIf="redemptionCounts">
+                <!-- Pending Card (Clickable) -->
+                <div class="status-item clickable" 
+                     (click)="navigateToRedemptions('pending')"
+                     tabindex="0"
+                     role="button"
+                     aria-label="View pending redemptions"
+                     (keydown.enter)="navigateToRedemptions('pending')">
                   <div class="status-icon pending">
                     <i class="fa-regular fa-clock"></i>
                   </div>
@@ -197,7 +251,13 @@
                   </div>
                 </div>
 
-                <div class="status-item">
+                <!-- Approved Card (Clickable) -->
+                <div class="status-item clickable" 
+                     (click)="navigateToRedemptions('approved')"
+                     tabindex="0"
+                     role="button"
+                     aria-label="View approved redemptions"
+                     (keydown.enter)="navigateToRedemptions('approved')">
                   <div class="status-icon approved">
                     <i class="fa-solid fa-circle-check"></i>
                   </div>
@@ -207,13 +267,19 @@
                   </div>
                 </div>
 
-                <div class="status-item">
-                  <div class="status-icon delivered">
-                    <i class="fa-solid fa-truck"></i>
+                <!-- Rejected/Not Delivered Card (Clickable) -->
+                <div class="status-item clickable" 
+                     (click)="navigateToRedemptions('rejected')"
+                     tabindex="0"
+                     role="button"
+                     aria-label="View rejected redemptions"
+                     (keydown.enter)="navigateToRedemptions('rejected')">
+                  <div class="status-icon rejected">
+                    <i class="fa-solid fa-circle-xmark"></i>
                   </div>
                   <div class="status-info">
-                    <span class="status-count">{{ redemptionCounts.delivered }}</span>
-                    <span class="status-label">Delivered</span>
+                    <span class="status-count">{{ getNotDeliveredCount() }}</span>
+                    <span class="status-label">Rejected</span>
                   </div>
                 </div>
               </div>

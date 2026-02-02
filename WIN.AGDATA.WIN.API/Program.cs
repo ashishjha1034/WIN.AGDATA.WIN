@@ -173,8 +173,10 @@ builder.Services.AddAuthorization(options =>
 		policy.RequireAssertion(context =>
 		{
 			var isAdmin = context.User.IsInRole("Admin");
+			var isEmployee = context.User.IsInRole("Employee");
 			var pwdChangedClaim = context.User.FindFirst("pwdChanged")?.Value;
-			return isAdmin || pwdChangedClaim == "true";
+			// Allow: Admin users, or any authenticated Employee, or non-Admin users with pwdChanged=true
+			return isAdmin || isEmployee || pwdChangedClaim == "true";
 		}));
 });
 

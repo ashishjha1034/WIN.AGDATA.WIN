@@ -10,10 +10,48 @@
       <div class="header-right">
         <div class="user-info" *ngIf="currentUser">
           <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
+          
+          <!-- Context Switch Dropdown -->
+          <div class="context-switch-container">
+            <button 
+              class="user-role context-switch-trigger"
+              (click)="toggleContextDropdown($event)"
+              [attr.aria-expanded]="isContextDropdownOpen"
+              aria-haspopup="listbox"
+              aria-label="Switch viewing context">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>Admin</span>
+              <i class="fa-solid fa-chevron-down dropdown-arrow" [class.rotated]="isContextDropdownOpen"></i>
+            </button>
+            
+            <!-- Dropdown Menu -->
+            <div 
+              class="context-dropdown" 
+              *ngIf="isContextDropdownOpen"
+              role="listbox"
+              aria-label="Viewing context options">
+              <button 
+                class="context-option"
+                [class.active]="viewingContext === 'admin'"
+                (click)="switchContext('admin')"
+                role="option"
+                [attr.aria-selected]="viewingContext === 'admin'">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Admin View</span>
+                <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'admin'"></i>
+              </button>
+              <button 
+                class="context-option"
+                [class.active]="viewingContext === 'employee'"
+                (click)="switchContext('employee')"
+                role="option"
+                [attr.aria-selected]="viewingContext === 'employee'">
+                <i class="fa-solid fa-user"></i>
+                <span>Employee View</span>
+                <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'employee'"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -205,11 +243,66 @@
     (userCreated)="onUserCreated($event)"
   ></app-add-user-modal>
 
-  <!-- User Deactivate Confirmation Dialog -->
-  <app-user-deactivate-confirmation-dialog
-    *ngIf="showDeactivateDialog"
-    [data]="deactivateWarningData"
-    (confirm)="onDeactivateConfirmed()"
-    (cancel)="onDeactivateCancelled()"
-  ></app-user-deactivate-confirmation-dialog>
+  <!-- Deactivation Warning Dialog (matches Product pattern) -->
+  <div *ngIf="showDeactivateDialog && deactivateWarningData" class="dialog-overlay">
+    <div class="dialog-content" role="alertdialog" aria-labelledby="deactivateDialogTitle" aria-modal="true">
+      <div class="dialog-header">
+        <h2 id="deactivateDialogTitle">Deactivation Warnings</h2>
+        <button type="button" class="btn-close" (click)="onDeactivateCancelled()" aria-label="Close dialog">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        <p class="warning-intro">User <strong>{{ deactivateWarningData.userName }}</strong> has the following conditions that may affect deactivation:</p>
+        
+        <div class="warnings-list">
+          <div *ngIf="deactivateWarningData.pointsBalance > 0" class="warning-item">
+            <i class="fa-solid fa-coins"></i>
+            <div class="warning-content">
+              <strong>Points Balance:</strong>
+              <p>This user has {{ deactivateWarningData.pointsBalance | number }} points. These points will remain but cannot be used while deactivated.</p>
+            </div>
+          </div>
+
+          <div *ngIf="deactivateWarningData.completedEventsCount > 0" class="warning-item">
+            <i class="fa-solid fa-calendar-check"></i>
+            <div class="warning-content">
+              <strong>Event Participation:</strong>
+              <p>{{ deactivateWarningData.completedEventsCount | number }} completed events</p>
+            </div>
+          </div>
+
+          <div *ngIf="deactivateWarningData.completedRedemptionsCount > 0" class="warning-item">
+            <i class="fa-solid fa-gift"></i>
+            <div class="warning-content">
+              <strong>Redemption History:</strong>
+              <p>{{ deactivateWarningData.completedRedemptionsCount | number }} completed redemptions</p>
+            </div>
+          </div>
+
+          <div *ngIf="deactivateWarningData.lastActivityDate" class="warning-item">
+            <i class="fa-solid fa-clock"></i>
+            <div class="warning-content">
+              <strong>Last Activity:</strong>
+              <p>{{ deactivateWarningData.lastActivityDate | date:'mediumDate' }} ({{ deactivateWarningData.daysSinceLastActivity }} days ago)</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="warning-message">
+          <p>Click "Confirm" to proceed with deactivation despite these warnings.</p>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" (click)="onDeactivateCancelled()">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="onDeactivateConfirmed()" [disabled]="isDeactivating">
+          <i class="fa-solid fa-check"></i> Confirm Deactivation
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

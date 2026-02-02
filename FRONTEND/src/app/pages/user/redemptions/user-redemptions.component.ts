@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { UserDashboardService, UserRedemption, RedemptionStatusCounts } from '../../../services/user-dashboard.service';
 import { Subject } from 'rxjs';
@@ -8,6 +8,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { UserPageHeaderComponent } from '../../../components/user-page-header/user-page-header.component';
 
 interface StatusTab {
   key: 'pending' | 'approved' | 'delivered' | 'rejected';
@@ -21,7 +22,7 @@ interface StatusTab {
   templateUrl: './user-redemptions.component.html',
   styleUrls: ['./user-redemptions.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent, UserPageHeaderComponent]
 })
 export class UserRedemptionsComponent implements OnInit, OnDestroy {
   currentUser: any;
@@ -49,10 +50,28 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private userDashboardService: UserDashboardService,
     private router: Router,
+    private route: ActivatedRoute,
     private cdr: ChangeDetectorRef
   ) { }
 
   ngOnInit(): void {
+    // Subscribe to query params for URL-driven filtering
+    this.route.queryParams
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        if (params['status']) {
+          const statusParam = params['status'].toLowerCase();
+          const validStatuses: ('pending' | 'approved' | 'delivered' | 'rejected')[] = ['pending', 'approved', 'delivered', 'rejected'];
+          if (validStatuses.includes(statusParam as any)) {
+            this.activeTab = statusParam as 'pending' | 'approved' | 'delivered' | 'rejected';
+            // Re-apply filter if data is already loaded
+            if (this.redemptions.length > 0) {
+              this.filterByStatus();
+            }
+          }
+        }
+      });
+
     this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
@@ -114,6 +133,18 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
 
   selectTab(tabKey: 'pending' | 'approved' | 'delivered' | 'rejected'): void {
     this.activeTab = tabKey;
+    this.filterRedemptionsByTab();
+    
+    // Update URL with status filter
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { status: tabKey },
+      queryParamsHandling: 'merge'
+    });
+  }
+
+  filterByStatus(): void {
+    // Re-apply tab filter (used when URL params update after data load)
     this.filterRedemptionsByTab();
   }
 

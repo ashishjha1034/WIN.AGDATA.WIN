@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { UserDetailsResponse, UpdateUserRequest } from '../../../../models/user.models';
 import { AdminUsersService } from '../../../../services/admin-users.service';
+import { AuthService } from '../../../../services/auth.service';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { CustomValidators, ValidationConstants } from '../../../../shared/validators/custom-validators';
@@ -10,7 +11,7 @@ import { ValidationHintComponent } from '../../../../shared/components/validatio
 import { FormErrorsSummaryComponent } from '../../../../shared/components/form-errors-summary.component';
 
 export interface DrawerAction {
-  type: 'assign-roles' | 'deactivate' | 'close' | 'edit' | 'user-updated';
+  type: 'assign-roles' | 'deactivate' | 'activate' | 'close' | 'edit' | 'user-updated' | 'toggle-role';
   data?: any;
 }
 
@@ -38,6 +39,23 @@ export interface DrawerAction {
               <p class="employee-id">ID: {{ userDetails.user?.employeeId || '' }}</p>
             </div>
             <button class="edit-btn" (click)="enterEditMode()">✎ Edit</button>
+          </div>
+
+          <!-- Role Toggle Button -->
+          <div class="role-toggle-section">
+            <button 
+              class="role-toggle-btn" 
+              (click)="onToggleRole()"
+              [disabled]="isTogglingRole || !canEditRole()"
+              [title]="!canEditRole() ? 'Users cannot change their own role' : ''"
+              *ngIf="userDetails.user?.isActive">
+              <span *ngIf="!isTogglingRole">
+                Change role : {{ isUserAdmin() ? 'Employee' : 'Admin' }}
+              </span>
+              <span *ngIf="isTogglingRole" class="toggle-loading">
+                <span class="spinner-small"></span> Updating...
+              </span>
+            </button>
           </div>
 
           <!-- Roles and Status -->
@@ -82,81 +100,20 @@ export interface DrawerAction {
             </div>
           </div>
 
-        <!-- Tabs Section -->
+        <!-- Tabs Section - Activity Only -->
         <div class="tabs-section">
           <div class="tabs-header">
             <button
-              class="tab-btn"
-              [class.active]="activeTab === 'profile'"
-              (click)="activeTab = 'profile'"
-            >
-              Profile
-            </button>
-            <button
-              class="tab-btn"
-              [class.active]="activeTab === 'points'"
-              (click)="activeTab = 'points'"
-            >
-              Points
-            </button>
-            <button
-              class="tab-btn"
-              [class.active]="activeTab === 'activity'"
-              (click)="activeTab = 'activity'"
+              class="tab-btn active"
             >
               Activity
             </button>
           </div>
 
-          <!-- Profile Tab -->
-          <div *ngIf="activeTab === 'profile'" class="tab-content">
-            <div class="info-group">
-              <label>First Name</label>
-              <p>{{ userDetails.user?.firstName || '-' }}</p>
-            </div>
-            <div class="info-group">
-              <label>Last Name</label>
-              <p>{{ userDetails.user?.lastName || '-' }}</p>
-            </div>
-            <div class="info-group">
-              <label>Email Address</label>
-              <p>{{ userDetails.user?.email || '-' }}</p>
-            </div>
-            <div class="info-group">
-              <label>Employee ID</label>
-              <p>{{ userDetails.user?.employeeId || '-' }}</p>
-            </div>
-            <div class="info-group" *ngIf="userDetails.user?.createdAt">
-              <label>Created</label>
-              <p>{{ userDetails.user?.createdAt | date: 'medium' }}</p>
-            </div>
-          </div>
-
-          <!-- Points Tab -->
-          <div *ngIf="activeTab === 'points'" class="tab-content">
-            <div class="info-group">
-              <label>Current Balance</label>
-              <p>{{ userDetails.points?.current ?? 0 | number }} points</p>
-            </div>
-            <div class="info-group">
-              <label>Total Earned</label>
-              <p>{{ userDetails.points?.earned ?? 0 | number }} points</p>
-            </div>
-            <div class="info-group">
-              <label>Total Redeemed</label>
-              <p>{{ userDetails.points?.redeemed ?? 0 | number }} points</p>
-            </div>
-            <div class="info-group">
-              <label>Net Points</label>
-              <p>{{ ((userDetails.points?.earned ?? 0) - (userDetails.points?.redeemed ?? 0)) | number }} points</p>
-            </div>
-          </div>
-
           <!-- Activity Tab -->
-          <div *ngIf="activeTab === 'activity'" class="tab-content">
+          <div class="tab-content">
             <div class="info-group">
-              <label>Total Transactions</label>
-              <p>{{ userDetails.transactionCount ?? 0 }}</p>
+              <label>Recent Transactions</label>
             </div>
             
             <div *ngIf="isLoadingTransactions" class="loading-transactions">
@@ -164,12 +121,12 @@ export interface DrawerAction {
               <p>Loading transactions...</p>
             </div>
 
-            <div *ngIf="!isLoadingTransactions && transactions.length === 0" class="no-transactions">
+            <div *ngIf="!isLoadingTransactions && recentTransactions.length === 0" class="no-transactions">
               <p>No transactions found</p>
             </div>
 
-            <div *ngIf="!isLoadingTransactions && transactions.length > 0" class="transactions-list">
-              <div *ngFor="let transaction of transactions" class="transaction-item">
+            <div *ngIf="!isLoadingTransactions && recentTransactions.length > 0" class="transactions-list">
+              <div *ngFor="let transaction of recentTransactions" class="transaction-item">
                 <div class="transaction-header">
                   <span class="transaction-type" [class.positive]="isPositiveTransaction(transaction)" [class.negative]="!isPositiveTransaction(transaction)">
                     {{ transaction.transactionType || transaction.type }}
@@ -308,7 +265,13 @@ export interface DrawerAction {
 
       <!-- Footer Actions -->
       <div class="drawer-footer" *ngIf="userDetails && !isLoading && !isEditMode">
-        <button class="btn-secondary" (click)="onAction('assign-roles')">Assign Roles</button>
+        <button
+          class="btn-success"
+          (click)="onAction('activate')"
+          *ngIf="!userDetails.user?.isActive"
+        >
+          Activate User
+        </button>
         <button
           class="btn-danger"
           (click)="onAction('deactivate')"
@@ -451,6 +414,45 @@ export interface DrawerAction {
       border-color: #d1d5db;
     }
 
+    /* Role Toggle Section */
+    .role-toggle-section {
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 20px;
+    }
+
+    .role-toggle-btn {
+      width: 100%;
+      padding: 10px 16px;
+      background: #2c5f3f;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .role-toggle-btn:hover:not(:disabled) {
+      background: #234a31;
+    }
+
+    .role-toggle-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .toggle-loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .meta-section {
       padding-bottom: 20px;
       border-bottom: 1px solid #e5e7eb;
@@ -475,12 +477,20 @@ export interface DrawerAction {
       color: #6b7280;
       text-transform: uppercase;
       min-width: 60px;
+      flex-shrink: 0;
     }
 
     .roles {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+      flex: 1;
+      align-items: center;
+    }
+
+    .status-toggle {
+      display: flex;
+      align-items: center;
       flex: 1;
     }
 
@@ -808,6 +818,15 @@ export interface DrawerAction {
       background: #fecaca;
     }
 
+    .btn-success {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
+    .btn-success:hover {
+      background: #bbf7d0;
+    }
+
     /* Edit Form Styles */
     .edit-form {
       display: flex;
@@ -946,14 +965,20 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
   transactions: any[] = [];
   isLoading = false;
   isLoadingTransactions = false;
+  isTogglingRole = false;
   error: string | null = null;
-  activeTab: 'profile' | 'points' | 'activity' = 'profile';
+  activeTab: 'activity' = 'activity'; // Only Activity tab now
 
   // Edit mode state
   isEditMode = false;
   isSaving = false;
   editError: string | null = null;
   editForm: FormGroup;
+
+  /** Returns the 5 most recent transactions */
+  get recentTransactions(): any[] {
+    return this.transactions.slice(0, 5);
+  }
 
   // Name validation constants
   readonly minNameLength = ValidationConstants.NAME_MIN_LENGTH;
@@ -971,6 +996,7 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
 
   constructor(
     private adminUsersService: AdminUsersService,
+    private authService: AuthService,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
@@ -1014,7 +1040,7 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     this.userDetails = null;
     this.transactions = [];
     this.error = null;
-    this.activeTab = 'profile';
+    this.activeTab = 'activity';
     this.isEditMode = false;
     this.editError = null;
     this.isSaving = false;
@@ -1072,12 +1098,13 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     return (first + last).toUpperCase() || '?';
   }
 
-  /** Load user transactions */
+  /** Load user transactions - fetches 5 most recent */
   private loadTransactions(): void {
     if (!this.userId) return;
 
     this.isLoadingTransactions = true;
-    this.adminUsersService.getUserTransactions(this.userId, 1, 50).pipe(
+    // Fetch only the 5 most recent transactions for the Activity tab
+    this.adminUsersService.getUserTransactions(this.userId, 1, 5).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (response) => {
@@ -1210,10 +1237,54 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
   formatTransactionAmount(transaction: any): string {
     const amount = Math.abs(transaction.amount || 0);
     const type = (transaction.transactionType || transaction.type || '').toLowerCase();
+    // Show just 0 if amount is zero
+    if (amount === 0) return '0';
     // Redeemed shows negative
     if (type === 'redeemed') return `-${amount.toLocaleString()}`;
     // Earned/Refunded shows positive
     return `+${amount.toLocaleString()}`;
+  }
+
+  /** Check if user is currently an Admin */
+  isUserAdmin(): boolean {
+    const roles = this.userDetails?.user?.roles || [];
+    return roles.some(r => r.toLowerCase() === 'admin');
+  }
+
+  /** Check if current user can edit the role of the displayed user */
+  canEditRole(): boolean {
+    // Only admins can edit roles, or users editing their own profile can do other things
+    // but cannot change their own role
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser) return false;
+    
+    // If user is editing their own profile, they cannot change their role
+    if (currentUser.id === this.userId) {
+      return false;
+    }
+    
+    // Otherwise, user can edit
+    return true;
+  }
+
+  /** Trigger role toggle action */
+  onToggleRole(): void {
+    // Prevent role toggle if user is trying to edit their own role
+    if (!this.canEditRole()) {
+      return;
+    }
+    
+    if (!this.userId || !this.userDetails?.user) return;
+    
+    const newRole = this.isUserAdmin() ? 'Employee' : 'Admin';
+    this.actionTriggered.emit({ 
+      type: 'toggle-role', 
+      data: { 
+        userId: this.userId, 
+        currentRole: this.isUserAdmin() ? 'Admin' : 'Employee',
+        newRole 
+      } 
+    });
   }
 
   ngOnDestroy(): void {

@@ -8,6 +8,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { UserPageHeaderComponent } from '../../../components/user-page-header/user-page-header.component';
 
 interface ProductWithState extends UserProduct {
   canRedeem: boolean;
@@ -21,7 +22,7 @@ interface ProductWithState extends UserProduct {
   templateUrl: './user-products.component.html',
   styleUrls: ['./user-products.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent, UserPageHeaderComponent]
 })
 export class UserProductsComponent implements OnInit, OnDestroy {
   Math = Math;

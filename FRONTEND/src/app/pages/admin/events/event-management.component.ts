@@ -1252,10 +1252,18 @@ export class EventManagementComponent implements OnInit, OnDestroy {
 
   /**
    * Format datetime with IST timezone for table display (12-hour AM/PM format)
+   * Handles both "2026-02-02T10:00:00Z" and "2026-02-02T10:00:00" (assumes UTC)
    */
   formatDateTimeIst(dateStr: string): string {
     if (!dateStr) return '—';
-    const date = new Date(dateStr);
+    
+    // Ensure the date string is treated as UTC
+    let normalized = dateStr.trim();
+    if (!normalized.endsWith('Z') && !normalized.includes('+') && !normalized.includes('-', 10)) {
+      normalized = normalized + 'Z';
+    }
+    const date = new Date(normalized);
+    
     // Convert to IST (UTC+5:30)
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istDate = new Date(date.getTime() + istOffset);

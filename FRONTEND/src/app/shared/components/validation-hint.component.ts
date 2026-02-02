@@ -303,11 +303,7 @@ export class ValidationHintComponent implements OnChanges, OnInit, OnDestroy {
       return `Maximum ${maxLen} characters allowed`;
     }
     
-    // Valid - show success message
-    if (!errors) {
-      return 'Looks good!';
-    }
-    
+    // Valid - no message needed (remove static success text per UX spec)
     return null;
   }
   
@@ -348,6 +344,21 @@ export class ValidationHintComponent implements OnChanges, OnInit, OnDestroy {
     // Check corporate domain
     if (domain && !domain.toLowerCase().includes('agdata.com')) {
       return 'Must use @agdata.com email domain';
+    }
+    
+    // Check email starts with letter or number
+    if (errors?.['corporateEmailStart']) {
+      return errors['corporateEmailStart'].message || 'Email must start with a letter or number';
+    }
+    
+    // Check email format (allowed characters)
+    if (errors?.['corporateEmailFormat']) {
+      return errors['corporateEmailFormat'].message || 'Email can only contain letters, numbers, and . _ + - symbols';
+    }
+    
+    // Check email is not only symbols
+    if (errors?.['corporateEmailOnlySymbols']) {
+      return errors['corporateEmailOnlySymbols'].message || 'Email cannot be only symbols';
     }
     
     // Check local part length

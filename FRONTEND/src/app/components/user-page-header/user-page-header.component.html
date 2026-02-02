@@ -1,0 +1,66 @@
+<!-- User Page Header - Mirrors Admin Style -->
+<header class="page-header" (document:click)="onDocumentClick($event)">
+  <div class="header-left">
+    <h1 class="page-title">{{ pageTitle }}</h1>
+  </div>
+  <div class="header-right">
+    <!-- Optional Points Badge -->
+    <div class="points-badge" *ngIf="showPointsBadge">
+      <i class="fa-solid fa-coins"></i>
+      <span class="points-value">{{ pointsValue | number }} pts</span>
+    </div>
+    
+    <!-- User Info Section -->
+    <div class="user-info" *ngIf="currentUser">
+      <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+      
+      <!-- Context Switch Dropdown (Admin Only) -->
+      <div class="context-switch-container" *ngIf="isAdmin">
+        <button 
+          class="user-role context-switch-trigger"
+          (click)="toggleContextDropdown($event)"
+          [attr.aria-expanded]="isContextDropdownOpen"
+          aria-haspopup="listbox"
+          aria-label="Switch viewing context">
+          <i class="fa-solid" [ngClass]="getContextIcon()"></i>
+          <span>Employee</span>
+          <i class="fa-solid fa-chevron-down dropdown-arrow" [class.rotated]="isContextDropdownOpen"></i>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div 
+          class="context-dropdown" 
+          *ngIf="isContextDropdownOpen"
+          role="listbox"
+          aria-label="Viewing context options">
+          <button 
+            class="context-option"
+            [class.active]="viewingContext === 'admin'"
+            (click)="switchContext('admin')"
+            role="option"
+            [attr.aria-selected]="viewingContext === 'admin'">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Admin View</span>
+            <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'admin'"></i>
+          </button>
+          <button 
+            class="context-option"
+            [class.active]="viewingContext === 'employee'"
+            (click)="switchContext('employee')"
+            role="option"
+            [attr.aria-selected]="viewingContext === 'employee'">
+            <i class="fa-solid fa-user"></i>
+            <span>Employee View</span>
+            <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'employee'"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Regular Role Badge (Non-Admin Users) -->
+      <span class="user-role" *ngIf="!isAdmin">
+        <i class="fa-solid fa-user"></i>
+        Employee
+      </span>
+    </div>
+  </div>
+</header>

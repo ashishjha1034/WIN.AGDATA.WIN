@@ -181,13 +181,25 @@ export class EventDetailComponent implements OnInit, OnDestroy {
     if (!this.event) return;
     
     // Format dates for datetime-local input (YYYY-MM-DDTHH:mm)
+    // Converts UTC from API to IST for the input field
     const formatForInput = (dateStr: string | undefined): string => {
       if (!dateStr) return '';
-      const date = new Date(dateStr);
-      // Adjust for local timezone
-      const offset = date.getTimezoneOffset() * 60000;
-      const localDate = new Date(date.getTime() - offset);
-      return localDate.toISOString().slice(0, 16);
+      // Ensure the date string is treated as UTC
+      let normalized = dateStr.trim();
+      if (!normalized.endsWith('Z') && !normalized.includes('+') && !normalized.includes('-', 10)) {
+        normalized = normalized + 'Z';
+      }
+      const date = new Date(normalized);
+      // Convert to IST (UTC+5:30) for display in the input
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(date.getTime() + istOffset);
+      // Format as YYYY-MM-DDTHH:mm using UTC methods (since we already converted to IST)
+      const year = istDate.getUTCFullYear();
+      const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(istDate.getUTCDate()).padStart(2, '0');
+      const hours = String(istDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
     
     // Populate form with current event data

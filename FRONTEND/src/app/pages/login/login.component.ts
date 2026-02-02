@@ -232,20 +232,29 @@ export class LoginComponent implements OnInit, OnDestroy {
           console.log('Token stored:', !!this.authService.getToken());
           
           // Login successful, get user roles
-          const roles = response.user.roles;
+          const roles = response.user.roles || [];
           console.log('User roles:', roles);
 
           // Add small delay to ensure state is settled before redirecting
           setTimeout(() => {
             // Navigate based on role
-            if (roles.includes('Admin')) {
-              console.log('Redirecting to admin dashboard');
-              this.router.navigateByUrl('/admin/dashboard');
-            } else if (roles.includes('Manager')) {
-              console.log('Redirecting to manager dashboard');
-              this.router.navigateByUrl('/manager/dashboard');
+            if (roles && roles.length > 0) {
+              if (roles.includes('Admin')) {
+                console.log('Redirecting to admin dashboard');
+                this.router.navigateByUrl('/admin/dashboard');
+              } else if (roles.includes('Manager')) {
+                console.log('Redirecting to manager dashboard');
+                this.router.navigateByUrl('/manager/dashboard');
+              } else if (roles.includes('Employee')) {
+                console.log('Redirecting to user dashboard');
+                this.router.navigateByUrl('/user/dashboard');
+              } else {
+                console.log('User has unrecognized role, redirecting to user dashboard as fallback');
+                this.router.navigateByUrl('/user/dashboard');
+              }
             } else {
-              console.log('Redirecting to user dashboard');
+              console.warn('User has no roles assigned, defaulting to user dashboard');
+              // Default to user dashboard if no roles
               this.router.navigateByUrl('/user/dashboard');
             }
           }, 100);

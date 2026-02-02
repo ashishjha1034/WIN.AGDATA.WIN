@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { API_CONFIG } from '../config/api.config';
 
@@ -9,6 +9,14 @@ export interface UserDashboardStats {
   pointsEarned: number;
   pointsRedeemed: number;
   eventsRegistered: number;
+}
+
+export interface TopProduct {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  categoryName: string;
+  pointsCost: number;
 }
 
 export interface UserTransaction {
@@ -125,6 +133,7 @@ export class UserDashboardService {
   /**
    * Fetch recent transactions for the current user
    * Uses /api/transaction/my-history endpoint
+   * NOTE: Backend DTO uses 'Amount' which serializes to 'amount' in JSON
    */
   getRecentTransactions(limit: number = 5): Observable<UserTransaction[]> {
     const url = `${this.API_URL}/transaction/my-history?pageNumber=1&pageSize=${limit}`;
@@ -133,13 +142,23 @@ export class UserDashboardService {
       map(response => {
         console.log('Transactions response:', response);
         const transactions = response.data || [];
-        return transactions.map((t: any) => ({
-          id: t.id,
-          type: t.type || t.Type || 'Transaction',
-          description: t.description || t.Description || t.type || t.Type,
-          points: t.points ?? t.Points ?? 0,
-          createdAt: t.createdAt || t.CreatedAt
-        }));
+        return transactions.map((t: any) => {
+          // Backend TransactionDto.Amount -> JSON 'amount'
+          const pointsValue = t.amount ?? t.Amount ?? t.points ?? t.Points ?? 0;
+          return {
+            id: t.id,
+            type: t.type || t.Type || 'Transaction',
+            description: t.description || t.Description || t.type || t.Type,
+            points: pointsValue,
+            amount: pointsValue,
+            source: t.source || t.Source || '',
+            sourceId: t.sourceId || t.SourceId || null,
+            balanceAfter: t.balanceAfter ?? t.BalanceAfter ?? 0,
+            processedBy: t.processedBy || t.ProcessedBy || null,
+            createdAt: t.timestamp || t.Timestamp || t.createdAt || t.CreatedAt,
+            timestamp: t.timestamp || t.Timestamp || t.createdAt || t.CreatedAt
+          };
+        });
       }),
       catchError(error => {
         console.error('Error fetching recent transactions:', error);
@@ -180,29 +199,47 @@ export class UserDashboardService {
 
   /**
    * Fetch upcoming events
-   * Uses /api/event endpoint and filters upcoming events
+   * Uses /api/event endpoint and filters by status "Upcoming" (mapped from Draft in backend)
+   * Also fetches user's registered events to show registration status
    */
   getUpcomingEvents(limit: number = 3): Observable<UserEvent[]> {
     const url = `${this.API_URL}/event`;
     console.log('Fetching events from:', url);
-    return this.http.get<any>(url).pipe(
-      map(response => {
-        console.log('Events response:', response);
-        const events = response.data || [];
-        const now = new Date();
+    
+    return forkJoin({
+      events: this.http.get<any>(url),
+      myEvents: this.http.get<any>(`${this.API_URL}/event/user/my-events`).pipe(
+        catchError(() => of({ data: [] }))
+      )
+    }).pipe(
+      map(({ events, myEvents }) => {
+        console.log('Events response:', events);
+        const allEvents = events.data || [];
+        const myEventIds = new Set(
+          (Array.isArray(myEvents) ? myEvents : myEvents.data || [])
+            .map((e: any) => e.id)
+        );
         
-        // Filter upcoming events and take only the limit
-        const upcomingEvents = events
-          .filter((e: any) => new Date(e.eventDate || e.EventDate) >= now)
+        // Filter by status "Upcoming" (mapped from EventStatus.Draft in backend via EventProfile)
+        // Also include events with future dates as fallback
+        const now = new Date();
+        const upcomingEvents = allEvents
+          .filter((e: any) => {
+            const status = (e.status || e.Status || '').toLowerCase();
+            const eventDate = new Date(e.eventDate || e.EventDate);
+            // Status "Upcoming" is the display label for Draft events
+            return status === 'upcoming' || (status === 'draft' && eventDate >= now);
+          })
           .slice(0, limit)
           .map((e: any) => ({
             id: e.id,
             name: e.name || e.Name,
             eventDate: e.eventDate || e.EventDate,
             location: e.location || e.Location || '',
-            status: e.status || e.Status || 'Active',
+            status: e.status || e.Status || 'Upcoming',
             participantCount: e.participantCount || e.ParticipantCount || 0,
-            spotsLeft: e.maxParticipants ? (e.maxParticipants - (e.participantCount || 0)) : undefined
+            spotsLeft: e.maxParticipants ? (e.maxParticipants - (e.participantCount || 0)) : undefined,
+            registrationStatus: myEventIds.has(e.id) ? 'Registered' : undefined
           }));
         
         return upcomingEvents;
@@ -476,6 +513,49 @@ export class UserDashboardService {
       catchError(error => {
         console.error('Error calculating redemption counts:', error);
         return of({ pending: 0, approved: 0, delivered: 0, rejected: 0 });
+      })
+    );
+  }
+
+  /**
+   * Fetch top products for carousel
+   * Uses the products endpoint and returns active products sorted by popularity
+   * Falls back to products with images for the carousel display
+   */
+  getTopProducts(limit: number = 10): Observable<TopProduct[]> {
+    const url = `${this.API_URL}/products`;
+    console.log('Fetching top products from:', url);
+    return this.http.get<any>(url).pipe(
+      map(response => {
+        console.log('Products response for carousel:', response);
+        const products = response.data || [];
+        
+        // Filter active products and sort by those with images first, then by stock
+        const topProducts = products
+          .filter((p: any) => p.isActive ?? p.IsActive ?? true)
+          .sort((a: any, b: any) => {
+            // Prefer products with images
+            const aHasImage = !!(a.imageUrl || a.ImageUrl);
+            const bHasImage = !!(b.imageUrl || b.ImageUrl);
+            if (aHasImage && !bHasImage) return -1;
+            if (!aHasImage && bHasImage) return 1;
+            // Then by stock level (higher stock first)
+            return (b.stockLevel ?? b.StockLevel ?? 0) - (a.stockLevel ?? a.StockLevel ?? 0);
+          })
+          .slice(0, limit)
+          .map((p: any) => ({
+            id: p.id,
+            name: p.name || p.Name,
+            imageUrl: p.imageUrl || p.ImageUrl,
+            categoryName: p.categoryName || p.CategoryName || 'General',
+            pointsCost: p.pointsCost ?? p.PointsCost ?? p.price ?? p.Price ?? 0
+          }));
+        
+        return topProducts;
+      }),
+      catchError(error => {
+        console.error('Error fetching top products:', error);
+        return of([]);
       })
     );
   }

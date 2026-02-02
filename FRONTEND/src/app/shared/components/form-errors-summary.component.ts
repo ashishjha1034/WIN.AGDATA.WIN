@@ -1,6 +1,8 @@
-import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup, AbstractControl } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { takeUntil, debounceTime } from 'rxjs/operators';
 
 interface FieldError {
   fieldName: string;
@@ -128,7 +130,7 @@ interface FieldError {
     }
   `]
 })
-export class FormErrorsSummaryComponent implements OnChanges {
+export class FormErrorsSummaryComponent implements OnChanges, OnInit, OnDestroy {
   @Input() form?: FormGroup;
   @Input() fieldLabels: { [key: string]: string } = {};
   @Input() showOnlyWhenTouched = false;
@@ -137,12 +139,42 @@ export class FormErrorsSummaryComponent implements OnChanges {
   totalErrors = 0;
   isExpanded = false;
   
+  private destroy$ = new Subject<void>();
+  
   get hasErrors(): boolean {
     return this.totalErrors > 0;
   }
   
+  ngOnInit(): void {
+    // Subscribe to form value and status changes to update errors dynamically
+    if (this.form) {
+      this.form.valueChanges
+        .pipe(
+          takeUntil(this.destroy$),
+          debounceTime(100)
+        )
+        .subscribe(() => {
+          this.updateErrors();
+        });
+      
+      this.form.statusChanges
+        .pipe(
+          takeUntil(this.destroy$),
+          debounceTime(100)
+        )
+        .subscribe(() => {
+          this.updateErrors();
+        });
+    }
+  }
+  
   ngOnChanges(changes: SimpleChanges): void {
     this.updateErrors();
+  }
+  
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
   
   toggleExpanded(): void {
@@ -249,6 +281,18 @@ export class FormErrorsSummaryComponent implements OnChanges {
     
     if (errorObj['corporateEmailLocalPart']) {
       errors.push(errorObj['corporateEmailLocalPart'].message || 'Invalid email username');
+    }
+    
+    if (errorObj['corporateEmailStart']) {
+      errors.push(errorObj['corporateEmailStart'].message || 'Email must start with letter or number');
+    }
+    
+    if (errorObj['corporateEmailFormat']) {
+      errors.push(errorObj['corporateEmailFormat'].message || 'Email contains invalid characters');
+    }
+    
+    if (errorObj['corporateEmailOnlySymbols']) {
+      errors.push(errorObj['corporateEmailOnlySymbols'].message || 'Email cannot be only symbols');
     }
     
     if (errorObj['strongPassword']) {

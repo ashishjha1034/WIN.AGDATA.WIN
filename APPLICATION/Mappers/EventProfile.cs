@@ -11,7 +11,8 @@ public class EventProfile : Profile
         CreateMap<Event, EventDto>()
             .ForMember(d => d.Status, o => o.MapFrom(s => MapStatusToLabel(s.Status)))
                 .ForMember(d => d.ParticipantCount, o => o.MapFrom(s => s.Participants.Count))
-                .ForMember(d => d.AwardedPercent, o => o.MapFrom(s => CalculateAwardedPercent(s)));
+                .ForMember(d => d.AwardedPercent, o => o.MapFrom(s => CalculateAwardedPercent(s)))
+                .ForMember(d => d.RegistrationEndDateUtc, o => o.MapFrom(s => s.RegistrationEndDate));
         }
 
         /// <summary>

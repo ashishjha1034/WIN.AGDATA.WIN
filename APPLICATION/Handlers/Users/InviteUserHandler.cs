@@ -26,9 +26,15 @@ public class InviteUserHandler : IRequestHandler<InviteUserCommand, UserDto>
 
     public async Task<UserDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
     {
+        // Check for existing email
         var existingUser = await _userRepository.GetByEmailAsync(request.Email);
         if (existingUser != null)
             throw new InvalidOperationException($"User with email {request.Email} already exists");
+
+        // Check for existing employee ID
+        var existingEmployeeId = await _userRepository.GetByEmployeeIdAsync(request.EmployeeId);
+        if (existingEmployeeId != null)
+            throw new InvalidOperationException($"User with employee ID {request.EmployeeId} already exists");
 
         var email = EmailAddress.Create(request.Email);
         var temporaryPassword = request.TemporaryPassword ?? GenerateTemporaryPassword();
@@ -43,15 +49,17 @@ public class InviteUserHandler : IRequestHandler<InviteUserCommand, UserDto>
         user.RequirePasswordChange();
         user.Activate();
 
-        if (request.Roles != null && request.Roles.Any())
-        {
-            foreach (var roleName in request.Roles)
-            {
-                var role = await _userRepository.GetRoleByNameAsync(roleName)
-                    ?? throw new InvalidOperationException($"Role '{roleName}' not found");
+        // Assign roles - default to Employee if none provided
+        var rolesToAssign = request.Roles != null && request.Roles.Any() 
+            ? request.Roles 
+            : new List<string> { "Employee" };
 
-                user.AssignRole(role, Guid.Empty);
-            }
+        foreach (var roleName in rolesToAssign)
+        {
+            var role = await _userRepository.GetRoleByNameAsync(roleName)
+                ?? throw new InvalidOperationException($"Role '{roleName}' not found");
+
+            user.AssignRole(role, Guid.Empty);
         }
 
         _userRepository.Add(user);

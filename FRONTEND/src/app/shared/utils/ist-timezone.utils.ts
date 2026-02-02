@@ -8,10 +8,27 @@
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**
+ * Parses a date string ensuring it's treated as UTC.
+ * Handles both "2026-02-02T10:00:00Z" and "2026-02-02T10:00:00" formats.
+ * If no Z suffix, assumes UTC and adds it.
+ */
+function parseAsUtc(dateStr: string): Date {
+  if (!dateStr) return new Date(NaN);
+  
+  // If the string doesn't end with Z and looks like ISO format, treat as UTC
+  let normalized = dateStr.trim();
+  if (!normalized.endsWith('Z') && !normalized.includes('+') && !normalized.includes('-', 10)) {
+    // Append Z to treat as UTC
+    normalized = normalized + 'Z';
+  }
+  return new Date(normalized);
+}
+
+/**
  * Converts a UTC Date to IST Date for display.
  */
 export function utcToIst(utcDate: Date | string): Date {
-  const date = typeof utcDate === 'string' ? new Date(utcDate) : utcDate;
+  const date = typeof utcDate === 'string' ? parseAsUtc(utcDate) : utcDate;
   return new Date(date.getTime() + IST_OFFSET_MS);
 }
 

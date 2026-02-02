@@ -263,6 +263,8 @@ export class AdminTransactionsService {
    * Format points with sign
    */
   formatPoints(points: number): string {
+    // Show just 0 if points is zero
+    if (points === 0) return '0';
     if (points > 0) {
       return `+${points.toLocaleString()}`;
     }

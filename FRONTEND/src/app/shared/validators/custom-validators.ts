@@ -83,6 +83,10 @@ export class CustomValidators {
 
   /**
    * Validates email ends with corporate domain AND has local-part >= 5 chars
+   * Rules:
+   * - Start with letter or number
+   * - Contain letters, numbers, and limited symbols (. _ + -) only
+   * - Not be only symbols
    */
   static corporateEmail(): ValidatorFn {
     return (control: AbstractControl): ValidationErrors | null => {
@@ -100,6 +104,21 @@ export class CustomValidators {
       const localPart = email.substring(0, atIndex);
       if (localPart.length < ValidationConstants.CORPORATE_EMAIL_LOCAL_MIN) {
         return { corporateEmailLocalPart: { message: `Use your corporate email. At least ${ValidationConstants.CORPORATE_EMAIL_LOCAL_MIN} characters before ${ValidationConstants.CORPORATE_DOMAIN}.` } };
+      }
+      
+      // Check local-part starts with letter or number
+      if (!/^[a-z0-9]/.test(localPart)) {
+        return { corporateEmailStart: { message: 'Email must start with a letter or number' } };
+      }
+      
+      // Check local-part contains only allowed characters (letters, numbers, . _ + -)
+      if (!/^[a-z0-9._+-]+$/.test(localPart)) {
+        return { corporateEmailFormat: { message: 'Email can only contain letters, numbers, and . _ + - symbols' } };
+      }
+      
+      // Check local-part is not only symbols (must have at least one letter or number)
+      if (!/[a-z0-9]/.test(localPart)) {
+        return { corporateEmailOnlySymbols: { message: 'Email cannot be only symbols' } };
       }
       
       return null;
@@ -151,6 +170,7 @@ export class CustomValidators {
 
   /**
    * Strong password validator with detailed checks
+   * Note: Personal info checks (name/ID) removed per requirements
    */
   static strongPassword(firstNameControl?: AbstractControl, lastNameControl?: AbstractControl, employeeIdControl?: AbstractControl): ValidatorFn {
     return (control: AbstractControl): ValidationErrors | null => {
@@ -176,22 +196,6 @@ export class CustomValidators {
       }
       if (/\s/.test(password)) {
         errors.push('No spaces allowed');
-      }
-
-      // Check for personal info
-      const firstName = firstNameControl?.value?.toLowerCase();
-      const lastName = lastNameControl?.value?.toLowerCase();
-      const employeeId = employeeIdControl?.value?.toLowerCase();
-      const passwordLower = password.toLowerCase();
-
-      if (firstName && firstName.length > 1 && passwordLower.includes(firstName)) {
-        errors.push('Cannot contain first name');
-      }
-      if (lastName && lastName.length > 1 && passwordLower.includes(lastName)) {
-        errors.push('Cannot contain last name');
-      }
-      if (employeeId && employeeId.length > 1 && passwordLower.includes(employeeId)) {
-        errors.push('Cannot contain employee ID');
       }
 
       return errors.length > 0 ? { strongPassword: { requirements: errors } } : null;

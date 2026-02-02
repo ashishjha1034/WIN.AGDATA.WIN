@@ -372,6 +372,54 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Toggle user role between Admin and Employee
+    /// </summary>
+    /// <remarks>
+    /// Switch a user's role. Admin only operation.
+    /// 
+    /// **Guards:**
+    /// - Cannot demote the last Admin in the system
+    /// - Only allows 'Admin' or 'Employee' as valid roles
+    /// 
+    /// **Sample request body:**
+    /// { "newRole": "Employee" }
+    /// </remarks>
+    /// <param name="id">User ID to update</param>
+    /// <param name="request">Role toggle request with newRole</param>
+    /// <returns>Updated user information</returns>
+    /// <response code="200">Role changed successfully</response>
+    /// <response code="400">Invalid role or operation blocked</response>
+    /// <response code="403">Forbidden - admin only</response>
+    /// <response code="404">User not found</response>
+    [HttpPost("{id:guid}/toggle-role")]
+    [Authorize(Policy = "PasswordChanged", Roles = "Admin")]
+    [SwaggerOperation(Summary = "Toggle user role", Description = "Switch user between Admin and Employee roles (admin only)")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> ToggleUserRole(Guid id, [FromBody] ToggleRoleRequest request)
+    {
+        try
+        {
+            var actingAdminId = _currentUserService.GetCurrentUserId();
+            var command = new ToggleUserRoleCommand(id, request.NewRole, actingAdminId);
+            var result = await _mediator.Send(command);
+            
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to toggle user role", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get user transaction history
     /// </summary>
     /// <remarks>

@@ -44,15 +44,17 @@ public class InviteUserRequestValidator : AbstractValidator<InviteUserRequest>
         RuleFor(x => x.EmployeeId)
             .NotEmpty().WithMessage("Employee ID is required.")
             .Length(EmployeeIdLength).WithMessage($"Employee ID must be exactly {EmployeeIdLength} characters.")
-            .Matches(@"^[a-zA-Z0-9]+$").WithMessage("Employee ID must contain only letters and numbers.")
-            .MustAsync(BeUniqueEmployeeId).WithMessage("This Employee ID is already in use.");
+            .Matches(@"^[a-zA-Z0-9]+$").WithMessage("Employee ID must contain only letters and numbers.");
 
-        // Email: valid format + @agdata.com domain + unique
+        // Email: valid format + @agdata.com domain
+        // Email validation: start with letter/number, contain only allowed chars, not only symbols
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Please enter a valid email address.")
             .Must(EndWithCorporateDomain).WithMessage($"Email must end with {CorporateDomain}.")
-            .MustAsync(BeUniqueEmail).WithMessage("This email is already in use.");
+            .Must(EmailStartsWithLetterOrNumber).WithMessage("Email must start with a letter or number.")
+            .Must(EmailHasValidCharacters).WithMessage("Email can only contain letters, numbers, and . _ + - symbols.")
+            .Must(EmailNotOnlySymbols).WithMessage("Email cannot be only symbols.");
 
         // Roles: if provided, must be valid role names
         RuleFor(x => x.Roles)
@@ -65,6 +67,7 @@ public class InviteUserRequestValidator : AbstractValidator<InviteUserRequest>
             .When(x => !x.GenerateTempPassword);
 
         // Strong password validation when temp password is provided
+        // Note: Personal info validation removed per requirements
         RuleFor(x => x.TemporaryPassword)
             .MinimumLength(PasswordMinLength).WithMessage($"Password must be at least {PasswordMinLength} characters.")
             .Matches(@"[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
@@ -72,8 +75,6 @@ public class InviteUserRequestValidator : AbstractValidator<InviteUserRequest>
             .Matches(@"[0-9]").WithMessage("Password must contain at least one digit.")
             .Matches(@"[!@#$%^&*()_+\-=\[\]{};':""\\|,.<>\/?]").WithMessage("Password must contain at least one special character.")
             .Matches(@"^\S+$").WithMessage("Password cannot contain spaces.")
-            .Must((request, password) => !ContainsPersonalInfo(password, request.FirstName, request.LastName, request.EmployeeId))
-            .WithMessage("Password cannot contain your first name, last name, or employee ID.")
             .When(x => !string.IsNullOrWhiteSpace(x.TemporaryPassword));
     }
 
@@ -83,41 +84,33 @@ public class InviteUserRequestValidator : AbstractValidator<InviteUserRequest>
         return email.ToLowerInvariant().EndsWith(CorporateDomain);
     }
 
-    private async Task<bool> BeUniqueEmployeeId(string employeeId, CancellationToken cancellationToken)
+    private bool EmailStartsWithLetterOrNumber(string email)
     {
-        if (string.IsNullOrWhiteSpace(employeeId)) return true;
-        var existing = await _userRepository.GetByEmployeeIdAsync(employeeId);
-        return existing == null;
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var localPart = email.Split('@')[0];
+        if (string.IsNullOrEmpty(localPart)) return false;
+        return char.IsLetterOrDigit(localPart[0]);
     }
 
-    private async Task<bool> BeUniqueEmail(string email, CancellationToken cancellationToken)
+    private bool EmailHasValidCharacters(string email)
     {
-        if (string.IsNullOrWhiteSpace(email)) return true;
-        var existing = await _userRepository.GetByEmailAsync(email.ToLowerInvariant());
-        return existing == null;
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var localPart = email.Split('@')[0];
+        if (string.IsNullOrEmpty(localPart)) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(localPart, @"^[a-zA-Z0-9._+-]+$");
+    }
+
+    private bool EmailNotOnlySymbols(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var localPart = email.Split('@')[0];
+        if (string.IsNullOrEmpty(localPart)) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(localPart, @"[a-zA-Z0-9]");
     }
 
     private bool BeValidRoles(List<string>? roles)
     {
         if (roles == null || !roles.Any()) return true;
         return roles.All(r => AllowedRoles.Contains(r, StringComparer.OrdinalIgnoreCase));
-    }
-
-    private bool ContainsPersonalInfo(string? password, string firstName, string lastName, string employeeId)
-    {
-        if (string.IsNullOrWhiteSpace(password)) return false;
-
-        var passwordLower = password.ToLowerInvariant();
-
-        if (!string.IsNullOrWhiteSpace(firstName) && passwordLower.Contains(firstName.ToLowerInvariant()))
-            return true;
-
-        if (!string.IsNullOrWhiteSpace(lastName) && passwordLower.Contains(lastName.ToLowerInvariant()))
-            return true;
-
-        if (!string.IsNullOrWhiteSpace(employeeId) && passwordLower.Contains(employeeId.ToLowerInvariant()))
-            return true;
-
-        return false;
     }
 }

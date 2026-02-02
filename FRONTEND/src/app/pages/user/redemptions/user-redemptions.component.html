@@ -2,17 +2,8 @@
   <app-user-sidebar></app-user-sidebar>
 
   <main class="user-redemptions-main">
-    <!-- Page Header -->
-    <header class="page-header">
-      <h1 class="page-title">My Redemptions</h1>
-      <div class="user-info">
-        <div class="user-avatar">{{ currentUser?.firstName?.charAt(0) || 'U' }}</div>
-        <div class="user-details">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="role-badge">Employee</span>
-        </div>
-      </div>
-    </header>
+    <!-- Shared Header Component -->
+    <app-user-page-header pageTitle="My Redemptions"></app-user-page-header>
 
     <!-- Main Content Area -->
     <div class="main-content">

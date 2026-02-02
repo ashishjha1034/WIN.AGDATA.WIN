@@ -2,21 +2,8 @@
   <app-user-sidebar></app-user-sidebar>
 
   <div class="user-events-main">
-    <!-- Header - Matches Admin Pages -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Events</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-user"></i>
-            Employee
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Shared Header Component -->
+    <app-user-page-header pageTitle="Events"></app-user-page-header>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -27,233 +14,451 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- Controls Card -->
-        <section class="controls-section">
-          <div class="controls-card">
-            <div class="controls-row">
-              <!-- Search -->
-              <div class="search-group">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input
-                  type="text"
-                  class="search-input"
-                  placeholder="Search events..."
-                  [(ngModel)]="searchQuery"
-                  (ngModelChange)="onSearchChange()"
-                  aria-label="Search events"
-                />
+        <!-- Split View Container -->
+        <div class="split-view-container">
+          
+          <!-- ======================================== -->
+          <!-- LEFT COLUMN: Events List -->
+          <!-- ======================================== -->
+          <div class="left-column">
+            <!-- Sticky Header with Search & Filters -->
+            <div class="left-column-header">
+              <!-- Search Bar -->
+              <div class="search-row">
+                <div class="search-group">
+                  <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                  <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Search events..."
+                    [(ngModel)]="searchQuery"
+                    (ngModelChange)="onSearchChange()"
+                    aria-label="Search events"
+                  />
+                </div>
               </div>
 
-              <!-- Filter Tabs -->
+              <!-- Filter Toggle Button -->
+              <div class="filter-toggle-row">
+                <button 
+                  class="filter-toggle-btn"
+                  (click)="toggleFilters()"
+                  [class.active]="showFilters"
+                  aria-label="Toggle filters"
+                >
+                  <i class="fa-solid fa-filter"></i>
+                  <span>Filters</span>
+                  <span class="filter-count" *ngIf="getActiveFilterCount() > 0">{{ getActiveFilterCount() }}</span>
+                  <i class="fa-solid" [ngClass]="showFilters ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </button>
+                
+                <!-- Clear Filters -->
+                <button 
+                  class="clear-filters-btn"
+                  *ngIf="hasActiveFilters()"
+                  (click)="clearFilters()"
+                  aria-label="Clear all filters"
+                  title="Clear filters"
+                >
+                  <i class="fa-solid fa-times"></i>
+                  Clear
+                </button>
+              </div>
+
+              <!-- Collapsible Filters Row -->
+              <div class="filters-row" *ngIf="showFilters">
+                <!-- Sort By -->
+                <div class="filter-item">
+                  <label for="sort-select" class="filter-label">Sort</label>
+                  <select 
+                    id="sort-select" 
+                    class="filter-select" 
+                    [(ngModel)]="selectedSort"
+                    (ngModelChange)="onSortChange()"
+                    aria-label="Sort by"
+                  >
+                    <option *ngFor="let opt of sortOptions" [value]="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Registration Status Filter -->
+                <div class="filter-item">
+                  <label for="reg-status-filter" class="filter-label">Status</label>
+                  <select 
+                    id="reg-status-filter" 
+                    class="filter-select" 
+                    [(ngModel)]="registrationFilter"
+                    (ngModelChange)="onFilterChange()"
+                    aria-label="Registration status"
+                  >
+                    <option value="all">All Events</option>
+                    <option value="registered">Registered</option>
+                    <option value="not-registered">To Register</option>
+                  </select>
+                </div>
+
+                <!-- Award Status Filter -->
+                <div class="filter-item">
+                  <label for="award-status-filter" class="filter-label">Awards</label>
+                  <select 
+                    id="award-status-filter" 
+                    class="filter-select" 
+                    [(ngModel)]="awardFilter"
+                    (ngModelChange)="onFilterChange()"
+                    aria-label="Award status"
+                  >
+                    <option value="all">All Awards</option>
+                    <option value="awarded">Awarded</option>
+                    <option value="not-awarded">Not Awarded</option>
+                  </select>
+                </div>
+
+                <!-- Date Range Filter -->
+                <div class="filter-item date-filter">
+                  <label class="filter-label">Date Range</label>
+                  <div class="date-inputs">
+                    <input 
+                      type="date" 
+                      class="date-input"
+                      [(ngModel)]="dateFromFilter"
+                      (ngModelChange)="onFilterChange()"
+                      aria-label="From date"
+                      placeholder="From"
+                    />
+                    <span class="date-separator">–</span>
+                    <input 
+                      type="date" 
+                      class="date-input"
+                      [(ngModel)]="dateToFilter"
+                      (ngModelChange)="onFilterChange()"
+                      aria-label="To date"
+                      placeholder="To"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status Tabs -->
               <div class="filter-tabs">
                 <button 
                   *ngFor="let tab of tabs" 
                   class="filter-tab"
                   [class.active]="activeTab === tab.status"
                   (click)="selectTab(tab.status)"
+                  [attr.aria-pressed]="activeTab === tab.status"
                 >
                   {{ tab.label }}
                   <span class="tab-count">{{ tab.count }}</span>
                 </button>
               </div>
 
-              <!-- Sort -->
-              <div class="sort-group">
-                <label for="sort-select">Sort:</label>
-                <select 
-                  id="sort-select" 
-                  class="sort-select" 
-                  [(ngModel)]="selectedSort"
-                  (ngModelChange)="onSortChange()"
+              <!-- Results Summary -->
+              <div class="results-summary">
+                <span>{{ filteredEvents.length }} event{{ filteredEvents.length !== 1 ? 's' : '' }} found</span>
+              </div>
+            </div>
+
+            <!-- Scrollable Events List -->
+            <div class="left-column-content">
+              <div class="events-list">
+                <div 
+                  *ngFor="let event of paginatedEvents; let i = index" 
+                  [class]="getEventCardClass(event)"
+                  (click)="selectEvent(event)"
+                  (keydown.enter)="selectEvent(event)"
+                  [attr.tabindex]="0"
+                  [attr.aria-selected]="isEventSelected(event)"
+                  role="option"
                 >
-                  <option *ngFor="let opt of sortOptions" [value]="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
+                  <div class="event-card-header">
+                    <h3 class="event-name">{{ event.name }}</h3>
+                    <span [class]="getStatusBadgeClass(event.status)">{{ getStatusLabel(event.status) }}</span>
+                  </div>
+                  
+                  <div class="event-card-meta">
+                    <div class="meta-item">
+                      <i class="fa-regular fa-calendar meta-icon-fa"></i>
+                      <span>{{ formatDate(event.eventDate) }}</span>
+                    </div>
+                    
+                    <div class="meta-item" *ngIf="event.location">
+                      <i class="fa-solid fa-location-dot meta-icon-fa"></i>
+                      <span>{{ event.location }}</span>
+                    </div>
+                  </div>
+
+                  <div class="event-card-stats">
+                    <div class="stat-item">
+                      <i class="fa-solid fa-users stat-icon-fa"></i>
+                      <span>{{ event.participantCount || 0 }}{{ event.maxParticipants ? '/' + event.maxParticipants : '' }}</span>
+                    </div>
+                    
+                    <div class="stat-item" *ngIf="event.totalPointsPool">
+                      <i class="fa-solid fa-coins stat-icon-fa"></i>
+                      <span>{{ event.totalPointsPool }} pts</span>
+                    </div>
+
+                    <!-- Registration badge -->
+                    <div class="stat-item registered-badge" *ngIf="isUserRegistered(event.id)">
+                      <i class="fa-solid fa-check-circle"></i>
+                      <span>Registered</span>
+                    </div>
+
+                    <!-- Award badge -->
+                    <div class="stat-item awarded-badge" *ngIf="getUserPointsForEvent(event.id) > 0">
+                      <i class="fa-solid fa-star"></i>
+                      <span>{{ getUserPointsForEvent(event.id) }} pts</span>
+                    </div>
+                  </div>
+
+                  <!-- Countdown Timer -->
+                  <div class="event-countdown" *ngIf="hasCountdown(event.id)">
+                    <span class="countdown-text">{{ getCountdown(event.id) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty State -->
+              <div class="empty-state" *ngIf="filteredEvents.length === 0">
+                <i class="fa-regular fa-calendar-xmark empty-icon-fa"></i>
+                <h3>No events found</h3>
+                <p *ngIf="searchQuery || hasActiveFilters()">Try adjusting your search or filters</p>
+                <p *ngIf="!searchQuery && !hasActiveFilters() && activeTab !== 'All'">No {{ activeTab.toLowerCase() }} events available</p>
+              </div>
+
+              <!-- Pagination -->
+              <app-pagination
+                *ngIf="filteredEvents.length > 0"
+                [currentPage]="currentPage"
+                [pageSize]="pageSize"
+                [totalItems]="filteredEvents.length"
+                [itemLabel]="'events'"
+                (pageChange)="changePage($event)"
+              ></app-pagination>
+            </div>
+          </div>
+
+          <!-- ======================================== -->
+          <!-- RIGHT COLUMN: Event Details -->
+          <!-- ======================================== -->
+          <div class="right-column" #rightColumn>
+            <!-- Event Details Panel -->
+            <div class="event-details-panel" *ngIf="selectedEvent">
+              <!-- Banner Section -->
+              <div class="event-banner" [style.background-image]="selectedEvent.bannerImageUrl ? 'url(' + selectedEvent.bannerImageUrl + ')' : 'none'">
+                <div class="banner-overlay">
+                  <span [class]="getStatusBadgeClass(selectedEvent.status) + ' banner-status'">{{ getStatusLabel(selectedEvent.status) }}</span>
+                </div>
+              </div>
+
+              <!-- Primary CTA -->
+              <div class="event-action-section">
+                <button 
+                  [class]="getCtaButtonClass(selectedEvent)"
+                  [disabled]="isCtaDisabled(selectedEvent) || isRegistering"
+                  (click)="onCtaClick(selectedEvent)"
+                >
+                  <i class="fa-solid" [ngClass]="getCtaIcon(selectedEvent)"></i>
+                  {{ isRegistering ? 'Registering...' : getCtaButtonText(selectedEvent) }}
+                </button>
+              </div>
+
+              <!-- Tabs Navigation -->
+              <div class="detail-tabs">
+                <button 
+                  class="detail-tab"
+                  [class.active]="activeDetailTab === 'info'"
+                  (click)="activeDetailTab = 'info'"
+                  role="tab"
+                  [attr.aria-selected]="activeDetailTab === 'info'"
+                >
+                  <i class="fa-solid fa-circle-info"></i>
+                  Info
+                </button>
+                <button 
+                  class="detail-tab"
+                  [class.active]="activeDetailTab === 'awards'"
+                  (click)="activeDetailTab = 'awards'"
+                  *ngIf="showAwardsTab(selectedEvent)"
+                  role="tab"
+                  [attr.aria-selected]="activeDetailTab === 'awards'"
+                >
+                  <i class="fa-solid fa-trophy"></i>
+                  Awards
+                </button>
+              </div>
+
+              <!-- Tab Content -->
+              <div class="detail-tab-content">
+                
+                <!-- INFO TAB -->
+                <div class="tab-pane" *ngIf="activeDetailTab === 'info'">
+                  <!-- Overview Section -->
+                  <div class="info-section">
+                    <h3 class="section-title" tabindex="-1" #detailHeading>{{ selectedEvent.name }}</h3>
+                    <div class="info-row" *ngIf="selectedEvent.location">
+                      <i class="fa-solid fa-location-dot info-icon-fa"></i>
+                      <span>{{ selectedEvent.location }}</span>
+                    </div>
+                    <p class="event-description-text">{{ selectedEvent.description }}</p>
+                  </div>
+
+                  <!-- KPIs Grid -->
+                  <div class="kpi-grid">
+                    <!-- Registrations KPI -->
+                    <div class="kpi-card">
+                      <div class="kpi-icon">
+                        <i class="fa-solid fa-users"></i>
+                      </div>
+                      <div class="kpi-content">
+                        <div class="kpi-label">Registrations</div>
+                        <div class="kpi-value">
+                          {{ selectedEvent.participantCount || 0 }}<span *ngIf="selectedEvent.maxParticipants && selectedEvent.maxParticipants > 0" class="kpi-capacity"> / {{ selectedEvent.maxParticipants }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Prize Pool KPI -->
+                    <div class="kpi-card">
+                      <div class="kpi-icon">
+                        <i class="fa-solid fa-coins"></i>
+                      </div>
+                      <div class="kpi-content">
+                        <div class="kpi-label">Prize Pool</div>
+                        <div class="kpi-value">
+                          <ng-container *ngIf="selectedEvent.totalPointsPool; else unlimitedPool">
+                            {{ selectedEvent.totalPointsPool | number }} pts
+                          </ng-container>
+                          <ng-template #unlimitedPool>Unlimited</ng-template>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Registration Deadline KPI -->
+                    <div class="kpi-card" *ngIf="selectedEvent.registrationEndDateUtc || selectedEvent.registrationEndDate">
+                      <div class="kpi-icon">
+                        <i class="fa-solid fa-hourglass-half"></i>
+                      </div>
+                      <div class="kpi-content">
+                        <div class="kpi-label">Registration Deadline</div>
+                        <div class="kpi-value countdown-value">
+                          {{ getRegistrationCountdown(selectedEvent) }}
+                        </div>
+                        <div class="kpi-subtext">{{ formatDateTime(selectedEvent.registrationEndDateUtc || selectedEvent.registrationEndDate) }}</div>
+                      </div>
+                    </div>
+
+                    <!-- Event Date KPI -->
+                    <div class="kpi-card">
+                      <div class="kpi-icon">
+                        <i class="fa-solid fa-calendar-day"></i>
+                      </div>
+                      <div class="kpi-content">
+                        <div class="kpi-label">Event Date</div>
+                        <div class="kpi-value countdown-value">
+                          {{ getEventDateCountdown(selectedEvent) }}
+                        </div>
+                        <div class="kpi-subtext">{{ formatDateTime(selectedEvent.eventDate) }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- User Registration Status -->
+                  <div class="user-status-section" *ngIf="isUserRegistered(selectedEvent.id)">
+                    <div class="user-status-card registered">
+                      <i class="fa-solid fa-circle-check"></i>
+                      <span>You're registered for this event</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- AWARDS TAB -->
+                <div class="tab-pane" *ngIf="activeDetailTab === 'awards'">
+                  <!-- Loading Awards -->
+                  <div class="awards-loading" *ngIf="isLoadingAwards">
+                    <div class="loading-spinner-small"></div>
+                    <p>Loading awards...</p>
+                  </div>
+
+                  <ng-container *ngIf="!isLoadingAwards">
+                    <!-- User's Award Summary (if awarded) -->
+                    <div class="user-award-summary" *ngIf="getUserPointsForEvent(selectedEvent.id) > 0">
+                      <div class="award-badge-large">
+                        <i class="fa-solid fa-trophy"></i>
+                        <span class="award-points">{{ getUserPointsForEvent(selectedEvent.id) | number }}</span>
+                        <span class="award-label">Points Earned</span>
+                      </div>
+                    </div>
+
+                    <!-- Awarded Participants List -->
+                    <div class="awards-section" *ngIf="getEventAwardedParticipants(selectedEvent.id).length > 0">
+                      <h4 class="awards-title">
+                        <i class="fa-solid fa-medal"></i>
+                        Awarded Participants ({{ getEventAwardedParticipants(selectedEvent.id).length }})
+                      </h4>
+                      <div class="awards-table-container">
+                        <table class="awards-table">
+                          <thead>
+                            <tr>
+                              <th class="col-rank">Rank</th>
+                              <th class="col-name">Name</th>
+                              <th class="col-points">Points</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr 
+                              *ngFor="let participant of getEventAwardedParticipants(selectedEvent.id)"
+                              [class.current-user-row]="participant.isCurrentUser"
+                            >
+                              <td class="col-rank">
+                                <span class="rank-badge" *ngIf="participant.rank">#{{ participant.rank }}</span>
+                                <span class="no-rank" *ngIf="!participant.rank">—</span>
+                              </td>
+                              <td class="col-name">
+                                {{ participant.name }}
+                                <span class="you-badge" *ngIf="participant.isCurrentUser">(You)</span>
+                              </td>
+                              <td class="col-points">{{ participant.points | number }}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <!-- No Awards Yet (only show if no participants awarded AND event is live/completed) -->
+                    <div class="no-awards-message" *ngIf="getEventAwardedParticipants(selectedEvent.id).length === 0">
+                      <i class="fa-regular fa-clock"></i>
+                      <p>No points have been awarded for this event yet</p>
+                      <p class="sub-text" *ngIf="selectedEvent.status === 'Live'">Awards will be distributed once the event is complete</p>
+                    </div>
+                  </ng-container>
+                </div>
+
               </div>
             </div>
 
-            <!-- Results Summary -->
-            <div class="results-summary">
-              <span>{{ filteredEvents.length }} event{{ filteredEvents.length !== 1 ? 's' : '' }} found</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- Events Layout -->
-        <div class="events-layout">
-          <div 
-            *ngFor="let event of paginatedEvents" 
-            [class]="getEventCardClass(event)"
-            (click)="selectEvent(event)"
-          >
-            <div class="event-card-header">
-              <h3 class="event-name">{{ event.name }}</h3>
-              <span [class]="getStatusBadgeClass(event.status)">{{ getStatusLabel(event.status) }}</span>
-            </div>
-            
-            <div class="event-card-meta">
-              <div class="meta-item">
-                <svg class="meta-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/>
-                </svg>
-                <span>{{ formatDate(event.eventDate) }}</span>
-              </div>
-              
-              <div class="meta-item" *ngIf="event.location">
-                <svg class="meta-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                </svg>
-                <span>{{ event.location }}</span>
+            <!-- Empty Selection State -->
+            <div class="event-details-panel empty-selection" *ngIf="!selectedEvent && filteredEvents.length > 0">
+              <div class="empty-selection-content">
+                <i class="fa-regular fa-calendar"></i>
+                <h3>Select an event</h3>
+                <p>Choose an event from the list to view details</p>
               </div>
             </div>
 
-            <div class="event-card-stats">
-              <div class="stat-item">
-                <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                </svg>
-                <span>{{ event.participantCount || 0 }}</span>
-              </div>
-              
-              <div class="stat-item" *ngIf="event.totalPointsPool">
-                <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-                <span>{{ event.totalPointsPool }} pts</span>
+            <!-- No Events Available -->
+            <div class="event-details-panel empty-selection" *ngIf="!selectedEvent && filteredEvents.length === 0">
+              <div class="empty-selection-content">
+                <i class="fa-regular fa-calendar-xmark"></i>
+                <h3>No events available</h3>
+                <p>Check back later for upcoming events</p>
               </div>
             </div>
-
-            <!-- Countdown Timer -->
-            <div class="event-countdown" *ngIf="hasCountdown(event.id)">
-              <span class="countdown-text">{{ getCountdown(event.id) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pagination -->
-        <app-pagination
-          *ngIf="filteredEvents.length > 0"
-          [currentPage]="currentPage"
-          [pageSize]="pageSize"
-          [totalItems]="filteredEvents.length"
-          [itemLabel]="'events'"
-          (pageChange)="changePage($event)"
-        ></app-pagination>
-
-        <!-- Empty State -->
-        <div class="empty-state" *ngIf="filteredEvents.length === 0">
-          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-          <h3>No events found</h3>
-          <p *ngIf="searchQuery">Try adjusting your search terms</p>
-          <p *ngIf="!searchQuery && activeTab !== 'All'">No {{ activeTab.toLowerCase() }} events available</p>
-        </div>
-
-      <!-- Right Panel: Event Details -->
-      <div class="event-details-panel" *ngIf="selectedEvent">
-        <!-- Hero Section -->
-        <div class="event-hero" [style.background-image]="selectedEvent.bannerImageUrl ? 'url(' + selectedEvent.bannerImageUrl + ')' : 'none'">
-          <div class="hero-overlay">
-            <h2 class="event-title">{{ selectedEvent.name }}</h2>
-            <div class="hero-meta">
-              <span [class]="getStatusBadgeClass(selectedEvent.status)">{{ getStatusLabel(selectedEvent.status) }}</span>
-              <span class="event-date">{{ formatDate(selectedEvent.eventDate) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Action Button -->
-        <div class="event-action-section">
-          <button 
-            [class]="getCtaButtonClass(selectedEvent)"
-            [disabled]="isCtaDisabled(selectedEvent) || isRegistering"
-            (click)="onCtaClick(selectedEvent)"
-          >
-            {{ isRegistering ? 'Registering...' : getCtaButtonText(selectedEvent) }}
-          </button>
-        </div>
-
-        <!-- Description -->
-        <div class="event-description">
-          <h3>Description</h3>
-          <p>{{ selectedEvent.description }}</p>
-        </div>
-
-        <!-- Event Info Grid -->
-        <div class="event-info-grid">
-          <div class="info-card" *ngIf="selectedEvent.registrationEndDate">
-            <div class="info-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
-              </svg>
-            </div>
-            <div class="info-content">
-              <div class="info-label">Registration Deadline</div>
-              <div class="info-value">{{ formatDateTime(selectedEvent.registrationEndDate) }}</div>
-            </div>
           </div>
 
-          <div class="info-card">
-            <div class="info-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-              </svg>
-            </div>
-            <div class="info-content">
-              <div class="info-label">Registered</div>
-              <div class="info-value">{{ selectedEvent.participantCount || 0 }}</div>
-            </div>
-          </div>
-
-          <div class="info-card" *ngIf="selectedEvent.totalPointsPool">
-            <div class="info-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-            <div class="info-content">
-              <div class="info-label">Points Pool</div>
-              <div class="info-value">{{ selectedEvent.totalPointsPool }} points</div>
-            </div>
-          </div>
-
-          <div class="info-card">
-            <div class="info-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
-              </svg>
-            </div>
-            <div class="info-content">
-              <div class="info-label">Points Rewarded</div>
-              <div class="info-value">{{ selectedEvent.distributedPoints || 0 }} points</div>
-            </div>
-          </div>
         </div>
-
-        <!-- User Context Section -->
-        <div class="user-context-section" *ngIf="isUserRegistered(selectedEvent.id)">
-          <div class="context-header">
-            <svg viewBox="0 0 24 24" fill="currentColor" class="check-icon">
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-            </svg>
-            <span>You're registered for this event</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Placeholder when no event selected -->
-      <div class="event-details-panel empty-selection" *ngIf="!selectedEvent && filteredEvents.length > 0">
-        <div class="empty-selection-content">
-          <i class="fa-regular fa-calendar"></i>
-          <h3>Select an event</h3>
-          <p>Choose an event from the list to view details</p>
-        </div>
-      </div>
       </ng-container>
     </main>
   </div>

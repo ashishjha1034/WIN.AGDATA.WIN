@@ -2,25 +2,12 @@
   <app-user-sidebar></app-user-sidebar>
 
   <div class="user-products-main">
-    <!-- Header - Matches Admin Pages -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Rewards</h1>
-      </div>
-      <div class="header-right">
-        <div class="points-badge">
-          <i class="fa-solid fa-coins"></i>
-          <span class="points-value">{{ userPoints | number }} pts</span>
-        </div>
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-user"></i>
-            Employee
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Shared Header Component with Points Badge -->
+    <app-user-page-header 
+      pageTitle="Rewards"
+      [showPointsBadge]="true"
+      [pointsValue]="userPoints">
+    </app-user-page-header>
 
     <!-- Main Content -->
     <main class="main-content">

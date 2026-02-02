@@ -119,7 +119,7 @@ import { FormErrorsSummaryComponent } from '../../../../shared/components/form-e
                 type="button" 
                 class="check-btn" 
                 (click)="checkEmployeeIdNow()"
-                [disabled]="checkingEmployeeId || !form.get('employeeId')?.value"
+                [disabled]="checkingEmployeeId || !form.get('employeeId')?.value || form.get('employeeId')?.invalid"
                 aria-label="Check employee ID availability">
                 Check
               </button>
@@ -153,7 +153,7 @@ import { FormErrorsSummaryComponent } from '../../../../shared/components/form-e
                 type="button" 
                 class="check-btn" 
                 (click)="checkEmailNow()"
-                [disabled]="checkingEmail || !form.get('email')?.value"
+                [disabled]="checkingEmail || !form.get('email')?.value || form.get('email')?.invalid"
                 aria-label="Check email availability">
                 Check
               </button>
@@ -173,7 +173,6 @@ import { FormErrorsSummaryComponent } from '../../../../shared/components/form-e
         <!-- ROLE & ACCESS Section -->
         <div class="form-section">
           <h3 class="section-title">ROLE & ACCESS <span class="optional">(optional)</span></h3>
-          <span class="help-text info-text">New users are assigned 'Employee' role by default.</span>
           <div class="role-selection">
             <div class="role-option">
               <input type="radio" id="role-employee" value="Employee" formControlName="role" />
@@ -821,15 +820,23 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
 
   checkEmailNow(): void {
     const email = this.form.get('email')?.value;
-    if (email) {
+    const emailControl = this.form.get('email');
+    if (email && emailControl?.valid) {
       this.checkEmail(email);
+    } else if (email && emailControl?.invalid) {
+      // Clear any previous uniqueness result if field is invalid
+      this.emailResult = null;
     }
   }
 
   checkEmployeeIdNow(): void {
     const employeeId = this.form.get('employeeId')?.value;
-    if (employeeId) {
+    const employeeIdControl = this.form.get('employeeId');
+    if (employeeId && employeeIdControl?.valid) {
       this.checkEmployeeId(employeeId);
+    } else if (employeeId && employeeIdControl?.invalid) {
+      // Clear any previous uniqueness result if field is invalid
+      this.employeeIdResult = null;
     }
   }
 
@@ -974,7 +981,7 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
       email: formValue.email.trim().toLowerCase(),
       firstName: formValue.firstName.trim(),
       lastName: formValue.lastName.trim(),
-      roles: formValue.role === 'Admin' ? ['Admin'] : undefined,
+      roles: formValue.role === 'Admin' ? ['Admin'] : ['Employee'],
       generateTempPassword: formValue.sendPasswordEmail,
       temporaryPassword: formValue.sendPasswordEmail ? undefined : formValue.temporaryPassword
     };

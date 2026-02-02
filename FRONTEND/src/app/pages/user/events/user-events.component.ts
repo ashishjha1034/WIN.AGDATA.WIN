@@ -1,5 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { EventService } from '../../../services/event.service';
 import { Event, EventStatus } from '../../../models/event.models';
@@ -8,13 +8,16 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { UserPageHeaderComponent } from '../../../components/user-page-header/user-page-header.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
 import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../../config/api.config';
 import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 import { DialogService } from '../../../services/dialog.service';
 
-type SortOption = 'dateNewest' | 'dateOldest' | 'pointsHigh' | 'participantsHigh' | 'availabilityLow';
+type SortOption = 'dateNewest' | 'dateOldest' | 'nameAZ' | 'nameZA' | 'pointsHigh' | 'participantsHigh' | 'availabilityLow';
+type RegistrationFilter = 'all' | 'registered' | 'not-registered';
+type AwardFilter = 'all' | 'awarded' | 'not-awarded';
 
 interface Tab {
   label: string;
@@ -29,24 +32,50 @@ interface UserEventContext {
   pointsEarned?: number;
 }
 
+interface AwardedParticipant {
+  rank?: number;
+  name: string;
+  points: number;
+  isCurrentUser: boolean;
+}
+
 @Component({
   selector: 'app-user-events',
   templateUrl: './user-events.component.html',
   styleUrls: ['./user-events.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, UserPageHeaderComponent, PaginationComponent]
 })
 export class UserEventsComponent implements OnInit, OnDestroy {
+  @ViewChild('detailHeading') detailHeading!: ElementRef;
+  @ViewChild('rightColumn') rightColumn!: ElementRef;
+  
   currentUser: any;
   allEvents: Event[] = [];
   filteredEvents: Event[] = [];
   selectedEvent: Event | null = null;
   userContext: Map<string, UserEventContext> = new Map();
   
+  // Store awarded participants data per event
+  eventAwardsMap: Map<string, AwardedParticipant[]> = new Map();
+  
   isLoading = true;
   isRegistering = false;
+  isLoadingAwards = false;
   searchQuery = '';
   selectedSort: SortOption = 'dateNewest';
+  
+  // New Filters
+  registrationFilter: RegistrationFilter = 'all';
+  awardFilter: AwardFilter = 'all';
+  dateFromFilter: string = '';
+  dateToFilter: string = '';
+  
+  // Filter visibility toggle
+  showFilters = false;
+  
+  // Detail panel tab
+  activeDetailTab: 'info' | 'awards' = 'info';
   
   // Countdown timer
   countdownMap: Map<string, string> = new Map();
@@ -67,25 +96,51 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   pageSize = 10;
   
   sortOptions = [
-    { value: 'dateNewest', label: 'Date (Newest First)' },
-    { value: 'dateOldest', label: 'Date (Oldest First)' },
-    { value: 'pointsHigh', label: 'Points (High → Low)' },
-    { value: 'participantsHigh', label: 'Participants (High → Low)' },
-    { value: 'availabilityLow', label: 'Availability (Few slots first)' }
+    { value: 'dateNewest', label: 'Date (Newest)' },
+    { value: 'dateOldest', label: 'Date (Oldest)' },
+    { value: 'nameAZ', label: 'Name A–Z' },
+    { value: 'nameZA', label: 'Name Z–A' },
+    { value: 'pointsHigh', label: 'Points (High)' },
+    { value: 'participantsHigh', label: 'Participants' }
   ];
   
   private destroy$ = new Subject<void>();
+  private pendingEventIdFromUrl: string | null = null;
 
   constructor(
     private authService: AuthService,
     private eventService: EventService,
     private http: HttpClient,
     private router: Router,
+    private route: ActivatedRoute,
     private cdr: ChangeDetectorRef,
     private dialogService: DialogService
   ) { }
 
   ngOnInit(): void {
+    // Subscribe to query params for URL-driven filtering and deep links
+    this.route.queryParams
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        // Apply status filter from URL
+        if (params['status']) {
+          const statusParam = params['status'];
+          const validStatuses: (EventStatus | 'All')[] = ['All', 'Upcoming', 'Live', 'Completed', 'Cancelled'];
+          if (validStatuses.includes(statusParam as EventStatus | 'All')) {
+            this.activeTab = statusParam as EventStatus | 'All';
+          }
+        }
+        // Deep link to specific event
+        if (params['eventId']) {
+          this.pendingEventIdFromUrl = params['eventId'];
+        }
+        // If data is already loaded, re-apply filters
+        if (this.allEvents.length > 0) {
+          this.applyFiltersAndSort();
+          this.handleDeepLink();
+        }
+      });
+
     this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
@@ -94,6 +149,21 @@ export class UserEventsComponent implements OnInit, OnDestroy {
           this.loadEvents();
         }
       });
+  }
+
+  private handleDeepLink(): void {
+    if (this.pendingEventIdFromUrl) {
+      const event = this.allEvents.find(e => e.id === this.pendingEventIdFromUrl);
+      if (event) {
+        this.selectEvent(event);
+        // Ensure the event's tab is selected
+        if (event.status && event.status !== this.activeTab && this.activeTab !== 'All') {
+          this.activeTab = event.status as EventStatus;
+          this.applyFiltersAndSort();
+        }
+      }
+      this.pendingEventIdFromUrl = null;
+    }
   }
 
   loadEvents(): void {
@@ -114,21 +184,39 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       next: (results) => {
         this.allEvents = results.allEvents;
         
-        // Build user context from registered events
+        // Build user context from registered events, including points earned
         const myEventsData = Array.isArray(results.myEvents) ? results.myEvents : results.myEvents.data || [];
         myEventsData.forEach((event: any) => {
           this.userContext.set(event.id, {
             eventId: event.id,
-            isRegistered: true
+            isRegistered: true,
+            attendanceStatus: event.attendanceStatus,
+            pointsEarned: event.pointsAwarded || event.pointsEarned || 0
           });
+          
+          // Pre-populate awards data for events where user has been awarded
+          if (event.pointsAwarded || event.pointsEarned) {
+            const points = event.pointsAwarded || event.pointsEarned || 0;
+            if (points > 0) {
+              this.eventAwardsMap.set(event.id, [{
+                rank: event.eventRank || undefined,
+                name: `${this.currentUser?.firstName || ''} ${this.currentUser?.lastName || ''}`.trim() || 'You',
+                points: points,
+                isCurrentUser: true
+              }]);
+            }
+          }
         });
         
         this.updateTabCounts();
         this.selectDefaultTab();
         this.applyFiltersAndSort();
         
-        // Auto-select first event if available
-        if (this.filteredEvents.length > 0) {
+        // Handle deep link from URL if present
+        this.handleDeepLink();
+        
+        // Auto-select first event if available and no deep link
+        if (!this.selectedEvent && this.filteredEvents.length > 0) {
           this.selectEvent(this.filteredEvents[0]);
         }
         
@@ -163,6 +251,13 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     this.activeTab = status;
     this.applyFiltersAndSort();
     
+    // Update URL with status filter
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { status: status },
+      queryParamsHandling: 'merge'
+    });
+    
     // Auto-select first event in new tab
     if (this.filteredEvents.length > 0) {
       this.selectEvent(this.filteredEvents[0]);
@@ -179,10 +274,29 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     this.applyFiltersAndSort();
   }
 
+  onFilterChange(): void {
+    this.applyFiltersAndSort();
+  }
+
+  hasActiveFilters(): boolean {
+    return this.registrationFilter !== 'all' ||
+           this.awardFilter !== 'all' ||
+           !!this.dateFromFilter ||
+           !!this.dateToFilter;
+  }
+
+  clearFilters(): void {
+    this.registrationFilter = 'all';
+    this.awardFilter = 'all';
+    this.dateFromFilter = '';
+    this.dateToFilter = '';
+    this.applyFiltersAndSort();
+  }
+
   applyFiltersAndSort(): void {
     let events = [...this.allEvents];
     
-    // Filter by tab
+    // Filter by tab (status)
     if (this.activeTab !== 'All') {
       events = events.filter(e => e.status === this.activeTab);
     }
@@ -192,8 +306,41 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       const search = this.searchQuery.toLowerCase();
       events = events.filter(e =>
         e.name.toLowerCase().includes(search) ||
-        e.description?.toLowerCase().includes(search)
+        e.description?.toLowerCase().includes(search) ||
+        e.location?.toLowerCase().includes(search)
       );
+    }
+
+    // Filter by registration status
+    if (this.registrationFilter === 'registered') {
+      events = events.filter(e => this.isUserRegistered(e.id));
+    } else if (this.registrationFilter === 'not-registered') {
+      events = events.filter(e => !this.isUserRegistered(e.id));
+    }
+
+    // Filter by award status
+    if (this.awardFilter === 'awarded') {
+      events = events.filter(e => this.getUserPointsForEvent(e.id) > 0);
+    } else if (this.awardFilter === 'not-awarded') {
+      events = events.filter(e => this.getUserPointsForEvent(e.id) === 0);
+    }
+
+    // Filter by date range
+    if (this.dateFromFilter) {
+      const fromDate = new Date(this.dateFromFilter);
+      fromDate.setHours(0, 0, 0, 0);
+      events = events.filter(e => {
+        const eventDate = new Date(e.eventDate);
+        return eventDate >= fromDate;
+      });
+    }
+    if (this.dateToFilter) {
+      const toDate = new Date(this.dateToFilter);
+      toDate.setHours(23, 59, 59, 999);
+      events = events.filter(e => {
+        const eventDate = new Date(e.eventDate);
+        return eventDate <= toDate;
+      });
     }
     
     // Sort
@@ -223,18 +370,17 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       case 'dateOldest':
         sorted.sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
         break;
+      case 'nameAZ':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'nameZA':
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
       case 'pointsHigh':
         sorted.sort((a, b) => (b.totalPointsPool || 0) - (a.totalPointsPool || 0));
         break;
       case 'participantsHigh':
         sorted.sort((a, b) => (b.participantCount || 0) - (a.participantCount || 0));
-        break;
-      case 'availabilityLow':
-        sorted.sort((a, b) => {
-          const aSlotsLeft = (a.maxParticipants || 999999) - (a.participantCount || 0);
-          const bSlotsLeft = (b.maxParticipants || 999999) - (b.participantCount || 0);
-          return aSlotsLeft - bSlotsLeft;
-        });
         break;
     }
     
@@ -243,6 +389,19 @@ export class UserEventsComponent implements OnInit, OnDestroy {
 
   selectEvent(event: Event): void {
     this.selectedEvent = event;
+    this.activeDetailTab = 'info'; // Reset to info tab when selecting new event
+    
+    // Focus management for accessibility - move focus to detail heading after selection
+    setTimeout(() => {
+      if (this.detailHeading?.nativeElement) {
+        this.detailHeading.nativeElement.focus();
+      }
+    }, 100);
+    
+    // Load awards data if the event is Live or Completed
+    if (event.status === 'Live' || event.status === 'Completed') {
+      this.loadEventAwards(event.id);
+    }
   }
 
   isEventSelected(event: Event): boolean {
@@ -253,13 +412,155 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     return this.userContext.get(eventId)?.isRegistered || false;
   }
 
+  /**
+   * Get the points earned by the current user for a specific event
+   */
+  getUserPointsForEvent(eventId: string): number {
+    return this.userContext.get(eventId)?.pointsEarned || 0;
+  }
+
+  /**
+   * Check if Awards tab should be visible (only for Live/Completed events)
+   */
+  showAwardsTab(event: Event): boolean {
+    return event.status === 'Live' || event.status === 'Completed';
+  }
+
+  /**
+   * Get the CTA button icon based on event state
+   */
+  getCtaIcon(event: Event): string {
+    if (!event) return '';
+    
+    if (event.status === 'Upcoming') {
+      return this.isUserRegistered(event.id) ? 'fa-check-circle' : 'fa-user-plus';
+    } else if (event.status === 'Live') {
+      return this.isUserRegistered(event.id) ? 'fa-broadcast-tower' : 'fa-user-slash';
+    } else if (event.status === 'Completed') {
+      return 'fa-flag-checkered';
+    } else if (event.status === 'Cancelled') {
+      return 'fa-ban';
+    }
+    return '';
+  }
+
+  /**
+   * Get countdown text for registration deadline
+   */
+  getRegistrationCountdown(event: Event): string {
+    const dateStr = event.registrationEndDateUtc || event.registrationEndDate;
+    if (!dateStr) return 'No deadline';
+    
+    const deadline = this.parseUtcDate(dateStr);
+    const now = new Date();
+    const diff = deadline.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Closed';
+    return this.formatCountdown(diff);
+  }
+
+  /**
+   * Get countdown text for event date
+   */
+  getEventDateCountdown(event: Event): string {
+    if (!event.eventDate) return 'TBD';
+    
+    const eventDate = this.parseUtcDate(event.eventDate);
+    const now = new Date();
+    const diff = eventDate.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+      if (event.status === 'Live') return 'Happening now!';
+      if (event.status === 'Completed') return 'Ended';
+      return 'Started';
+    }
+    return this.formatCountdown(diff);
+  }
+
+  /**
+   * Toggle filter visibility
+   */
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  /**
+   * Get count of active filters
+   */
+  getActiveFilterCount(): number {
+    let count = 0;
+    if (this.registrationFilter !== 'all') count++;
+    if (this.awardFilter !== 'all') count++;
+    if (this.dateFromFilter) count++;
+    if (this.dateToFilter) count++;
+    return count;
+  }
+
+  /**
+   * Load awards data for an event from API
+   */
+  private loadEventAwards(eventId: string): void {
+    // If already loaded, skip
+    if (this.eventAwardsMap.has(eventId)) {
+      this.isLoadingAwards = false;
+      return;
+    }
+    
+    this.isLoadingAwards = true;
+    
+    // Call the participants API to get all participants with their awards
+    this.eventService.getEventParticipants(eventId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingAwards = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (participants) => {
+          // Filter only awarded participants and map to AwardedParticipant interface
+          const awardedParticipants: AwardedParticipant[] = participants
+            .filter(p => p.pointsAwarded && p.pointsAwarded > 0)
+            .map(p => ({
+              rank: p.eventRank,
+              name: p.name,
+              points: p.pointsAwarded || 0,
+              isCurrentUser: p.userId === this.currentUser?.id || p.email === this.currentUser?.email
+            }))
+            .sort((a, b) => {
+              // Sort by rank if available, otherwise by points
+              if (a.rank && b.rank) return a.rank - b.rank;
+              if (a.rank) return -1;
+              if (b.rank) return 1;
+              return b.points - a.points;
+            });
+          
+          this.eventAwardsMap.set(eventId, awardedParticipants);
+          this.cdr.detectChanges();
+        },
+        error: (error) => {
+          console.error('[UserEvents] Error loading event awards:', error);
+          // Set empty array on error so we don't keep retrying
+          this.eventAwardsMap.set(eventId, []);
+        }
+      });
+  }
+
+  /**
+   * Get awarded participants for an event
+   */
+  getEventAwardedParticipants(eventId: string): AwardedParticipant[] {
+    return this.eventAwardsMap.get(eventId) || [];
+  }
+
   canRegister(event: Event): boolean {
     if (this.isUserRegistered(event.id)) return false;
     if (event.status !== 'Upcoming') return false;
     
     // Check registration deadline
     if (event.registrationEndDateUtc) {
-      const deadline = new Date(event.registrationEndDateUtc);
+      const deadline = this.parseUtcDate(event.registrationEndDateUtc);
       const now = new Date();
       if (now > deadline) return false;
     }
@@ -270,6 +571,19 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     }
     
     return true;
+  }
+
+  /**
+   * Parse a date string ensuring it's treated as UTC.
+   * Handles both "2026-02-02T10:00:00Z" and "2026-02-02T10:00:00" formats.
+   */
+  private parseUtcDate(dateStr: string): Date {
+    if (!dateStr) return new Date(NaN);
+    let normalized = dateStr.trim();
+    if (!normalized.endsWith('Z') && !normalized.includes('+') && !normalized.includes('-', 10)) {
+      normalized = normalized + 'Z';
+    }
+    return new Date(normalized);
   }
 
   getCtaButtonText(event: Event): string {
@@ -435,11 +749,11 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       if (event.status === 'Upcoming') {
         if (!isRegistered && event.registrationEndDateUtc) {
           // Show countdown to registration close
-          targetDate = new Date(event.registrationEndDateUtc);
+          targetDate = this.parseUtcDate(event.registrationEndDateUtc);
           label = 'Registration closes in';
         } else if (isRegistered) {
           // Show countdown to event start
-          targetDate = new Date(event.eventDate);
+          targetDate = this.parseUtcDate(event.eventDate);
           label = 'Event starts in';
         }
       } else if (event.status === 'Live' && isRegistered) {

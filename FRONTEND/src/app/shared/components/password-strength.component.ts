@@ -34,12 +34,6 @@ import { calculatePasswordStrength, ValidationConstants } from '../validators/cu
           {{ req.text }}
         </li>
       </ul>
-
-      <!-- Personal info warning -->
-      <div *ngIf="containsPersonalInfo" class="warning" role="alert">
-        <span class="icon">⚠</span>
-        Password cannot contain your name or employee ID
-      </div>
     </div>
   `,
   styles: [`

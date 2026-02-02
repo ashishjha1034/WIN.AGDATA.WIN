@@ -3,9 +3,11 @@ import { inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { AuthService } from './auth.service';
+import { ToastService } from './toast.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
+  const toastService = inject(ToastService);
   
   // Get token directly from localStorage to avoid expiration check issues
   let token = localStorage.getItem('agdata_token');
@@ -71,6 +73,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       console.error('[AuthInterceptor] Request error:', error.status, error.statusText);
       console.error('[AuthInterceptor] Error details:', error);
       
+      // Show toast for HTTP errors (except 401 on auth endpoints which are handled differently)
+      if (!isAuthEndpoint(req.url) && error.status !== 401) {
+        // Don't show toasts for 409/422 deactivation responses - those are handled by specific UI
+        const isDeactivationResponse = error.status === 409 || error.status === 422;
+        const isDeactivationEndpoint = req.url.includes('/deactivate');
+        
+        if (!(isDeactivationResponse && isDeactivationEndpoint)) {
+          toastService.showHttpError(error);
+        }
+      }
+      
       if (error.status === 401) {
         console.warn('[AuthInterceptor] 401 Unauthorized - Token likely expired or invalid');
         console.warn('[AuthInterceptor] Current token:', authService.getToken()?.substring(0, 50));
@@ -78,6 +91,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         // If this is not a login/auth endpoint, log the user out
         if (!isAuthEndpoint(req.url)) {
           console.error('[AuthInterceptor] Logging out due to invalid/expired token');
+          toastService.error('Session Expired', 'Please log in again');
           setTimeout(() => {
             authService.logout();
             window.location.href = '/login?expired=true';

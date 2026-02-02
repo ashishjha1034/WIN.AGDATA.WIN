@@ -13,6 +13,11 @@ public class EventDto
     public string? Location { get; set; }
     public int? MaxParticipants { get; set; }
     public DateTime? RegistrationEndDate { get; set; }
+    /// <summary>
+    /// Registration end date in UTC. This is the same value as RegistrationEndDate.
+    /// Included for frontend compatibility.
+    /// </summary>
+    public DateTime? RegistrationEndDateUtc { get; set; }
     public string? BannerImageUrl { get; set; }
     /// <summary>
     /// Percentage of points awarded from the total pool.

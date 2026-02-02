@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { UserDashboardService, UserDashboardStats } from '../../../services/user-dashboard.service';
 import { Subject, forkJoin } from 'rxjs';
@@ -7,6 +7,7 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { UserPageHeaderComponent } from '../../../components/user-page-header/user-page-header.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
 import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 
@@ -35,7 +36,7 @@ export interface TransactionFilters {
   templateUrl: './user-transactions.component.html',
   styleUrls: ['./user-transactions.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, UserPageHeaderComponent, PaginationComponent]
 })
 export class UserTransactionsComponent implements OnInit, OnDestroy {
   currentUser: any;
@@ -68,10 +69,28 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private userDashboardService: UserDashboardService,
     private router: Router,
+    private route: ActivatedRoute,
     private cdr: ChangeDetectorRef
   ) { }
 
   ngOnInit(): void {
+    // Subscribe to query params for URL-driven filtering
+    this.route.queryParams
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        // Apply type filter from URL
+        if (params['type']) {
+          const typeParam = params['type'].toLowerCase();
+          if (['all', 'earned', 'redeemed', 'refunded', 'adjusted'].includes(typeParam)) {
+            this.filters.type = typeParam as TransactionFilters['type'];
+          }
+        }
+        // If data is already loaded, re-apply filters
+        if (this.transactions.length > 0) {
+          this.applyFilters();
+        }
+      });
+
     this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
@@ -271,8 +290,15 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
   }
 
   // Filter actions
-  setTypeFilter(type: 'all' | 'earned' | 'redeemed'): void {
+  setTypeFilter(type: 'all' | 'earned' | 'redeemed' | 'refunded' | 'adjusted'): void {
     this.filters.type = type;
+    // Update URL query params
+    const queryParams = type === 'all' ? {} : { type };
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: type === 'all' ? '' : 'merge'
+    });
     this.applyFilters();
   }
 
@@ -291,6 +317,11 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
       endDate: null,
       searchQuery: ''
     };
+    // Clear URL query params
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {}
+    });
     this.applyFilters();
   }
 
@@ -351,6 +382,8 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
   }
 
   formatPoints(points: number, type?: string): string {
+    // Show just 0 if points is zero
+    if (points === 0) return '0';
     // Determine the effective sign based on transaction type
     if (type) {
       const typeLower = type.toLowerCase();

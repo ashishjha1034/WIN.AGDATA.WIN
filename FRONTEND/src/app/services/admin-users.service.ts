@@ -184,6 +184,21 @@ export class AdminUsersService {
   }
 
   /**
+   * Toggle user role between Admin and Employee
+   * @param userId - The user ID to update
+   * @param newRole - The new role ('Admin' or 'Employee')
+   */
+  toggleUserRole(userId: string, newRole: string): Observable<any> {
+    this.setLoading(true);
+    this.clearError();
+
+    return this.http.post(`${this.USERS_API_URL}/${userId}/toggle-role`, { newRole }).pipe(
+      tap(() => this.setLoading(false)),
+      catchError(error => this.handleError(error))
+    );
+  }
+
+  /**
    * Private helper methods
    */
   private setLoading(loading: boolean): void {
