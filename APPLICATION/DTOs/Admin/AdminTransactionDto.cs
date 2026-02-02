@@ -6,13 +6,13 @@ namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Admin;
 public class AdminTransactionDto
 {
     public Guid Id { get; set; }
-    public int Amount { get; set; }
+    public decimal Amount { get; set; }
     public string Type { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public Guid? SourceId { get; set; }
-    public int BalanceAfter { get; set; }
+    public decimal BalanceAfter { get; set; }
     public Guid? ProcessedBy { get; set; }
     public string? ProcessedByName { get; set; }
     
@@ -68,11 +68,11 @@ public class PaginationInfo
 /// </summary>
 public class TransactionSummary
 {
-    public int TotalEarned { get; set; }
-    public int TotalRedeemed { get; set; }
-    public int TotalAdjusted { get; set; }
+    public decimal TotalEarned { get; set; }
+    public decimal TotalRedeemed { get; set; }
+    public decimal TotalAdjusted { get; set; }
     public int TransactionCount { get; set; }
-    public int NetPoints { get; set; }
+    public decimal NetPoints { get; set; }
 }
 
 /// <summary>
@@ -83,7 +83,7 @@ public class MonthlyChartDataPoint
     public int Month { get; set; }
     public int Year { get; set; }
     public string MonthName { get; set; } = string.Empty;
-    public int PointsEarned { get; set; }
-    public int PointsRedeemed { get; set; }
-    public int NetPoints { get; set; }
+    public decimal PointsEarned { get; set; }
+    public decimal PointsRedeemed { get; set; }
+    public decimal NetPoints { get; set; }
 }

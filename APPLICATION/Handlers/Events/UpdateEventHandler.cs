@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Events;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Events;
@@ -39,6 +40,51 @@ public class UpdateEventHandler : IRequestHandler<UpdateEventCommand, EventDto>
         var @event = await _eventRepository.GetByIdAsync(request.EventId)
             ?? throw new InvalidOperationException($"Event with ID {request.EventId} not found");
 
+        // Normalize whitespace on text fields
+        var normalizedName = SharedValidationRules.NormalizeWhitespace(request.Name);
+        var normalizedDescription = SharedValidationRules.NormalizeWhitespace(request.Description);
+        var normalizedLocation = SharedValidationRules.NormalizeWhitespace(request.Location);
+
+        // Validate event name
+        var (nameValid, nameError) = SharedValidationRules.ValidateEventName(normalizedName);
+        if (!nameValid)
+        {
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", nameError, request.EventId);
+            throw new ValidationException("Name", nameError!);
+        }
+
+        // Validate description
+        var (descValid, descError) = SharedValidationRules.ValidateEventDescription(normalizedDescription);
+        if (!descValid)
+        {
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", descError, request.EventId);
+            throw new ValidationException("Description", descError!);
+        }
+
+        // Validate location (if provided)
+        var (locValid, locError) = SharedValidationRules.ValidateEventLocation(normalizedLocation);
+        if (!locValid)
+        {
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", locError, request.EventId);
+            throw new ValidationException("Location", locError!);
+        }
+
+        // Validate max participants
+        var (partValid, partError) = SharedValidationRules.ValidateEventMaxParticipants(request.MaxParticipants);
+        if (!partValid)
+        {
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", partError, request.EventId);
+            throw new ValidationException("MaxParticipants", partError!);
+        }
+
+        // Validate points pool
+        var (poolValid, poolError) = SharedValidationRules.ValidateEventPointsPool(request.TotalPointsPool);
+        if (!poolValid)
+        {
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", poolError, request.EventId);
+            throw new ValidationException("TotalPointsPool", poolError!);
+        }
+
         // Validate EventDate is provided (DateTime is value type, check for default)
         if (request.EventDate == default)
         {
@@ -53,26 +99,25 @@ public class UpdateEventHandler : IRequestHandler<UpdateEventCommand, EventDto>
             throw new ValidationException("RegistrationEndDateUtc", "Registration deadline is required.");
         }
 
-        // NEW VALIDATION: RegistrationEndDateUtc must be STRICTLY EARLIER than EventDate
-        if (request.RegistrationEndDateUtc >= request.EventDate)
+        // Validate dates (future and RegistrationEnd < EventDate)
+        var (datesValid, datesError) = SharedValidationRules.ValidateEventDates(
+            request.EventDate, 
+            request.RegistrationEndDateUtc, 
+            nowUtc);
+        if (!datesValid)
         {
-            _logger.LogWarning(
-                "Event update failed: RegistrationEndDateUtc ({RegEnd}) must be earlier than EventDate ({EventDate}) for Event {EventId}",
-                request.RegistrationEndDateUtc.ToString("o"),
-                request.EventDate.ToString("o"),
-                request.EventId);
-            throw new ValidationException(
-                "RegistrationEndDateUtc",
-                $"Registration end ({request.RegistrationEndDateUtc:yyyy-MM-dd HH:mm} UTC) must be strictly earlier than event start ({request.EventDate:yyyy-MM-dd HH:mm} UTC). Same-day is allowed if times differ.");
+            // Determine which field the error relates to
+            var fieldName = datesError!.Contains("Registration") ? "RegistrationEndDateUtc" : "EventDate";
+            _logger.LogWarning("Event update failed: {Error} for Event {EventId}", datesError, request.EventId);
+            throw new ValidationException(fieldName, datesError);
         }
 
-        // Validate dates are in the future (warn but allow for testing)
-        if (request.RegistrationEndDateUtc <= nowUtc)
+        // Check event name uniqueness (excluding current event)
+        var nameExists = await _eventRepository.ExistsByNameAsync(normalizedName, request.EventId);
+        if (nameExists)
         {
-            _logger.LogWarning(
-                "Event {EventId} updated with past RegistrationEndDateUtc: {RegEnd}. This may trigger immediate auto-cancel if no registrations.",
-                request.EventId,
-                request.RegistrationEndDateUtc.ToString("o"));
+            _logger.LogWarning("Event update failed: Event name '{Name}' is already in use for Event {EventId}", normalizedName, request.EventId);
+            throw new ValidationException("Name", "An event with this name already exists. Please choose a different name.");
         }
 
         try
@@ -81,11 +126,11 @@ public class UpdateEventHandler : IRequestHandler<UpdateEventCommand, EventDto>
             // - Event must be in Draft (Created) status
             // - Throws DomainException if event is Active, Completed, or Cancelled
             @event.UpdateDetails(
-                name: request.Name,
-                description: request.Description,
+                name: normalizedName,
+                description: normalizedDescription,
                 eventDate: request.EventDate,
                 totalPointsPool: request.TotalPointsPool,
-                location: request.Location,
+                location: string.IsNullOrWhiteSpace(normalizedLocation) ? null : normalizedLocation,
                 maxParticipants: request.MaxParticipants,
                 registrationEndDate: request.RegistrationEndDateUtc,
                 bannerImageUrl: request.BannerImageUrl);

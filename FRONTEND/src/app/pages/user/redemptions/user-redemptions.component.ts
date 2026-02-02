@@ -7,6 +7,7 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
 
 interface StatusTab {
   key: 'pending' | 'approved' | 'delivered' | 'rejected';
@@ -20,7 +21,7 @@ interface StatusTab {
   templateUrl: './user-redemptions.component.html',
   styleUrls: ['./user-redemptions.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
 })
 export class UserRedemptionsComponent implements OnInit, OnDestroy {
   currentUser: any;
@@ -37,6 +38,10 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
     { key: 'rejected', label: 'Rejected', count: 0, statusCode: 2 }
   ];
   activeTab: 'pending' | 'approved' | 'delivered' | 'rejected' = 'pending';
+  
+  // Pagination
+  currentPage = 1;
+  pageSize = 10;
   
   private destroy$ = new Subject<void>();
 
@@ -116,7 +121,18 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
     const activeTabConfig = this.statusTabs.find(t => t.key === this.activeTab);
     if (activeTabConfig) {
       this.filteredRedemptions = this.redemptions.filter(r => r.statusCode === activeTabConfig.statusCode);
+      this.currentPage = 1; // Reset to first page when changing tabs
     }
+  }
+
+  get paginatedRedemptions(): UserRedemption[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    const end = start + this.pageSize;
+    return this.filteredRedemptions.slice(start, end);
+  }
+
+  changePage(page: number): void {
+    this.currentPage = page;
   }
 
   getStatusClass(statusCode: number): string {

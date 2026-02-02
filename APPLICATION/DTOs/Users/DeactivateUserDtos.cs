@@ -39,7 +39,7 @@ public class DeactivateUserWarnings
     /// <summary>
     /// User's current points balance (warning if > 0)
     /// </summary>
-    public int PointsBalance { get; init; }
+    public decimal PointsBalance { get; init; }
     
     /// <summary>
     /// Count of completed events user participated in

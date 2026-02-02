@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Subject } from 'rxjs';
-import { takeUntil, finalize, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Subject, of } from 'rxjs';
+import { takeUntil, finalize, debounceTime, distinctUntilChanged, switchMap, tap, filter } from 'rxjs/operators';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 
 // ECharts imports
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
@@ -17,20 +18,43 @@ import type { EChartsOption } from 'echarts';
 echarts.use([BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 import { EventService } from '../../../services/event.service';
+import { ValidationService, ValidationResult } from '../../../services/validation.service';
 import { Event, EventStatus, EventFilter, EventKPI, CreateEventRequest, UpdateEventRequest } from '../../../models/event.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
+import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { CustomValidators, ValidationConstants } from '../../../shared/validators/custom-validators';
+import { 
+  formatDateTimeForInputIst, 
+  parseInputDateTimeToUtcIso, 
+  getMinDateTimeForInput,
+  EventValidationUtils 
+} from '../../../shared/utils/ist-timezone.utils';
 
 @Component({
   selector: 'app-event-management',
   templateUrl: './event-management.component.html',
   styleUrls: ['./event-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, NgxEchartsDirective, ValidationHintComponent, FormErrorsSummaryComponent, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
   ],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('slideDown', [
+      transition(':enter', [
+        style({ height: 0, opacity: 0, overflow: 'hidden' }),
+        animate('300ms ease-out', style({ height: '*', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        style({ height: '*', opacity: 1, overflow: 'hidden' }),
+        animate('300ms ease-in', style({ height: 0, opacity: 0 }))
+      ])
+    ])
+  ]
 })
 export class EventManagementComponent implements OnInit, OnDestroy {
   // Expose global Math to templates to avoid AOT/runtime undefined
@@ -51,6 +75,10 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   sortBy = 'eventDate';
   successMessage: string | null = null;
   
+  // Chart visibility state
+  eventStatusChartVisible = signal(true);
+  private readonly CHART_VISIBILITY_KEY = 'events_status_chart_visible';
+  
   // Error & Empty States
   errorMessage = '';
   showErrorAlert = false;
@@ -62,7 +90,26 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   isSubmittingEvent = false;
   editingEventId: string | null = null;
   
-  // Create/Edit Event Form
+  // Create/Edit Event Form - Reactive Form
+  eventForm!: FormGroup;
+  validationConstants = ValidationConstants;
+  
+  // Validation signals for event form
+  nameCharCount = signal(0);
+  nameWordCount = signal(0);
+  descCharCount = signal(0);
+  descWordCount = signal(0);
+  locationCharCount = signal(0);
+  locationWordCount = signal(0);
+  nameUniquenessChecking = signal(false);
+  nameUniquenessResult = signal<ValidationResult | null>(null);
+  minDateTime = signal('');
+  maxRegistrationDateTime = signal('');
+  
+  // For name uniqueness debounce
+  private nameChange$ = new Subject<string>();
+  
+  // Legacy newEvent object (for compatibility during transition)
   newEvent: CreateEventRequest = {
     name: '',
     description: '',
@@ -122,13 +169,20 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   constructor(
     private eventService: EventService,
     private authService: AuthService,
+    private validationService: ValidationService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private fb: FormBuilder
   ) {}
 
   ngOnInit(): void {
     this.loadCurrentUser();
     this.loadEvents();
+    this.initializeEventForm();
+    this.setupEventFormListeners();
+    this.setupNameUniquenessCheck();
+    this.updateMinDateTime();
+    this.loadChartVisibilityPreference();
     
     // Setup search debounce
     this.searchSubject$.pipe(
@@ -146,6 +200,209 @@ export class EventManagementComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
   }
+
+  // ============================================================
+  // Event Form Methods
+  // ============================================================
+
+  /**
+   * Initialize the reactive form for event create/edit
+   */
+  private initializeEventForm(): void {
+    this.eventForm = this.fb.group({
+      name: ['', [
+        Validators.required,
+        CustomValidators.eventNameFormat()
+      ]],
+      description: ['', [
+        Validators.required,
+        CustomValidators.eventDescriptionFormat()
+      ]],
+      eventDate: ['', [
+        Validators.required,
+        CustomValidators.futureDate()
+      ]],
+      registrationEndDate: ['', [
+        Validators.required,
+        CustomValidators.futureDate(),
+        CustomValidators.registrationBeforeEvent('eventDate')
+      ]],
+      location: ['', [
+        CustomValidators.eventLocationFormat()
+      ]],
+      maxParticipants: [null, [
+        CustomValidators.eventMaxParticipants()
+      ]],
+      totalPointsPool: [null, [
+        Validators.required,
+        CustomValidators.eventPointsPool()
+      ]]
+    });
+
+    // Cross-field validation: re-validate registrationEndDate when eventDate changes
+    this.eventForm.get('eventDate')?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      const regEndControl = this.eventForm.get('registrationEndDate');
+      if (regEndControl) {
+        regEndControl.updateValueAndValidity();
+      }
+      // Update max datetime for registration
+      const eventDate = this.eventForm.get('eventDate')?.value;
+      if (eventDate) {
+        this.maxRegistrationDateTime.set(eventDate);
+      }
+    });
+  }
+
+  /**
+   * Setup value change listeners for counters
+   */
+  private setupEventFormListeners(): void {
+    // Name counters
+    this.eventForm.get('name')?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(value => {
+      this.nameCharCount.set(EventValidationUtils.countCharsNoSpaces(value));
+      this.nameWordCount.set(EventValidationUtils.countWords(value));
+      // Trigger uniqueness check
+      if (value && value.trim().length >= 2) {
+        this.nameChange$.next(value);
+      } else {
+        this.nameUniquenessResult.set(null);
+      }
+    });
+
+    // Description counters
+    this.eventForm.get('description')?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(value => {
+      this.descCharCount.set(value?.trim()?.length || 0);
+      this.descWordCount.set(EventValidationUtils.countWords(value));
+    });
+
+    // Location counters
+    this.eventForm.get('location')?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(value => {
+      this.locationCharCount.set(EventValidationUtils.countCharsNoSpaces(value));
+      this.locationWordCount.set(EventValidationUtils.countWords(value));
+    });
+  }
+
+  /**
+   * Setup name uniqueness check with debounce
+   */
+  private setupNameUniquenessCheck(): void {
+    this.nameChange$.pipe(
+      takeUntil(this.destroy$),
+      debounceTime(500),
+      distinctUntilChanged(),
+      filter(name => {
+        const nameControl = this.eventForm.get('name');
+        return nameControl?.valid ?? false;
+      }),
+      tap(() => {
+        this.nameUniquenessChecking.set(true);
+        this.nameUniquenessResult.set(null);
+      }),
+      switchMap(name => {
+        if (!name || name.trim().length < 2) {
+          return of(null);
+        }
+        // Pass excludeEventId for edit scenario
+        return this.validationService.checkEventNameAvailability(name, this.editingEventId || undefined);
+      })
+    ).subscribe({
+      next: (result) => {
+        this.nameUniquenessChecking.set(false);
+        this.nameUniquenessResult.set(result);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.nameUniquenessChecking.set(false);
+        this.nameUniquenessResult.set(null);
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  /**
+   * Update minimum datetime for date inputs
+   */
+  private updateMinDateTime(): void {
+    this.minDateTime.set(getMinDateTimeForInput());
+  }
+
+  /**
+   * Check name availability manually
+   */
+  checkEventNameAvailability(): void {
+    const name = this.eventForm.get('name')?.value;
+    if (name && name.trim().length >= 2) {
+      this.nameUniquenessChecking.set(true);
+      this.nameUniquenessResult.set(null);
+      this.validationService.checkEventNameAvailability(name, this.editingEventId || undefined)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (result) => {
+            this.nameUniquenessChecking.set(false);
+            this.nameUniquenessResult.set(result);
+            this.cdr.markForCheck();
+          },
+          error: () => {
+            this.nameUniquenessChecking.set(false);
+            this.nameUniquenessResult.set(null);
+            this.cdr.markForCheck();
+          }
+        });
+    }
+  }
+
+  /**
+   * Form control getter
+   */
+  get ef() {
+    return this.eventForm.controls;
+  }
+
+  /**
+   * Check if form can be submitted
+   */
+  canSubmitEventForm(): boolean {
+    const form = this.eventForm;
+    const uniquenessResult = this.nameUniquenessResult();
+    const isChecking = this.nameUniquenessChecking();
+
+    // Cannot submit if form is invalid or currently checking uniqueness
+    if (form.invalid || isChecking) {
+      return false;
+    }
+
+    // Cannot submit if uniqueness check failed
+    if (uniquenessResult && !uniquenessResult.isValid) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get submit disabled message
+   */
+  getSubmitDisabledMessage(): string {
+    if (this.isSubmittingEvent) return 'Saving...';
+    if (this.nameUniquenessChecking()) return 'Checking name availability...';
+    if (this.nameUniquenessResult() && !this.nameUniquenessResult()?.isValid) {
+      return 'Event name is already taken';
+    }
+    if (this.eventForm.invalid) return 'Please fix validation errors';
+    return '';
+  }
+
+  // ============================================================
+  // End Event Form Methods
+  // ============================================================
 
   /**
    * Load current user info
@@ -196,7 +453,7 @@ export class EventManagementComponent implements OnInit, OnDestroy {
           
           // Update charts
           this.updateEventStatusChart();
-          this.updateEnrollmentChart();
+          // Enrollment chart removed as per requirements
           
           // Apply tab filter for display
           this.applyStatusFilter();
@@ -434,6 +691,25 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Load chart visibility preference from localStorage
+   */
+  private loadChartVisibilityPreference(): void {
+    const stored = localStorage.getItem(this.CHART_VISIBILITY_KEY);
+    if (stored !== null) {
+      this.eventStatusChartVisible.set(stored === 'true');
+    }
+  }
+
+  /**
+   * Toggle event status chart visibility
+   */
+  toggleEventStatusChart(): void {
+    const newState = !this.eventStatusChartVisible();
+    this.eventStatusChartVisible.set(newState);
+    localStorage.setItem(this.CHART_VISIBILITY_KEY, String(newState));
+  }
+
+  /**
    * Check if we have event status data for the chart
    */
   hasEventStatusData(): boolean {
@@ -554,6 +830,26 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Handle pie chart click to filter by status
+   */
+  onPieChartClick(event: any): void {
+    if (event && event.name) {
+      // Map chart label to EventStatus
+      const statusMap: Record<string, EventStatus> = {
+        'Upcoming': 'Upcoming',
+        'Live': 'Live',
+        'Completed': 'Completed',
+        'Cancelled': 'Cancelled'
+      };
+      
+      const status = statusMap[event.name];
+      if (status) {
+        this.onStatusTabChange(status);
+      }
+    }
+  }
+
+  /**
    * Handle search with debounce
    */
   onSearch(text: string): void {
@@ -602,6 +898,40 @@ export class EventManagementComponent implements OnInit, OnDestroy {
    */
   openEditEventModal(event: Event): void {
     this.editingEventId = event.id;
+    
+    // Format dates for input
+    const eventDateFormatted = event.eventDate ? formatDateTimeForInputIst(event.eventDate) : '';
+    const regEndDateFormatted = event.registrationEndDateUtc ? formatDateTimeForInputIst(event.registrationEndDateUtc) : '';
+    
+    // Reset the form and populate with event data
+    this.eventForm.reset();
+    this.eventForm.patchValue({
+      name: event.name,
+      description: event.description || '',
+      eventDate: eventDateFormatted,
+      registrationEndDate: regEndDateFormatted,
+      location: event.location || '',
+      maxParticipants: event.maxParticipants || null,
+      totalPointsPool: event.totalPointsPool || 0
+    });
+    
+    // Update counters
+    this.nameCharCount.set(EventValidationUtils.countCharsNoSpaces(event.name));
+    this.nameWordCount.set(EventValidationUtils.countWords(event.name));
+    this.descCharCount.set(event.description?.trim()?.length || 0);
+    this.descWordCount.set(EventValidationUtils.countWords(event.description));
+    this.locationCharCount.set(EventValidationUtils.countCharsNoSpaces(event.location));
+    this.locationWordCount.set(EventValidationUtils.countWords(event.location));
+    
+    // Update max registration date
+    if (eventDateFormatted) {
+      this.maxRegistrationDateTime.set(eventDateFormatted);
+    }
+    
+    // Clear uniqueness result (will re-check if name changes)
+    this.nameUniquenessResult.set(null);
+    
+    // Legacy support
     this.newEvent = {
       name: event.name,
       description: event.description || '',
@@ -611,6 +941,7 @@ export class EventManagementComponent implements OnInit, OnDestroy {
       totalPointsPool: event.totalPointsPool || 0,
       registrationEndDateUtc: event.registrationEndDateUtc ? this.formatDatetimeForInput(event.registrationEndDateUtc) : ''
     };
+    
     this.showEditEventModal = true;
     this.showCreateEventModal = false;
     this.cdr.markForCheck();
@@ -635,6 +966,32 @@ export class EventManagementComponent implements OnInit, OnDestroy {
     const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16); // YYYY-MM-DDTHH:mm format for datetime-local
+    
+    // Reset reactive form
+    if (this.eventForm) {
+      this.eventForm.reset({
+        name: '',
+        description: '',
+        eventDate: localDatetime,
+        registrationEndDate: '',
+        location: '',
+        maxParticipants: null,
+        totalPointsPool: null
+      });
+    }
+    
+    // Reset counters
+    this.nameCharCount.set(0);
+    this.nameWordCount.set(0);
+    this.descCharCount.set(0);
+    this.descWordCount.set(0);
+    this.locationCharCount.set(0);
+    this.locationWordCount.set(0);
+    this.nameUniquenessResult.set(null);
+    this.nameUniquenessChecking.set(false);
+    this.updateMinDateTime();
+    
+    // Legacy support
     this.newEvent = {
       name: '',
       description: '',
@@ -704,19 +1061,28 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   submitNewEvent(): void {
     this.showErrorAlert = false;
     
-    if (!this.validateEventForm()) {
+    // Mark all fields as touched
+    Object.keys(this.eventForm.controls).forEach(key => {
+      this.eventForm.get(key)?.markAsTouched();
+    });
+    
+    if (!this.canSubmitEventForm()) {
+      this.cdr.markForCheck();
       return;
     }
 
     this.isSubmittingEvent = true;
+    const formValue = this.eventForm.value;
     
     // Convert datetime-local format to ISO UTC
-    const eventPayload = {
-      ...this.newEvent,
-      eventDate: new Date(this.newEvent.eventDate).toISOString(),
-      registrationEndDateUtc: this.newEvent.registrationEndDateUtc 
-        ? new Date(this.newEvent.registrationEndDateUtc).toISOString()
-        : undefined
+    const eventPayload: CreateEventRequest = {
+      name: formValue.name,
+      description: formValue.description,
+      eventDate: parseInputDateTimeToUtcIso(formValue.eventDate),
+      registrationEndDateUtc: parseInputDateTimeToUtcIso(formValue.registrationEndDate),
+      location: formValue.location || '',
+      maxParticipants: formValue.maxParticipants || undefined,
+      totalPointsPool: formValue.totalPointsPool
     };
     
     this.eventService.createEvent(eventPayload)
@@ -754,23 +1120,29 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   submitEditEvent(): void {
     this.showErrorAlert = false;
     
-    if (!this.validateEventForm() || !this.editingEventId) {
+    // Mark all fields as touched
+    Object.keys(this.eventForm.controls).forEach(key => {
+      this.eventForm.get(key)?.markAsTouched();
+    });
+    
+    if (!this.canSubmitEventForm() || !this.editingEventId) {
+      this.cdr.markForCheck();
       return;
     }
 
     this.isSubmittingEvent = true;
     
+    const formValue = this.eventForm.value;
+    
     // Convert datetime-local format to ISO UTC
     const updateRequest: UpdateEventRequest = {
-      name: this.newEvent.name,
-      description: this.newEvent.description,
-      eventDate: new Date(this.newEvent.eventDate).toISOString(),
-      location: this.newEvent.location || undefined,
-      maxParticipants: this.newEvent.maxParticipants,
-      totalPointsPool: this.newEvent.totalPointsPool,
-      registrationEndDateUtc: this.newEvent.registrationEndDateUtc
-        ? new Date(this.newEvent.registrationEndDateUtc).toISOString()
-        : undefined
+      name: formValue.name,
+      description: formValue.description,
+      eventDate: parseInputDateTimeToUtcIso(formValue.eventDate),
+      location: formValue.location || undefined,
+      maxParticipants: formValue.maxParticipants || undefined,
+      totalPointsPool: formValue.totalPointsPool,
+      registrationEndDateUtc: parseInputDateTimeToUtcIso(formValue.registrationEndDate)
     };
     
     this.eventService.updateEvent(this.editingEventId, updateRequest)
@@ -876,6 +1248,48 @@ export class EventManagementComponent implements OnInit, OnDestroy {
       day: 'numeric',
       year: 'numeric'
     });
+  }
+
+  /**
+   * Format datetime with IST timezone for table display (12-hour AM/PM format)
+   */
+  formatDateTimeIst(dateStr: string): string {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(date.getTime() + istOffset);
+    
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    
+    // Convert to 12-hour format with AM/PM
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const hoursStr = hours.toString().padStart(2, '0');
+    
+    return `${day} ${month} ${year}, ${hoursStr}:${minutes} ${ampm}`;
+  }
+
+  /**
+   * Check if pool is fully distributed
+   */
+  isPoolFullyDistributed(event: Event): boolean {
+    if (!event.totalPointsPool || event.totalPointsPool === 0) return false;
+    return event.distributedPoints >= event.totalPointsPool;
+  }
+
+  /**
+   * Get pool tooltip text
+   */
+  getPoolTooltip(event: Event): string {
+    return this.isPoolFullyDistributed(event) 
+      ? 'Fully distributed' 
+      : 'Distribution pending';
   }
 
   /**

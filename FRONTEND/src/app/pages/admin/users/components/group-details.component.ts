@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { AdminGroupsService } from '../../../../services/admin-groups.service';
 import { GroupDetails, GroupMember } from '../../../../models/group.models';
+import { DialogService } from '../../../../services/dialog.service';
 
 interface GroupTableAction {
   type: 'remove' | 'role-change';
@@ -570,7 +571,10 @@ export class GroupDetailsComponent implements OnInit, OnChanges, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private groupsService: AdminGroupsService) {}
+  constructor(
+    private groupsService: AdminGroupsService,
+    private dialogService: DialogService
+  ) {}
 
   ngOnInit(): void {
     this.groupsService.loading$
@@ -660,24 +664,30 @@ export class GroupDetailsComponent implements OnInit, OnChanges, OnDestroy {
   onDeleteGroup(): void {
     if (!this.groupDetails) return;
 
-    const confirmed = confirm(`Are you sure you want to delete the group "${this.groupDetails.name}"? This action cannot be undone.`);
-    if (confirmed) {
-      this.isUpdating = true;
-      this.groupsService.deleteGroup(this.groupDetails.id)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: () => {
-            this.groupDetails = null;
-            this.showMenu = false;
-            this.isUpdating = false;
-            this.groupUpdated.emit();
-          },
-          error: (error: any) => {
-            console.error('Error deleting group:', error);
-            this.isUpdating = false;
-          }
-        });
-    }
+    this.dialogService.confirm(
+      `Are you sure you want to delete the group "${this.groupDetails.name}"? This action cannot be undone.`,
+      'Delete Group',
+      'Delete',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed && this.groupDetails) {
+        this.isUpdating = true;
+        this.groupsService.deleteGroup(this.groupDetails.id)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: () => {
+              this.groupDetails = null;
+              this.showMenu = false;
+              this.isUpdating = false;
+              this.groupUpdated.emit();
+            },
+            error: (error: any) => {
+              console.error('Error deleting group:', error);
+              this.isUpdating = false;
+            }
+          });
+      }
+    });
   }
 
   onExportMembers(): void {
@@ -727,22 +737,28 @@ export class GroupDetailsComponent implements OnInit, OnChanges, OnDestroy {
   onRemoveMember(member: GroupMember): void {
     if (!this.groupId) return;
 
-    const confirmed = confirm(`Remove ${member.firstName} ${member.lastName} from this group?`);
-    if (confirmed) {
-      this.isUpdating = true;
-      this.groupsService.removeMemberFromGroup(this.groupId, member.userId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: () => {
-            this.isUpdating = false;
-            this.loadGroupDetails();
-            this.groupUpdated.emit();
-          },
-          error: (error: any) => {
-            console.error('Error removing member:', error);
-            this.isUpdating = false;
-          }
-        });
-    }
+    this.dialogService.confirm(
+      `Remove ${member.firstName} ${member.lastName} from this group?`,
+      'Remove Member',
+      'Remove',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        this.isUpdating = true;
+        this.groupsService.removeMemberFromGroup(this.groupId!, member.userId)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: () => {
+              this.isUpdating = false;
+              this.loadGroupDetails();
+              this.groupUpdated.emit();
+            },
+            error: (error: any) => {
+              console.error('Error removing member:', error);
+              this.isUpdating = false;
+            }
+          });
+      }
+    });
   }
 }

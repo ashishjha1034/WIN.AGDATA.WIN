@@ -8,8 +8,11 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
 import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../../config/api.config';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
+import { DialogService } from '../../../services/dialog.service';
 
 type SortOption = 'dateNewest' | 'dateOldest' | 'pointsHigh' | 'participantsHigh' | 'availabilityLow';
 
@@ -31,7 +34,7 @@ interface UserEventContext {
   templateUrl: './user-events.component.html',
   styleUrls: ['./user-events.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
 })
 export class UserEventsComponent implements OnInit, OnDestroy {
   currentUser: any;
@@ -59,6 +62,10 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   
   activeTab: EventStatus | 'All' = 'All';
   
+  // Pagination
+  currentPage = 1;
+  pageSize = 10;
+  
   sortOptions = [
     { value: 'dateNewest', label: 'Date (Newest First)' },
     { value: 'dateOldest', label: 'Date (Oldest First)' },
@@ -74,7 +81,8 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     private eventService: EventService,
     private http: HttpClient,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
   ) { }
 
   ngOnInit(): void {
@@ -192,6 +200,17 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     events = this.sortEvents(events, this.selectedSort);
     
     this.filteredEvents = events;
+    this.currentPage = 1; // Reset to first page when filters change
+  }
+
+  get paginatedEvents(): Event[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    const end = start + this.pageSize;
+    return this.filteredEvents.slice(start, end);
+  }
+
+  changePage(page: number): void {
+    this.currentPage = page;
   }
 
   sortEvents(events: Event[], sortBy: SortOption): Event[] {
@@ -330,7 +349,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
           this.loadEvents();
           
           // Show success message
-          alert('Successfully registered for ' + event.name);
+          this.dialogService.success('Successfully registered for ' + event.name);
           
           this.cdr.detectChanges();
         },
@@ -349,33 +368,28 @@ export class UserEventsComponent implements OnInit, OnDestroy {
             errorMessage = error.error.message;
           }
           
-          alert(errorMessage);
+          this.dialogService.error(errorMessage);
         }
       });
   }
 
   formatDate(dateStr: string): string {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Convert UTC to IST for display
+    const istDate = utcToIst(dateStr);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${day} ${month} ${year}, ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   }
 
   formatDateTime(dateStr: string): string {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
+    return this.formatDate(dateStr);
   }
 
   // ==================== COUNTDOWN ====================

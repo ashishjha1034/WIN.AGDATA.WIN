@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, forkJoin } from 'rxjs';
 import { takeUntil, finalize, debounceTime } from 'rxjs/operators';
+import { NgxEchartsModule, NGX_ECHARTS_CONFIG } from 'ngx-echarts';
+import { EChartsOption } from 'echarts';
 import { AdminTransactionsService } from '../../../services/admin-transactions.service';
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AuthService } from '../../../services/auth.service';
@@ -16,13 +18,21 @@ import {
   UserOption
 } from '../../../models/admin-transaction.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 
 @Component({
   selector: 'app-transaction-management',
   templateUrl: './transaction-management.component.html',
   styleUrls: ['./transaction-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent]
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsModule, PaginationComponent],
+  providers: [
+    {
+      provide: NGX_ECHARTS_CONFIG,
+      useValue: { echarts: () => import('echarts') }
+    }
+  ]
 })
 export class TransactionManagementComponent implements OnInit, OnDestroy {
   // Expose Math for template
@@ -33,8 +43,9 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   selectedTransaction: AdminTransaction | null = null;
   currentUser: any;
   chartData: MonthlyChartDataPoint[] = [];
+  chartOptions: EChartsOption = {};
 
-  // Summary stats
+  // Summary stats (from backend, not computed)
   summary: TransactionSummary = {
     totalEarned: 0,
     totalRedeemed: 0,
@@ -48,9 +59,8 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   pageSize = 20;
   totalCount = 0;
   totalPages = 0;
-  pageSizeOptions = [10, 20, 50, 100];
 
-  // Filters
+  // Unified filter state - drives KPIs, Chart, and Table together
   filters: TransactionFilterRequest = {
     pageNumber: 1,
     pageSize: 20,
@@ -59,10 +69,9 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   };
   searchText = '';
   selectedType: string | null = null;
-  selectedSource: string | null = null;
-  selectedUserId: string | null = null;
   startDate: string | null = null;
   endDate: string | null = null;
+  datePreset: string | null = null;
 
   // Type filter options
   typeOptions = [
@@ -73,21 +82,11 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
     { value: 'Refunded', label: 'Refunded' }
   ];
 
-  // Source filter options
-  sourceOptions = [
-    { value: null, label: 'All Sources' },
-    { value: 'Event', label: 'Event' },
-    { value: 'Product', label: 'Product' },
-    { value: 'Admin', label: 'Admin' },
-    { value: 'System', label: 'System' }
-  ];
-
   // Users for filter dropdown
   userOptions: UserOption[] = [];
 
   // UI State
   isLoading = false;
-  isLoadingDetails = false;
   isLoadingChart = false;
   isExporting = false;
   isSubmitting = false;
@@ -125,15 +124,16 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe(query => {
       this.filters.searchQuery = query;
-      this.loadTransactions();
+      this.loadAllData(); // Reload all data with new filter
     });
   }
 
   ngOnInit(): void {
     this.loadCurrentUser();
-    this.loadTransactions();
-    this.loadChart();
+    this.loadAllData();
     this.loadUsers();
+    // Load chart data ONCE without filters - chart should not change with filters
+    this.loadChart();
   }
 
   ngOnDestroy(): void {
@@ -149,20 +149,19 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       });
   }
 
-  loadTransactions(): void {
+  /**
+   * Load all data (transactions, summary, chart) with the same filter state
+   * This ensures KPIs, Chart, and Table are always in sync
+   */
+  loadAllData(): void {
     this.isLoading = true;
     this.errorMessage = '';
     this.showErrorAlert = false;
 
-    // Update filter with current pagination
-    this.filters.pageNumber = this.currentPage;
-    this.filters.pageSize = this.pageSize;
-    this.filters.type = this.selectedType || undefined;
-    this.filters.source = this.selectedSource || undefined;
-    this.filters.userId = this.selectedUserId || undefined;
-    this.filters.startDate = this.startDate || undefined;
-    this.filters.endDate = this.endDate || undefined;
+    // Build unified filter
+    this.buildFilters();
 
+    // Load transactions (includes summary in response)
     this.transactionsService.getAllTransactions(this.filters)
       .pipe(
         takeUntil(this.destroy$),
@@ -176,7 +175,7 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
           this.transactions = response.data;
           this.totalCount = response.pagination.totalCount;
           this.totalPages = response.pagination.totalPages;
-          this.summary = response.summary;
+          this.summary = response.summary; // KPIs from backend
         },
         error: (error) => {
           console.error('Error loading transactions:', error);
@@ -184,8 +183,24 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
           this.showErrorAlert = true;
         }
       });
+
+    // Chart is loaded once on init and does NOT change with filters
   }
 
+  /**
+   * Build filter object from current UI state
+   */
+  private buildFilters(): void {
+    this.filters.pageNumber = this.currentPage;
+    this.filters.pageSize = this.pageSize;
+    this.filters.type = this.selectedType || undefined;
+    this.filters.startDate = this.startDate || undefined;
+    this.filters.endDate = this.endDate || undefined;
+  }
+
+  /**
+   * Load chart data ONCE (without filters) - chart shows overall trends
+   */
   loadChart(): void {
     this.isLoadingChart = true;
 
@@ -200,11 +215,140 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           this.chartData = response.data;
+          this.buildChartOptions();
         },
         error: (error) => {
           console.error('Error loading chart:', error);
         }
       });
+  }
+
+  /**
+   * Load chart data with the same filters as table/KPIs (DEPRECATED - kept for reference)
+   */
+  loadFilteredChart(): void {
+    // Now using loadChart() instead - chart should NOT change with filters
+    this.loadChart();
+  }
+
+  /**
+   * Build ECharts options for Monthly Points Trend chart
+   * Grouped bars for Earned & Redeemed + thin line for Net
+   */
+  buildChartOptions(): void {
+    const months = this.chartData.map(d => d.monthName?.substring(0, 3) || '');
+    const earnedData = this.chartData.map(d => d.pointsEarned);
+    const redeemedData = this.chartData.map(d => d.pointsRedeemed);
+    const netData = this.chartData.map(d => d.netPoints);
+
+    this.chartOptions = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          crossStyle: {
+            color: '#999'
+          }
+        },
+        formatter: (params: any) => {
+          let result = `<strong>${params[0].axisValue}</strong><br/>`;
+          params.forEach((item: any) => {
+            const marker = `<span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>`;
+            result += `${marker}${item.seriesName}: ${item.value?.toLocaleString()}<br/>`;
+          });
+          return result;
+        }
+      },
+      legend: {
+        data: ['Earned', 'Redeemed', 'Net Points'],
+        bottom: 0,
+        textStyle: {
+          fontSize: 12,
+          color: '#6b7280'
+        }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        top: '10%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        data: months,
+        axisPointer: {
+          type: 'shadow'
+        },
+        axisLabel: {
+          color: '#6b7280',
+          fontSize: 12
+        },
+        axisLine: {
+          lineStyle: {
+            color: '#e5e7eb'
+          }
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          color: '#6b7280',
+          fontSize: 12,
+          formatter: (value: number) => {
+            if (value >= 1000) {
+              return (value / 1000).toFixed(0) + 'k';
+            }
+            return value.toString();
+          }
+        },
+        axisLine: {
+          show: false
+        },
+        splitLine: {
+          lineStyle: {
+            color: '#f3f4f6'
+          }
+        }
+      },
+      series: [
+        {
+          name: 'Earned',
+          type: 'bar',
+          barWidth: '25%',
+          data: earnedData,
+          itemStyle: {
+            color: '#16a34a',
+            borderRadius: [4, 4, 0, 0]
+          }
+        },
+        {
+          name: 'Redeemed',
+          type: 'bar',
+          barWidth: '25%',
+          data: redeemedData,
+          itemStyle: {
+            color: '#dc2626',
+            borderRadius: [4, 4, 0, 0]
+          }
+        },
+        {
+          name: 'Net Points',
+          type: 'line',
+          data: netData,
+          smooth: true,
+          lineStyle: {
+            width: 2,
+            color: '#2c5f3f'
+          },
+          itemStyle: {
+            color: '#2c5f3f'
+          },
+          symbol: 'circle',
+          symbolSize: 6
+        }
+      ]
+    };
   }
 
   loadUsers(): void {
@@ -233,37 +377,57 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   clearSearch(): void {
     this.searchText = '';
     this.filters.searchQuery = '';
-    this.loadTransactions();
+    this.loadAllData();
   }
 
-  // Filter handlers
+  // Filter handlers - all reload everything to keep in sync
   onTypeFilterChange(): void {
     this.currentPage = 1;
-    this.loadTransactions();
-  }
-
-  onSourceFilterChange(): void {
-    this.currentPage = 1;
-    this.loadTransactions();
-  }
-
-  onUserFilterChange(): void {
-    this.currentPage = 1;
-    this.loadTransactions();
+    this.loadAllData();
   }
 
   onDateFilterChange(): void {
+    this.datePreset = null; // Clear preset when manual dates change
     this.currentPage = 1;
-    this.loadTransactions();
+    this.loadAllData();
+  }
+
+  setDatePreset(preset: string): void {
+    const today = new Date();
+    let start: Date;
+
+    if (preset === 'last15') {
+      start = new Date(today);
+      start.setDate(today.getDate() - 15);
+    } else if (preset === 'last30') {
+      start = new Date(today);
+      start.setDate(today.getDate() - 30);
+    } else {
+      return;
+    }
+
+    this.datePreset = preset;
+    this.startDate = start.toISOString().split('T')[0];
+    this.endDate = today.toISOString().split('T')[0];
+    this.currentPage = 1;
+    this.loadAllData();
+  }
+
+  onSortChange(): void {
+    this.loadAllData();
+  }
+
+  setSortOrder(descending: boolean): void {
+    this.filters.sortDescending = descending;
+    this.loadAllData();
   }
 
   clearFilters(): void {
     this.searchText = '';
     this.selectedType = null;
-    this.selectedSource = null;
-    this.selectedUserId = null;
     this.startDate = null;
     this.endDate = null;
+    this.datePreset = null;
     this.filters = {
       pageNumber: 1,
       pageSize: this.pageSize,
@@ -271,12 +435,11 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       sortDescending: true
     };
     this.currentPage = 1;
-    this.loadTransactions();
+    this.loadAllData();
   }
 
   get hasFiltersApplied(): boolean {
-    return !!(this.searchText || this.selectedType || this.selectedSource ||
-              this.selectedUserId || this.startDate || this.endDate);
+    return !!(this.searchText || this.selectedType || this.startDate || this.endDate);
   }
 
   toggleFiltersPanel(): void {
@@ -287,68 +450,8 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   changePage(page: number): void {
     if (page >= 1 && page <= this.totalPages) {
       this.currentPage = page;
-      this.loadTransactions();
+      this.loadAllData();
     }
-  }
-
-  onPageSizeChange(): void {
-    this.currentPage = 1;
-    this.loadTransactions();
-  }
-
-  get showingFrom(): number {
-    if (this.totalCount === 0) return 0;
-    return (this.currentPage - 1) * this.pageSize + 1;
-  }
-
-  get showingTo(): number {
-    return Math.min(this.currentPage * this.pageSize, this.totalCount);
-  }
-
-  get visiblePages(): (number | string)[] {
-    const pages: (number | string)[] = [];
-    const total = this.totalPages;
-    const current = this.currentPage;
-
-    if (total <= 7) {
-      for (let i = 1; i <= total; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (current > 3) {
-        pages.push('...');
-      }
-      for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-        if (!pages.includes(i)) {
-          pages.push(i);
-        }
-      }
-      if (current < total - 2) {
-        pages.push('...');
-      }
-      if (!pages.includes(total)) {
-        pages.push(total);
-      }
-    }
-
-    return pages;
-  }
-
-  // Sorting
-  sortBy(column: string): void {
-    if (this.filters.sortBy === column) {
-      this.filters.sortDescending = !this.filters.sortDescending;
-    } else {
-      this.filters.sortBy = column;
-      this.filters.sortDescending = true;
-    }
-    this.loadTransactions();
-  }
-
-  getSortIcon(column: string): string {
-    if (this.filters.sortBy !== column) return '↕️';
-    return this.filters.sortDescending ? '↓' : '↑';
   }
 
   // Details drawer
@@ -429,7 +532,7 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
           this.successMessage = response.message;
           this.showSuccessAlert = true;
           this.closeAdjustPointsModal();
-          this.loadTransactions();
+          this.loadAllData(); // Refresh all data
           setTimeout(() => this.showSuccessAlert = false, 5000);
         },
         error: (error) => {
@@ -465,12 +568,6 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       });
   }
 
-  // Refresh
-  refreshData(): void {
-    this.loadTransactions();
-    this.loadChart();
-  }
-
   // Toggle chart visibility
   toggleChart(): void {
     this.showChart = !this.showChart;
@@ -486,56 +583,19 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   }
 
   // Utility methods
-  getTypeLabel(type: string): string {
-    return this.transactionsService.getTypeLabel(type);
-  }
-
-  getTypeClass(type: string): string {
-    return this.transactionsService.getTypeClass(type);
-  }
-
-  getSourceIcon(source: string): string {
-    return this.transactionsService.getSourceIcon(source);
-  }
-
-  getSourceClass(source: string): string {
-    return this.transactionsService.getSourceClass(source);
-  }
-
-  formatPoints(points: number): string {
-    return this.transactionsService.formatPoints(points);
-  }
-
-  getPointsClass(points: number): string {
-    return points >= 0 ? 'points-positive' : 'points-negative';
-  }
-
-  formatDate(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }
-
   formatDateTime(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-
-  formatTime(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return '';
+    // Convert UTC to IST for display
+    const istDate = utcToIst(dateString);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${month} ${day}, ${year}, ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   }
 
   getUserInitials(name: string): string {
@@ -548,20 +608,14 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   }
 
   getBalanceBefore(transaction: AdminTransaction): number {
-    return transaction.balanceAfter - transaction.amount;
-  }
-
-  // Chart helpers
-  getChartMaxValue(): number {
-    if (!this.chartData.length) return 100;
-    const max = Math.max(
-      ...this.chartData.map(d => Math.max(d.pointsEarned, d.pointsRedeemed))
-    );
-    return Math.ceil(max * 1.1); // Add 10% padding
-  }
-
-  getBarHeight(value: number): number {
-    const max = this.getChartMaxValue();
-    return max > 0 ? (value / max) * 100 : 0;
+    // Calculate balance before based on transaction type
+    // Points are stored as positive values in the database
+    const type = transaction.type?.toLowerCase();
+    if (type === 'redeemed') {
+      // For redeemed, balance before was higher (add back the points)
+      return transaction.balanceAfter + Math.abs(transaction.amount);
+    }
+    // For earned/refunded, balance before was lower (subtract the points)
+    return transaction.balanceAfter - Math.abs(transaction.amount);
   }
 }

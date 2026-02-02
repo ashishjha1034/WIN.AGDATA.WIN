@@ -62,8 +62,9 @@
                   echarts 
                   [options]="redemptionStatusChartOption" 
                   [merge]="redemptionStatusChartOption"
+                  (chartClick)="onPieChartClick($event)"
                   class="status-chart"
-                  aria-label="Donut chart showing redemptions status distribution">
+                  aria-label="Donut chart showing redemptions status distribution. Click on a segment to filter by that status.">
                 </div>
                 <div class="chart-empty" *ngIf="!hasRedemptionStatusData()">
                   <i class="fa-regular fa-chart-pie"></i>
@@ -277,25 +278,13 @@
             </div>
 
             <!-- Pagination -->
-            <div class="pagination" *ngIf="totalPages > 1">
-              <button
-                class="page-btn"
-                [disabled]="currentPage === 1"
-                (click)="changePage(currentPage - 1)"
-              >
-                <i class="fa-solid fa-chevron-left"></i> Previous
-              </button>
-              <div class="page-info">
-                Page {{ currentPage }} of {{ totalPages }}
-              </div>
-              <button
-                class="page-btn"
-                [disabled]="currentPage === totalPages"
-                (click)="changePage(currentPage + 1)"
-              >
-                Next <i class="fa-solid fa-chevron-right"></i>
-              </button>
-            </div>
+            <app-pagination
+              [currentPage]="currentPage"
+              [pageSize]="pageSize"
+              [totalItems]="filteredRedemptions.length"
+              [itemLabel]="'redemptions'"
+              (pageChange)="changePage($event)"
+            ></app-pagination>
           </div>
         </section>
       </ng-container>

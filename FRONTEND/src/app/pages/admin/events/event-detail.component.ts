@@ -6,6 +6,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { EventService } from '../../../services/event.service';
 import { AuthService } from '../../../services/auth.service';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import {
   EventDetail,
@@ -417,31 +418,28 @@ export class EventDetailComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Format date with time
+   * Format date with time in IST
    */
   formatDate(date: string): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Convert UTC to IST for display
+    const istDate = utcToIst(date);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${day} ${month} ${year}, ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   }
 
   /**
-   * Format datetime (same as formatDate - shows date + time)
+   * Format datetime in IST (same as formatDate - shows date + time)
    */
   formatDateTime(date: string): string {
-    if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return this.formatDate(date);
   }
 
   /**

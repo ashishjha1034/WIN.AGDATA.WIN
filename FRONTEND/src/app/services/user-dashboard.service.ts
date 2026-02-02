@@ -321,6 +321,25 @@ export class UserDashboardService {
   }
 
   /**
+   * Get product IDs with pending or approved redemptions
+   * Users cannot redeem a product again until the previous redemption is delivered
+   */
+  getPendingRedemptionProductIds(): Observable<string[]> {
+    const url = `${this.API_URL}/redemptions/pending-products`;
+    console.log('Fetching pending redemption product IDs from:', url);
+    return this.http.get<any>(url).pipe(
+      map(response => {
+        console.log('Pending products response:', response);
+        return response.productIds || [];
+      }),
+      catchError(error => {
+        console.error('Error fetching pending products:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
    * Fetch product details
    */
   getProductDetails(productId: string): Observable<UserProduct> {

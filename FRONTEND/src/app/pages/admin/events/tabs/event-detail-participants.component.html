@@ -11,7 +11,7 @@
     <button type="button" class="alert-close" (click)="dismissError()"><i class="fa-solid fa-xmark"></i></button>
   </div>
 
-  <!-- Filter Bar: Search + Filter Button -->
+  <!-- Filter Bar: Search + Filter Button + All Check-In -->
   <div class="filter-bar">
     <div class="search-box">
       <input 
@@ -24,34 +24,47 @@
       <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
     </div>
 
-    <div class="filter-dropdown-container">
-      <button class="btn btn-filter" (click)="toggleFilterDropdown()">
-        <span class="filter-icon"><i class="fa-solid fa-filter"></i></span>
-        Filter: {{ statusFilter }}
-      </button>
-      <div class="filter-dropdown" *ngIf="showFilterDropdown" (clickOutside)="closeFilterDropdown()">
-        <button 
-          class="dropdown-item"
-          [class.active]="statusFilter === 'All'"
-          (click)="onFilterChange('All')"
-        >
-          All ({{ participants.length }})
+    <div class="filter-actions">
+      <div class="filter-dropdown-container">
+        <button class="btn btn-filter" (click)="toggleFilterDropdown()">
+          <span class="filter-icon"><i class="fa-solid fa-filter"></i></span>
+          Filter: {{ statusFilter }}
         </button>
-        <button 
-          class="dropdown-item"
-          [class.active]="statusFilter === 'Registered'"
-          (click)="onFilterChange('Registered')"
-        >
-          Registered ({{ getRegisteredCount() }})
-        </button>
-        <button 
-          class="dropdown-item"
-          [class.active]="statusFilter === 'Checked-In'"
-          (click)="onFilterChange('Checked-In')"
-        >
-          Checked-In ({{ getCheckedInCount() }})
-        </button>
+        <div class="filter-dropdown" *ngIf="showFilterDropdown" (clickOutside)="closeFilterDropdown()">
+          <button 
+            class="dropdown-item"
+            [class.active]="statusFilter === 'All'"
+            (click)="onFilterChange('All')"
+          >
+            All ({{ participants.length }})
+          </button>
+          <button 
+            class="dropdown-item"
+            [class.active]="statusFilter === 'Registered'"
+            (click)="onFilterChange('Registered')"
+          >
+            Registered ({{ getRegisteredCount() }})
+          </button>
+          <button 
+            class="dropdown-item"
+            [class.active]="statusFilter === 'Checked-In'"
+            (click)="onFilterChange('Checked-In')"
+          >
+            Checked-In ({{ getCheckedInCount() }})
+          </button>
+        </div>
       </div>
+
+      <!-- All Check-In Button -->
+      <button 
+        class="btn btn-primary btn-check-in-all"
+        (click)="checkInAll()"
+        [disabled]="!canCheckInAll() || isCheckingInAll"
+        [title]="getCheckInAllTooltip()"
+      >
+        <i class="fa-solid" [ngClass]="isCheckingInAll ? 'fa-spinner fa-spin' : 'fa-user-check'"></i>
+        {{ isCheckingInAll ? 'Checking In...' : 'All Check-In' }}
+      </button>
     </div>
   </div>
 

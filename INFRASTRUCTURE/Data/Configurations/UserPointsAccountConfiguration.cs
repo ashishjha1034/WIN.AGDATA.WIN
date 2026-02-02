@@ -15,9 +15,10 @@ public class UserPointsAccountConfiguration : IEntityTypeConfiguration<UserPoint
             .HasForeignKey<UserPointsAccount>(p => p.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Property(p => p.CurrentBalance).HasDefaultValue(0);
-        builder.Property(p => p.TotalEarned).HasDefaultValue(0);
-        builder.Property(p => p.TotalRedeemed).HasDefaultValue(0);
+        // Points fields - use decimal(18,2) for 2 decimal places
+        builder.Property(p => p.CurrentBalance).HasPrecision(18, 2).HasDefaultValue(0m);
+        builder.Property(p => p.TotalEarned).HasPrecision(18, 2).HasDefaultValue(0m);
+        builder.Property(p => p.TotalRedeemed).HasPrecision(18, 2).HasDefaultValue(0m);
 
         builder.HasIndex(p => p.UserId).IsUnique();
     }

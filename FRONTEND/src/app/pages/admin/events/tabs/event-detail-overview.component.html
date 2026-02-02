@@ -1,96 +1,72 @@
 <div class="overview-content" *ngIf="event">
-  <div class="overview-grid">
-    <!-- Left Column -->
-    <div class="overview-column left-column">
-      <!-- Event Details Section -->
-      <div class="card">
-        <h3 class="card-title">Event Details</h3>
-        <div class="details-group">
-          <div class="detail-row">
-            <span class="label">Event Name</span>
-            <span class="value">{{ event.name }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Status</span>
-            <span class="value badge" [style.backgroundColor]="getStatusColor(event.status)" [style.color]="'#FFFFFF'">{{ getStatusLabel(event.status) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Description</span>
-            <p class="value description">{{ event.description }}</p>
-          </div>
-        </div>
+  <!-- Event Details Section -->
+  <div class="event-details-card">
+    <h3 class="section-title">Event Details</h3>
+    <div class="details-list">
+      <div class="detail-item">
+        <span class="detail-label">Event Name</span>
+        <span class="detail-value">{{ event.name }}</span>
       </div>
+      <div class="detail-item">
+        <span class="detail-label">Description</span>
+        <p class="detail-value description">{{ event.description }}</p>
+      </div>
+      <div class="detail-item" *ngIf="event.location">
+        <span class="detail-label">Location</span>
+        <span class="detail-value">{{ event.location }}</span>
+      </div>
+    </div>
+  </div>
 
-      <!-- Event Dates Section -->
-      <div class="card">
-        <h3 class="card-title">Event Dates</h3>
-        <div class="details-group">
-          <div class="detail-row">
-            <span class="label">Event Start Date</span>
-            <span class="value">{{ formatDate(event.eventDate) }}</span>
-          </div>
-          <div class="detail-row" *ngIf="event.registrationEndDateUtc">
-            <span class="label">Registration End Date</span>
-            <span class="value">{{ formatDate(event.registrationEndDateUtc) }}</span>
-          </div>
-          <div class="detail-row" *ngIf="event.maxParticipants">
-            <span class="label">Max Participants</span>
-            <span class="value">{{ event.maxParticipants }}</span>
-          </div>
-          <div class="detail-row" *ngIf="event.location">
-            <span class="label">Location</span>
-            <span class="value">{{ event.location }}</span>
-          </div>
+  <!-- KPI Cards Grid -->
+  <div class="kpi-grid">
+    <!-- Start DateTime -->
+    <div class="kpi-card">
+      <div class="kpi-icon">
+        <i class="fa-solid fa-calendar-day"></i>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Start</div>
+        <div class="kpi-value">{{ formatDateTimeIst(event.eventDate) }}</div>
+      </div>
+    </div>
+
+    <!-- Registration End DateTime -->
+    <div class="kpi-card">
+      <div class="kpi-icon">
+        <i class="fa-solid fa-calendar-xmark"></i>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Registration End</div>
+        <div class="kpi-value">{{ formatDateTimeIst(event.registrationEndDateUtc || event.registrationEndDate || event.eventDate) }}</div>
+      </div>
+    </div>
+
+    <!-- Participants (registered / total) -->
+    <div class="kpi-card">
+      <div class="kpi-icon">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Participants</div>
+        <div class="kpi-value">
+          {{ event.registeredCount || event.participantCount || 0 }} / {{ event.maxParticipants || '∞' }}
         </div>
       </div>
     </div>
 
-    <!-- Right Column (Summary Cards) -->
-    <div class="overview-column right-column">
-      <!-- Summary Cards - Only Total Participants and Total Points Pool -->
-      <div class="summary-cards">
-        <div class="summary-card">
-          <div class="card-icon">
-            <i class="fa-solid fa-users"></i>
-          </div>
-          <div class="card-info">
-            <div class="card-label">Total Participants</div>
-            <div class="card-value">{{ event.registeredCount || event.participantCount || 0 }}</div>
-          </div>
-        </div>
-
-        <div class="summary-card">
-          <div class="card-icon">
-            <i class="fa-solid fa-coins"></i>
-          </div>
-          <div class="card-info">
-            <div class="card-label">Total Points Pool</div>
-            <div class="card-value">{{ event.totalPointsPool | number }}</div>
-          </div>
-        </div>
+    <!-- Prize Pool -->
+    <div class="kpi-card">
+      <div class="kpi-icon">
+        <i class="fa-solid fa-coins"></i>
       </div>
-
-      <!-- Progress Bar -->
-      <div class="card">
-        <h3 class="card-title">Points Distribution Progress</h3>
-        <div class="progress-container">
-          <div class="progress-bar">
-            <div 
-              class="progress-fill"
-              [style.width.%]="getDistributionPercentage()"
-            ></div>
-          </div>
-          <div class="progress-info">
-            <span class="progress-label">Distributed</span>
-            <span class="progress-value">{{ event.distributedPoints | number }} / {{ event.totalPointsPool | number }}</span>
-          </div>
-          <div class="progress-percentage">
-            {{ getDistributionPercentage() }}%
-          </div>
-          <div class="progress-remaining">
-            <span class="label">Remaining:</span>
-            <span class="value">{{ getRemainingPoints() | number }}</span>
-          </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Prize Pool</div>
+        <div class="kpi-value">
+          {{ (event.totalPointsPool || 0) | number }}
+          <span class="kpi-subtext" *ngIf="event.totalPointsPool">
+            ({{ getDistributionPercentage() }}% distributed)
+          </span>
         </div>
       </div>
     </div>

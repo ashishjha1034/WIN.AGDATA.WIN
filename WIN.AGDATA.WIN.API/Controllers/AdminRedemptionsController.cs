@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 using WIN.AGDATA.WIN.Domain.Enums;
 using WIN.AGDATA.WIN.Domain.Exceptions;
 
@@ -22,6 +23,7 @@ public class AdminRedemptionsController : ControllerBase
     private readonly IRedemptionRepository _redemptionRepository;
     private readonly IUserRepository _userRepository;
     private readonly IProductRepository _productRepository;
+    private readonly ITransactionRepository _transactionRepository;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUnitOfWork _unitOfWork;
@@ -30,6 +32,7 @@ public class AdminRedemptionsController : ControllerBase
         IRedemptionRepository redemptionRepository,
         IUserRepository userRepository,
         IProductRepository productRepository,
+        ITransactionRepository transactionRepository,
         IMapper mapper,
         ICurrentUserService currentUserService,
         IUnitOfWork unitOfWork)
@@ -37,6 +40,7 @@ public class AdminRedemptionsController : ControllerBase
         _redemptionRepository = redemptionRepository;
         _userRepository = userRepository;
         _productRepository = productRepository;
+        _transactionRepository = transactionRepository;
         _mapper = mapper;
         _currentUserService = currentUserService;
         _unitOfWork = unitOfWork;
@@ -259,6 +263,18 @@ public class AdminRedemptionsController : ControllerBase
 
             // Refund points to user
             user.PointsAccount.RefundPoints(redemption.PointsSpent, currentAdminId, $"Refund for rejected redemption: {request.Reason}");
+
+            // Create refund transaction record for tracking
+            var refundTransaction = UserPointsTransaction.CreateRefunded(
+                userId: user.Id,
+                points: redemption.PointsSpent,
+                source: "Redemption Refund",
+                sourceId: redemption.Id,
+                description: $"Refund for rejected redemption of {product.Name}: {request.Reason}",
+                balanceAfter: user.PointsAccount.CurrentBalance,
+                processedBy: currentAdminId
+            );
+            _transactionRepository.Add(refundTransaction);
 
             // Restore product inventory
             product.Inventory.AdjustStock(redemption.Quantity, currentAdminId);

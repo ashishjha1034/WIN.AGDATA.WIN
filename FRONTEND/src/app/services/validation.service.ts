@@ -108,6 +108,28 @@ export class ValidationService {
   }
 
   /**
+   * Check event name availability with debouncing
+   * Also validates event name format (alphanumeric words, single spaces, word limits)
+   */
+  checkEventNameAvailability(name: string, excludeEventId?: string): Observable<ValidationResult> {
+    if (!name || name.trim().length === 0) {
+      return of({ isValid: false, message: 'Event name is required' });
+    }
+
+    let params = new HttpParams().set('name', name.trim());
+    if (excludeEventId) {
+      params = params.set('excludeEventId', excludeEventId);
+    }
+
+    return this.http.get<ValidationResult>(`${this.apiUrl}/validation/check-event-name`, { params }).pipe(
+      catchError(error => {
+        console.error('Event name validation error:', error);
+        return of({ isValid: true, message: '' }); // Fail open - let backend validate
+      })
+    );
+  }
+
+  /**
    * Creates a debounced uniqueness checker that can be used with forms
    * Returns an observable that emits checking state and results
    */

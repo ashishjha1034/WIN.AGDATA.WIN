@@ -34,25 +34,49 @@
       <!-- Form Sections -->
       <div class="form-section">
         <h3 class="section-title">Event Details</h3>
+        <p class="section-desc">Basic information about the event.</p>
 
         <!-- Event Name -->
         <div class="form-group">
           <label for="name" class="form-label">
             Event Name <span class="required">*</span>
           </label>
-          <input
-            id="name"
-            type="text"
-            class="form-input"
-            formControlName="name"
-            placeholder="e.g., Spring Sales Contest"
-            [class.is-invalid]="f['name'].invalid && f['name'].touched"
-          />
-          <div *ngIf="f['name'].invalid && f['name'].touched" class="error-text">
-            <span *ngIf="f['name'].hasError('required')">Event name is required</span>
-            <span *ngIf="f['name'].hasError('minlength')">Minimum 3 characters</span>
-            <span *ngIf="f['name'].hasError('maxlength')">Maximum 100 characters</span>
+          <div class="input-with-action">
+            <input
+              id="name"
+              type="text"
+              class="form-input"
+              formControlName="name"
+              placeholder="e.g., Spring Sales Contest"
+              [class.is-invalid]="f['name'].invalid && f['name'].touched"
+              [class.is-valid]="f['name'].valid && nameUniquenessResult()?.isValid"
+            />
+            <button 
+              type="button" 
+              class="btn btn-sm btn-outline check-btn"
+              (click)="checkNameAvailability()"
+              [disabled]="nameUniquenessChecking() || f['name'].invalid || !f['name'].value"
+            >
+              {{ nameUniquenessChecking() ? 'Checking...' : 'Check Availability' }}
+            </button>
           </div>
+          <div class="field-meta">
+            <span class="counter" [class.over]="nameCharCount() > validationConstants.EVENT_NAME_MAX_LENGTH">
+              {{ nameCharCount() }}/{{ validationConstants.EVENT_NAME_MAX_LENGTH }} chars
+            </span>
+            <span class="counter" [class.over]="nameWordCount() > validationConstants.EVENT_NAME_MAX_WORDS">
+              {{ nameWordCount() }}/{{ validationConstants.EVENT_NAME_MAX_WORDS }} words
+            </span>
+          </div>
+          <app-validation-hint
+            [control]="f['name']"
+            fieldName="Event Name"
+            fieldType="productName"
+            [checking]="nameUniquenessChecking()"
+            [uniquenessResult]="nameUniquenessResult()"
+            helperText="1-7 alphanumeric words, single spaces only"
+            [showImmediately]="true"
+          ></app-validation-hint>
         </div>
 
         <!-- Description -->
@@ -68,11 +92,23 @@
             rows="4"
             [class.is-invalid]="f['description'].invalid && f['description'].touched"
           ></textarea>
-          <div *ngIf="f['description'].invalid && f['description'].touched" class="error-text">
-            <span *ngIf="f['description'].hasError('required')">Description is required</span>
-            <span *ngIf="f['description'].hasError('minlength')">Minimum 10 characters</span>
-            <span *ngIf="f['description'].hasError('maxlength')">Maximum 500 characters</span>
+          <div class="field-meta">
+            <span class="counter" [class.over]="descCharCount() > validationConstants.EVENT_DESCRIPTION_MAX_LENGTH">
+              {{ descCharCount() }}/{{ validationConstants.EVENT_DESCRIPTION_MAX_LENGTH }} chars
+            </span>
+            <span class="counter" [class.over]="descWordCount() > validationConstants.EVENT_DESCRIPTION_MAX_WORDS">
+              {{ descWordCount() }}/{{ validationConstants.EVENT_DESCRIPTION_MAX_WORDS }} words
+            </span>
           </div>
+          <app-validation-hint
+            [control]="f['description']"
+            fieldName="Description"
+            fieldType="description"
+            [minLength]="validationConstants.EVENT_DESCRIPTION_MIN_LENGTH"
+            [maxLength]="validationConstants.EVENT_DESCRIPTION_MAX_LENGTH"
+            helperText="Minimum {{ validationConstants.EVENT_DESCRIPTION_MIN_LENGTH }} characters and {{ validationConstants.EVENT_DESCRIPTION_MIN_WORDS }} words"
+            [showImmediately]="true"
+          ></app-validation-hint>
         </div>
 
         <!-- Location -->
@@ -84,117 +120,143 @@
             class="form-input"
             formControlName="location"
             placeholder="e.g., Conference Room A or Virtual"
+            [class.is-invalid]="f['location'].invalid && f['location'].touched"
           />
+          <div class="field-meta" *ngIf="f['location'].value">
+            <span class="counter" [class.over]="locationCharCount() > validationConstants.EVENT_LOCATION_MAX_LENGTH">
+              {{ locationCharCount() }}/{{ validationConstants.EVENT_LOCATION_MAX_LENGTH }} chars
+            </span>
+            <span class="counter" [class.over]="locationWordCount() > validationConstants.EVENT_LOCATION_MAX_WORDS">
+              {{ locationWordCount() }}/{{ validationConstants.EVENT_LOCATION_MAX_WORDS }} words
+            </span>
+          </div>
+          <app-validation-hint
+            [control]="f['location']"
+            fieldName="Location"
+            fieldType="generic"
+            helperText="Alphanumeric words, max {{ validationConstants.EVENT_LOCATION_MAX_WORDS }} words"
+            [showImmediately]="true"
+          ></app-validation-hint>
         </div>
       </div>
 
       <!-- Date & Time Section -->
       <div class="form-section">
         <h3 class="section-title">Event Timeline</h3>
+        <p class="section-desc">All times are displayed in IST (Indian Standard Time).</p>
 
         <div class="form-row">
-          <!-- Registration Deadline -->
-          <div class="form-group">
-            <label for="registrationDeadline" class="form-label">
-              Registration Deadline <span class="required">*</span>
-            </label>
-            <input
-              id="registrationDeadline"
-              type="date"
-              class="form-input"
-              formControlName="registrationDeadline"
-              [class.is-invalid]="f['registrationDeadline'].invalid && f['registrationDeadline'].touched"
-            />
-            <small class="form-hint">Registrations close on this date</small>
-          </div>
-
-          <!-- Event Start Date -->
+          <!-- Event Date (IST) -->
           <div class="form-group">
             <label for="eventDate" class="form-label">
-              Event Start Date <span class="required">*</span>
+              Event Date (IST) <span class="required">*</span>
             </label>
             <input
               id="eventDate"
-              type="date"
+              type="datetime-local"
               class="form-input"
               formControlName="eventDate"
+              [min]="minDateTime()"
               [class.is-invalid]="f['eventDate'].invalid && f['eventDate'].touched"
             />
-            <small class="form-hint">When the event begins</small>
+            <small class="form-hint">When the event takes place</small>
+            <app-validation-hint
+              [control]="f['eventDate']"
+              fieldName="Event Date"
+              fieldType="generic"
+              helperText="Must be in the future"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
-        </div>
 
-        <!-- Event End Date -->
-        <div class="form-group">
-          <label for="endDate" class="form-label">
-            Event End Date <span class="required">*</span>
-          </label>
-          <input
-            id="endDate"
-            type="date"
-            class="form-input"
-            formControlName="endDate"
-            [class.is-invalid]="f['endDate'].invalid && f['endDate'].touched"
-          />
-          <small class="form-hint">When the event concludes</small>
+          <!-- Registration Deadline (IST) -->
+          <div class="form-group">
+            <label for="registrationEndDate" class="form-label">
+              Registration Deadline (IST) <span class="required">*</span>
+            </label>
+            <input
+              id="registrationEndDate"
+              type="datetime-local"
+              class="form-input"
+              formControlName="registrationEndDate"
+              [min]="minDateTime()"
+              [max]="maxRegistrationDateTime()"
+              [class.is-invalid]="f['registrationEndDate'].invalid && f['registrationEndDate'].touched"
+            />
+            <small class="form-hint">Must be before event date</small>
+            <app-validation-hint
+              [control]="f['registrationEndDate']"
+              fieldName="Registration Deadline"
+              fieldType="generic"
+              helperText="Must be in the future and before the event date"
+              [showImmediately]="true"
+            ></app-validation-hint>
+          </div>
         </div>
       </div>
 
       <!-- Points & Participants Section -->
       <div class="form-section">
         <h3 class="section-title">Participants & Points</h3>
+        <p class="section-desc">Set participant limits and total points pool.</p>
 
         <div class="form-row">
           <!-- Max Participants -->
           <div class="form-group">
             <label for="maxParticipants" class="form-label">
-              Max Participants <span class="required">*</span>
+              Max Participants
             </label>
             <input
               id="maxParticipants"
               type="number"
               class="form-input"
               formControlName="maxParticipants"
-              placeholder="0"
+              placeholder="e.g., 100"
               min="1"
+              [max]="validationConstants.EVENT_MAX_PARTICIPANTS_MAX"
               [class.is-invalid]="f['maxParticipants'].invalid && f['maxParticipants'].touched"
             />
-            <small class="form-hint">Maximum number of event participants</small>
+            <small class="form-hint">1 - {{ validationConstants.EVENT_MAX_PARTICIPANTS_MAX | number }} participants (optional)</small>
+            <app-validation-hint
+              [control]="f['maxParticipants']"
+              fieldName="Max Participants"
+              fieldType="number"
+              [minValue]="validationConstants.EVENT_MAX_PARTICIPANTS_MIN"
+              [maxValue]="validationConstants.EVENT_MAX_PARTICIPANTS_MAX"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
 
-          <!-- Points Per Participant -->
+          <!-- Total Points Pool -->
           <div class="form-group">
-            <label for="pointsPerParticipant" class="form-label">
-              Points Per Participant <span class="required">*</span>
+            <label for="totalPointsPool" class="form-label">
+              Total Points Pool <span class="required">*</span>
               <span *ngIf="pointsLocked" class="lock-badge"><i class="fa-solid fa-lock"></i> Locked</span>
             </label>
             <input
-              id="pointsPerParticipant"
+              id="totalPointsPool"
               type="number"
               class="form-input"
-              formControlName="pointsPerParticipant"
-              placeholder="0"
+              formControlName="totalPointsPool"
+              placeholder="e.g., 10000"
               min="1"
-              [disabled]="pointsLocked"
-              [class.is-invalid]="f['pointsPerParticipant'].invalid && f['pointsPerParticipant'].touched"
+              [max]="validationConstants.EVENT_POINTS_POOL_MAX"
+              [class.is-invalid]="f['totalPointsPool'].invalid && f['totalPointsPool'].touched"
             />
             <small class="form-hint" *ngIf="pointsLocked">
-              Points are locked when event is Active
+              Points are locked when event is Live
             </small>
             <small class="form-hint" *ngIf="!pointsLocked">
-              Points per participant (editable only in Draft)
+              1 - {{ validationConstants.EVENT_POINTS_POOL_MAX | number }} points
             </small>
-          </div>
-        </div>
-
-        <!-- Calculated Total Points -->
-        <div class="info-box">
-          <div class="info-row">
-            <span class="info-label">Estimated Total Points Pool:</span>
-            <span class="info-value">
-              {{ (f['maxParticipants'].value || 0) * (f['pointsPerParticipant'].value || 0)
-              | number }}
-            </span>
+            <app-validation-hint
+              [control]="f['totalPointsPool']"
+              fieldName="Total Points Pool"
+              fieldType="number"
+              [minValue]="validationConstants.EVENT_POINTS_POOL_MIN"
+              [maxValue]="validationConstants.EVENT_POINTS_POOL_MAX"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
         </div>
       </div>
@@ -204,13 +266,29 @@
         <h3 class="section-title">Event Status</h3>
         <div class="info-box" [ngClass]="'info-' + eventDetail.status.toLowerCase()">
           <strong>Current Status:</strong> {{ eventDetail.status }}
-          <small *ngIf="eventDetail.status === 'Draft'">
-            This event is in draft status and can be edited freely before activation.
+          <small *ngIf="eventDetail.status === 'Upcoming'">
+            This event is upcoming and can be edited freely before activation.
           </small>
-          <small *ngIf="eventDetail.status === 'Active'">
-            This event is active. Some fields like points are locked and cannot be changed.
+          <small *ngIf="eventDetail.status === 'Live'">
+            This event is live. Some fields like points are locked and cannot be changed.
           </small>
         </div>
+      </div>
+
+      <!-- Validation Summary -->
+      <app-form-errors-summary
+        [form]="form"
+        [fieldLabels]="fieldLabels"
+      ></app-form-errors-summary>
+
+      <!-- Submit Disabled Message -->
+      <div *ngIf="!canSubmit && (form.touched || form.dirty)" class="submit-disabled-msg">
+        <i class="fa-solid fa-circle-info"></i>
+        <span *ngIf="!form.valid">Please fix the validation errors above.</span>
+        <span *ngIf="form.valid && nameUniquenessChecking()">Checking event name availability...</span>
+        <span *ngIf="form.valid && !nameUniquenessChecking() && nameUniquenessResult()?.isValid === false">
+          Event name is not available. Please choose a different name.
+        </span>
       </div>
 
       <!-- Form Actions -->
@@ -218,7 +296,7 @@
         <button type="button" class="btn btn-secondary" (click)="onCancel()" [disabled]="isSubmitting">
           <i class="fa-solid fa-xmark"></i> Cancel
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="!form.valid || isSubmitting">
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
           <ng-container *ngIf="!isSubmitting">
             <i class="fa-solid fa-check"></i> Save Changes
           </ng-container>

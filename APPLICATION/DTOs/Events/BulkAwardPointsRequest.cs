@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 
 /// <summary>
 /// Distribution mode for bulk awards.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DistributionMode
 {
     /// <summary>
@@ -53,22 +55,20 @@ public record BulkAwardPointsRequest
     /// Used only in RankBased mode. The last rank's points are auto-calculated.
     /// Example: [500, 300, 150] means Rank 1=500, Rank 2=300, Rank 3=150, Rank 4=auto.
     /// </summary>
-    public IReadOnlyList<int>? RankPoints { get; init; }
+    public IReadOnlyList<decimal>? RankPoints { get; init; }
 }
 
 /// <summary>
 /// Individual participant award in a bulk request.
 /// </summary>
 /// <param name="ParticipantId">The participant's user ID</param>
-/// <param name="Points">Points to award (must be positive)</param>
+/// <param name="Points">Points to award (ignored in EqualSplit mode where backend computes)</param>
 /// <param name="Rank">Optional rank position (1st, 2nd, etc.)</param>
 public record BulkAwardItem(
     [Required]
     Guid ParticipantId,
     
-    [Required]
-    [Range(1, int.MaxValue, ErrorMessage = "Points must be positive")]
-    int Points,
+    decimal Points = 0,
     
     int? Rank = null
 );
@@ -81,7 +81,7 @@ public record BulkAwardPointsResponse
     public bool Success { get; init; }
     public string Message { get; init; } = null!;
     public Guid EventId { get; init; }
-    public int TotalPointsAwarded { get; init; }
+    public decimal TotalPointsAwarded { get; init; }
     public int ParticipantsAwarded { get; init; }
-    public int? RemainingPoolPoints { get; init; }
+    public decimal? RemainingPoolPoints { get; init; }
 }

@@ -142,4 +142,29 @@ public class RedemptionRepository : Repository<Redemption>, IRedemptionRepositor
             .Where(r => r.UserId == userId && r.Status == RedemptionStatus.Delivered)
             .CountAsync();
     }
+
+    /// <summary>
+    /// Checks if the user has a pending or approved redemption for a specific product.
+    /// Used to enforce the one-at-a-time redemption rule.
+    /// </summary>
+    public async Task<bool> HasPendingRedemptionForProductAsync(Guid userId, Guid productId)
+    {
+        return await _context.Redemptions
+            .AnyAsync(r => r.UserId == userId && 
+                          r.ProductId == productId && 
+                          (r.Status == RedemptionStatus.Pending || r.Status == RedemptionStatus.Approved));
+    }
+
+    /// <summary>
+    /// Gets all product IDs that have pending or approved (not yet delivered) redemptions for a user.
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> GetPendingProductIdsForUserAsync(Guid userId)
+    {
+        return await _context.Redemptions
+            .Where(r => r.UserId == userId && 
+                       (r.Status == RedemptionStatus.Pending || r.Status == RedemptionStatus.Approved))
+            .Select(r => r.ProductId)
+            .Distinct()
+            .ToListAsync();
+    }
 }

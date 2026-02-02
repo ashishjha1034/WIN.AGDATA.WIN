@@ -7,9 +7,11 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
 
 interface ProductWithState extends UserProduct {
   canRedeem: boolean;
+  hasPendingRedemption: boolean;
   stockStatus: 'in-stock' | 'low-stock' | 'out-of-stock';
   stockLabel: string;
 }
@@ -19,7 +21,7 @@ interface ProductWithState extends UserProduct {
   templateUrl: './user-products.component.html',
   styleUrls: ['./user-products.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
 })
 export class UserProductsComponent implements OnInit, OnDestroy {
   Math = Math;
@@ -41,13 +43,16 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   // Modal
   showModal = false;
   selectedProduct: ProductWithState | null = null;
-  selectedQuantity = 1;
+  readonly selectedQuantity = 1; // Fixed to 1 - users can only redeem 1 quantity per request
   isRedeeming = false;
 
   // Toast notification
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
+
+  // Track products with pending redemptions
+  pendingProductIds: Set<string> = new Set();
 
   private destroy$ = new Subject<void>();
 
@@ -72,11 +77,14 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   loadData(): void {
     this.isLoading = true;
     
-    // Load products, categories, and user points in parallel
-    this.userDashboardService.getProducts()
-      .pipe(takeUntil(this.destroy$))
+    // Load products, categories, user points, and pending product IDs in parallel
+    forkJoin({
+      products: this.userDashboardService.getProducts(),
+      pendingProductIds: this.userDashboardService.getPendingRedemptionProductIds()
+    }).pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (products) => {
+        next: ({ products, pendingProductIds }) => {
+          this.pendingProductIds = new Set(pendingProductIds);
           this.processProducts(products);
           this.isLoading = false;
           this.cdr.detectChanges();
@@ -121,11 +129,13 @@ export class UserProductsComponent implements OnInit, OnDestroy {
 
   enrichProduct(product: UserProduct): ProductWithState {
     const stockStatus = this.getStockStatus(product.currentStock);
-    const canRedeem = this.userPoints >= product.pointsCost && product.currentStock > 0;
+    const hasPendingRedemption = this.pendingProductIds.has(product.id);
+    const canRedeem = this.userPoints >= product.pointsCost && product.currentStock > 0 && !hasPendingRedemption;
     
     return {
       ...product,
       canRedeem,
+      hasPendingRedemption,
       stockStatus,
       stockLabel: this.getStockLabel(stockStatus)
     };
@@ -149,7 +159,8 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   updateProductStates(): void {
     this.products = this.products.map(product => ({
       ...product,
-      canRedeem: this.userPoints >= product.pointsCost && product.currentStock > 0
+      hasPendingRedemption: this.pendingProductIds.has(product.id),
+      canRedeem: this.userPoints >= product.pointsCost && product.currentStock > 0 && !this.pendingProductIds.has(product.id)
     }));
     this.applyFilters();
   }
@@ -230,7 +241,6 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   // Modal functions
   openProductModal(product: ProductWithState): void {
     this.selectedProduct = product;
-    this.selectedQuantity = 1;
     this.showModal = true;
     document.body.style.overflow = 'hidden';
   }
@@ -238,24 +248,11 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   closeModal(): void {
     this.showModal = false;
     this.selectedProduct = null;
-    this.selectedQuantity = 1;
     document.body.style.overflow = '';
   }
 
-  incrementQuantity(): void {
-    if (this.selectedProduct && this.selectedQuantity < this.selectedProduct.currentStock) {
-      const maxAffordable = Math.floor(this.userPoints / this.selectedProduct.pointsCost);
-      if (this.selectedQuantity < maxAffordable) {
-        this.selectedQuantity++;
-      }
-    }
-  }
-
-  decrementQuantity(): void {
-    if (this.selectedQuantity > 1) {
-      this.selectedQuantity--;
-    }
-  }
+  // Quantity is fixed to 1 - users can only redeem 1 quantity per request
+  // If they want more, they must wait for current redemption to be delivered
 
   get totalPointsCost(): number {
     return this.selectedProduct ? this.selectedProduct.pointsCost * this.selectedQuantity : 0;
@@ -264,7 +261,8 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   get canRedeemSelected(): boolean {
     if (!this.selectedProduct) return false;
     return this.userPoints >= this.totalPointsCost && 
-           this.selectedProduct.currentStock >= this.selectedQuantity;
+           this.selectedProduct.currentStock >= this.selectedQuantity &&
+           !this.selectedProduct.hasPendingRedemption;
   }
 
   redeemProduct(): void {
@@ -285,7 +283,13 @@ export class UserProductsComponent implements OnInit, OnDestroy {
           this.showToastMessage('Redemption request submitted successfully!', 'success');
           this.closeModal();
           this.loadUserPoints();
-          this.loadData();
+          // Reload pending products and refresh data
+          this.userDashboardService.getPendingRedemptionProductIds()
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(productIds => {
+              this.pendingProductIds = new Set(productIds);
+              this.loadData();
+            });
         },
         error: (error) => {
           const message = error.error?.message || 'Failed to submit redemption request. Please try again.';

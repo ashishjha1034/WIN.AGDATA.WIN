@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Events;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
 using WIN.AGDATA.WIN.Domain.Exceptions;
 
@@ -32,6 +33,51 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
     {
         var nowUtc = DateTime.UtcNow;
 
+        // Normalize whitespace on text fields
+        var normalizedName = SharedValidationRules.NormalizeWhitespace(request.Name);
+        var normalizedDescription = SharedValidationRules.NormalizeWhitespace(request.Description);
+        var normalizedLocation = SharedValidationRules.NormalizeWhitespace(request.Location);
+
+        // Validate event name
+        var (nameValid, nameError) = SharedValidationRules.ValidateEventName(normalizedName);
+        if (!nameValid)
+        {
+            _logger.LogWarning("Event creation failed: {Error}", nameError);
+            throw new ValidationException("Name", nameError!);
+        }
+
+        // Validate description
+        var (descValid, descError) = SharedValidationRules.ValidateEventDescription(normalizedDescription);
+        if (!descValid)
+        {
+            _logger.LogWarning("Event creation failed: {Error}", descError);
+            throw new ValidationException("Description", descError!);
+        }
+
+        // Validate location (if provided)
+        var (locValid, locError) = SharedValidationRules.ValidateEventLocation(normalizedLocation);
+        if (!locValid)
+        {
+            _logger.LogWarning("Event creation failed: {Error}", locError);
+            throw new ValidationException("Location", locError!);
+        }
+
+        // Validate max participants
+        var (partValid, partError) = SharedValidationRules.ValidateEventMaxParticipants(request.MaxParticipants);
+        if (!partValid)
+        {
+            _logger.LogWarning("Event creation failed: {Error}", partError);
+            throw new ValidationException("MaxParticipants", partError!);
+        }
+
+        // Validate points pool
+        var (poolValid, poolError) = SharedValidationRules.ValidateEventPointsPool(request.TotalPointsPool);
+        if (!poolValid)
+        {
+            _logger.LogWarning("Event creation failed: {Error}", poolError);
+            throw new ValidationException("TotalPointsPool", poolError!);
+        }
+
         // Validate RegistrationEndDateUtc is provided (MVP requirement)
         if (!request.RegistrationEndDateUtc.HasValue)
         {
@@ -46,33 +92,33 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
             throw new ValidationException("EventDate", "Event start date/time is required.");
         }
 
-        // NEW VALIDATION: RegistrationEndDateUtc must be STRICTLY EARLIER than EventDate
-        // Same-day is allowed as long as RegEnd time < EventStart time
-        if (request.RegistrationEndDateUtc.Value >= request.EventDate)
+        // Validate dates (future and RegistrationEnd < EventDate)
+        var (datesValid, datesError) = SharedValidationRules.ValidateEventDates(
+            request.EventDate, 
+            request.RegistrationEndDateUtc.Value, 
+            nowUtc);
+        if (!datesValid)
         {
-            _logger.LogWarning(
-                "Event creation failed: RegistrationEndDateUtc ({RegEnd}) must be earlier than EventDate ({EventDate})",
-                request.RegistrationEndDateUtc.Value.ToString("o"), 
-                request.EventDate.ToString("o"));
-            throw new ValidationException(
-                "RegistrationEndDateUtc",
-                $"Registration end ({request.RegistrationEndDateUtc.Value:yyyy-MM-dd HH:mm} UTC) must be strictly earlier than event start ({request.EventDate:yyyy-MM-dd HH:mm} UTC). Same-day is allowed if times differ.");
+            // Determine which field the error relates to
+            var fieldName = datesError!.Contains("Registration") ? "RegistrationEndDateUtc" : "EventDate";
+            _logger.LogWarning("Event creation failed: {Error}", datesError);
+            throw new ValidationException(fieldName, datesError);
         }
 
-        // Validate dates are in the future (warn but allow for testing)
-        if (request.RegistrationEndDateUtc.Value <= nowUtc)
+        // Check event name uniqueness
+        var nameExists = await _eventRepository.ExistsByNameAsync(normalizedName);
+        if (nameExists)
         {
-            _logger.LogWarning(
-                "Event created with past RegistrationEndDateUtc: {RegEnd}. This may trigger immediate auto-cancel if no registrations.",
-                request.RegistrationEndDateUtc.Value.ToString("o"));
+            _logger.LogWarning("Event creation failed: Event name '{Name}' is already in use", normalizedName);
+            throw new ValidationException("Name", "An event with this name already exists. Please choose a different name.");
         }
 
         var @event = new Event(
-            request.Name,
-            request.Description,
+            normalizedName,
+            normalizedDescription,
             request.EventDate,
             request.TotalPointsPool,
-            request.Location,
+            string.IsNullOrWhiteSpace(normalizedLocation) ? null : normalizedLocation,
             request.MaxParticipants,
             request.RegistrationEndDateUtc,
             request.BannerImageUrl);

@@ -18,18 +18,22 @@ public class ValidationController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
     private readonly IProductRepository _productRepository;
+    private readonly IEventRepository _eventRepository;
 
     /// <summary>
     /// Initializes a new instance of the ValidationController
     /// </summary>
     /// <param name="userRepository">User repository for email and employee ID checks</param>
     /// <param name="productRepository">Product repository for product and category name checks</param>
+    /// <param name="eventRepository">Event repository for event name checks</param>
     public ValidationController(
         IUserRepository userRepository,
-        IProductRepository productRepository)
+        IProductRepository productRepository,
+        IEventRepository eventRepository)
     {
         _userRepository = userRepository;
         _productRepository = productRepository;
+        _eventRepository = eventRepository;
     }
 
     /// <summary>
@@ -165,6 +169,40 @@ public class ValidationController : ControllerBase
         }
 
         return Ok(new ValidationResult { IsValid = false, Message = "This product name is already in use" });
+    }
+
+    /// <summary>
+    /// Check if an event name is available (not already in use, case-insensitive)
+    /// Also validates event name format (alphanumeric words, single spaces, word limits)
+    /// </summary>
+    /// <param name="name">Event name to check</param>
+    /// <param name="excludeEventId">Optional event ID to exclude (for edit scenarios)</param>
+    [HttpGet("check-event-name")]
+    public async Task<ActionResult<ValidationResult>> CheckEventName(
+        [FromQuery] string name,
+        [FromQuery] Guid? excludeEventId = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Ok(new ValidationResult { IsValid = false, Message = "Event name is required" });
+        }
+
+        // Validate format using shared rules
+        var (isValidFormat, formatError) = SharedValidationRules.ValidateEventName(name);
+        if (!isValidFormat)
+        {
+            return Ok(new ValidationResult { IsValid = false, Message = formatError! });
+        }
+
+        // Check uniqueness
+        var exists = await _eventRepository.ExistsByNameAsync(name, excludeEventId);
+        
+        if (!exists)
+        {
+            return Ok(new ValidationResult { IsValid = true, Message = "Available" });
+        }
+
+        return Ok(new ValidationResult { IsValid = false, Message = "This event name is already in use" });
     }
 }
 

@@ -42,6 +42,10 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
         var @event = await _eventRepository.GetByIdWithParticipantsAsync(request.EventId)
                      ?? throw new InvalidOperationException("Event not found");
 
+        // Debug logging for pool investigation
+        Console.WriteLine($"[BulkAward] Event: {@event.Name}, TotalPool: {@event.TotalPointsPool}, DistributedPoints: {@event.DistributedPoints}, RemainingPoints: {@event.RemainingPoints}");
+        Console.WriteLine($"[BulkAward] Request Mode: {request.Mode}, ConsumeEntirePool: {request.ConsumeEntirePool}, AwardsCount: {request.Awards?.Count ?? 0}");
+
         // Enforce event lifecycle
         if (!@event.CanAward())
             throw new InvalidOperationException($"Cannot award points. Event status is {@event.Status}. Points can only be awarded when event is Active.");
@@ -50,6 +54,13 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
 
         // Build computed awards based on distribution mode
         var computedAwards = ComputeAwards(request, @event);
+
+        // Debug: Log computed awards
+        Console.WriteLine($"[BulkAward] ComputedAwards: {computedAwards.Count} participants, TotalPoints: {computedAwards.Sum(a => a.Points)}");
+        foreach (var award in computedAwards)
+        {
+            Console.WriteLine($"[BulkAward]   - Participant {award.ParticipantId}: {award.Points} points");
+        }
 
         // Validate request
         if (computedAwards.Count == 0)
@@ -163,7 +174,7 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             return request.Awards?.ToList() ?? new List<ParticipantAward>();
         }
 
-        var remainingPoints = @event.RemainingPoints ?? 0;
+        var remainingPoints = @event.RemainingPoints ?? 0m;
         if (remainingPoints <= 0)
             throw new InvalidOperationException("No remaining points in the pool to distribute.");
 
@@ -181,21 +192,28 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
 
     /// <summary>
     /// Computes equal split distribution across all participants.
-    /// Uses deterministic remainder handling: first N participants get floor+1, rest get floor.
+    /// Uses exact decimal division for precise fractional point distribution.
     /// </summary>
-    private List<ParticipantAward> ComputeEqualSplitAwards(List<Guid> participantIds, int totalPoints)
+    private List<ParticipantAward> ComputeEqualSplitAwards(List<Guid> participantIds, decimal totalPoints)
     {
         var count = participantIds.Count;
-        var basePoints = totalPoints / count;
-        var remainder = totalPoints % count;
+        // Exact decimal division - no remainder loss
+        var pointsPerParticipant = Math.Round(totalPoints / count, 2, MidpointRounding.ToZero);
+        var distributed = pointsPerParticipant * count;
+        var remainder = totalPoints - distributed;
+
+        Console.WriteLine($"[EqualSplit] TotalPoints: {totalPoints}, Count: {count}, PointsPerParticipant: {pointsPerParticipant}, Remainder: {remainder}");
 
         var awards = new List<ParticipantAward>();
         for (int i = 0; i < count; i++)
         {
-            // First 'remainder' participants get one extra point (deterministic)
-            var points = basePoints + (i < remainder ? 1 : 0);
+            // First participant gets any remainder to ensure exact distribution
+            var points = pointsPerParticipant + (i == 0 ? remainder : 0m);
             awards.Add(new ParticipantAward(participantIds[i], points, null));
         }
+
+        var computedTotal = awards.Sum(a => a.Points);
+        Console.WriteLine($"[EqualSplit] Computed total: {computedTotal} (should equal {totalPoints})");
 
         return awards;
     }
@@ -204,7 +222,7 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
     /// Computes rank-based distribution.
     /// Admin specifies points for top N-1 ranks, last rank gets remainder.
     /// </summary>
-    private List<ParticipantAward> ComputeRankBasedAwards(List<Guid> participantIds, int totalPoints, IReadOnlyList<int>? rankPoints)
+    private List<ParticipantAward> ComputeRankBasedAwards(List<Guid> participantIds, decimal totalPoints, IReadOnlyList<decimal>? rankPoints)
     {
         if (rankPoints == null || rankPoints.Count == 0)
             throw new InvalidOperationException("RankPoints must be specified for RankBased distribution mode.");
@@ -227,7 +245,7 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
         var awards = new List<ParticipantAward>();
         for (int i = 0; i < count; i++)
         {
-            int points;
+            decimal points;
             int rank = i + 1;
 
             if (i < specifiedRanksCount)
@@ -245,11 +263,12 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
                 }
                 else
                 {
-                    // Multiple participants for "last rank" - split equally
+                    // Multiple participants for "last rank" - split equally with decimal precision
                     var lastRankIdx = i - specifiedRanksCount;
-                    var baseLastPoints = remainingForLastRank / remainingParticipants;
-                    var lastRemainder = remainingForLastRank % remainingParticipants;
-                    points = baseLastPoints + (lastRankIdx < lastRemainder ? 1 : 0);
+                    var pointsPerLast = Math.Round(remainingForLastRank / remainingParticipants, 2, MidpointRounding.ToZero);
+                    var distributed = pointsPerLast * remainingParticipants;
+                    var lastRemainder = remainingForLastRank - distributed;
+                    points = pointsPerLast + (lastRankIdx == 0 ? lastRemainder : 0m);
                 }
             }
 

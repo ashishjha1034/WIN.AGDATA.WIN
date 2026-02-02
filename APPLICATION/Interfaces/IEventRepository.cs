@@ -16,6 +16,14 @@ public interface IEventRepository
     Task<(int ActiveEventRegistrations, int CompletedEventCount)> GetUserEventRegistrationStatsAsync(Guid userId);
     
     /// <summary>
+    /// Checks if an event with the given name already exists (case-insensitive).
+    /// </summary>
+    /// <param name="name">Event name to check</param>
+    /// <param name="excludeEventId">Optional event ID to exclude (for edit scenarios)</param>
+    /// <returns>True if the name exists, false otherwise</returns>
+    Task<bool> ExistsByNameAsync(string name, Guid? excludeEventId = null);
+    
+    /// <summary>
     /// Saves changes to the database. Used for compute-on-read automated transitions.
     /// </summary>
     Task SaveChangesAsync(CancellationToken ct = default);

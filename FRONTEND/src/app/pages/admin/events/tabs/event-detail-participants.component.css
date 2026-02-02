@@ -25,6 +25,38 @@
 
 .search-box { position: relative; flex: 1; min-width: 250px; }
 
+.filter-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-check-in-all {
+  padding: 0.75rem 1.25rem;
+  background-color: #2c5f3f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-check-in-all:hover:not(:disabled) {
+  background-color: #245032;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(44, 95, 63, 0.2);
+}
+
+.btn-check-in-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .search-input {
   width: 100%;
   padding: 0.75rem 2.5rem 0.75rem 1rem;

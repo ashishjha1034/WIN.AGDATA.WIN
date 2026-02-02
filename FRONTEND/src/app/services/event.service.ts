@@ -353,6 +353,25 @@ export class EventService {
   }
 
   /**
+   * Batch check-in all registered participants (admin-only)
+   * BACKEND: POST /api/event/{eventId}/batch-check-in
+   */
+  batchCheckIn(eventId: string): Observable<any> {
+    const url = `${this.EVENT_API_URL}/${eventId}/batch-check-in`;
+    console.log('[EventService] Batch checking in all registered participants for event:', eventId);
+
+    return this.http.post<any>(url, {}).pipe(
+      tap(response => {
+        console.log('[EventService] Batch check-in completed:', response);
+      }),
+      catchError(error => {
+        console.error('[EventService] Error in batch check-in:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
    * Bulk check-in all registered participants
    * Calls check-in endpoint for each registered participant
    */

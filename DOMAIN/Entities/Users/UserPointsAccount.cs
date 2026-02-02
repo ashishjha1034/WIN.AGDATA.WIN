@@ -6,9 +6,9 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Users;
 public class UserPointsAccount : Entity<Guid>
 {
     public Guid UserId { get; private set; }
-    public int CurrentBalance { get; private set; } = 0;
-    public int TotalEarned { get; private set; } = 0;
-    public int TotalRedeemed { get; private set; } = 0;
+    public decimal CurrentBalance { get; private set; } = 0;
+    public decimal TotalEarned { get; private set; } = 0;
+    public decimal TotalRedeemed { get; private set; } = 0;
     public DateTime LastUpdatedAt { get; private set; }
 
     // Navigation
@@ -27,8 +27,8 @@ public class UserPointsAccount : Entity<Guid>
         LastUpdatedAt = DateTime.UtcNow;
     }
 
-    public int Balance => CurrentBalance;
-    public void Credit(int points, Guid transactionId)
+    public decimal Balance => CurrentBalance;
+    public void Credit(decimal points, Guid transactionId)
     {
         if (points <= 0) throw new DomainException("Points must be positive");
         CurrentBalance += points;
@@ -36,7 +36,7 @@ public class UserPointsAccount : Entity<Guid>
         UpdateAudit(transactionId);
     }
 
-    public void Debit(int points, Guid transactionId)
+    public void Debit(decimal points, Guid transactionId)
     {
         if (points <= 0) throw new DomainException("Points must be positive");
         if (CurrentBalance < points) throw new DomainException("Insufficient points balance");
@@ -46,16 +46,16 @@ public class UserPointsAccount : Entity<Guid>
     }
 
     
-    public void AddPoints(int points, Guid processedBy)
+    public void AddPoints(decimal points, Guid processedBy)
         => Credit(points, processedBy);
 
-    public void SpendPoints(int points, Guid processedBy)
+    public void SpendPoints(decimal points, Guid processedBy)
         => Debit(points, processedBy);
 
-    public void RefundPoints(int points, Guid processedBy, string reason)
+    public void RefundPoints(decimal points, Guid processedBy, string reason)
         => Credit(points, processedBy);
 
-    public void AdjustPoints(int points, Guid processedBy, string reason)
+    public void AdjustPoints(decimal points, Guid processedBy, string reason)
     {
         if (points > 0)
             Credit(points, processedBy);

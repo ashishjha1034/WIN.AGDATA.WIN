@@ -1,14 +1,15 @@
 import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 
 export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pending' | 'live';
 
 @Component({
   selector: 'app-kpi-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   template: `
-    <div class="kpi-card" [class]="'kpi-card--' + iconType">
+    <a [routerLink]="routerLink" [class.no-link]="!routerLink" class="kpi-card" [class]="'kpi-card--' + iconType">
       <div class="kpi-icon">
         <i [class]="getIconClass()"></i>
       </div>
@@ -16,7 +17,7 @@ export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pendi
         <span class="kpi-label">{{ label }}</span>
         <span class="kpi-value">{{ value | number }}</span>
       </div>
-    </div>
+    </a>
   `,
   styles: [`
     .kpi-card {
@@ -29,9 +30,16 @@ export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pendi
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
       border: 1px solid var(--ag-color-border-subtle, #e5e7eb);
       transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
     }
 
-    .kpi-card:hover {
+    .kpi-card.no-link {
+      cursor: default;
+    }
+
+    .kpi-card:hover:not(.no-link) {
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     }
@@ -110,6 +118,7 @@ export class KpiCardComponent {
   @Input() label: string = '';
   @Input() value: number = 0;
   @Input() iconType: KpiIconType = 'users';
+  @Input() routerLink: string | string[] | null = null;
 
   getIconClass(): string {
     const iconMap: Record<KpiIconType, string> = {

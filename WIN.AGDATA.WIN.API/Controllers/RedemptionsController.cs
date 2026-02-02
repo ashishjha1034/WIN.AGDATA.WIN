@@ -196,4 +196,36 @@ public class RedemptionsController : ControllerBase
                 new { message = "Failed to retrieve redemptions", error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Get product IDs with pending or approved redemptions
+    /// </summary>
+    /// <remarks>
+    /// Returns a list of product IDs for which the current user has active (pending or approved) 
+    /// redemptions that haven't been delivered yet. Used to disable redemption buttons in the UI.
+    /// </remarks>
+    /// <returns>List of product IDs with active redemptions</returns>
+    /// <response code="200">Product IDs retrieved</response>
+    [HttpGet("pending-products")]
+    [SwaggerOperation(Summary = "Get pending product IDs", Description = "Get products with active redemptions")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetPendingProductIds()
+    {
+        try
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var productIds = await _redemptionRepository.GetPendingProductIdsForUserAsync(userId);
+
+            return Ok(new
+            {
+                count = productIds.Count,
+                productIds = productIds
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve pending products", error = ex.Message });
+        }
+    }
 }

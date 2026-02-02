@@ -11,7 +11,7 @@ public class EventParticipantDto
     public string Email { get; set; } = string.Empty;
     public string EmployeeId { get; set; } = string.Empty;
     public string AttendanceStatus { get; set; } = "Registered";
-    public int PointsAwarded { get; set; }
+    public decimal PointsAwarded { get; set; }
     public int? EventRank { get; set; }
     public DateTime RegisteredAt { get; set; }
     public DateTime? CheckedInAt { get; set; }

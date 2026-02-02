@@ -19,6 +19,10 @@ public class UserPointsTransactionConfiguration : IEntityTypeConfiguration<UserP
         builder.Property(t => t.Source).HasMaxLength(50);
         builder.Property(t => t.Description).HasMaxLength(500);
 
+        // Points fields - use decimal(18,2) for 2 decimal places
+        builder.Property(t => t.Points).HasPrecision(18, 2);
+        builder.Property(t => t.BalanceAfter).HasPrecision(18, 2);
+
         builder.HasIndex(t => t.Timestamp);
         builder.HasIndex(t => new { t.UserId, t.Timestamp });
     }

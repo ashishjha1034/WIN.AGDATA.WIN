@@ -9,18 +9,18 @@ public class Event : AuditableEntity<Guid>
     public string Description { get; private set; } = null!;
     public DateTime EventDate { get; private set; }
     public EventStatus Status { get; private set; }
-    public int? TotalPointsPool { get; private set; }
+    public decimal? TotalPointsPool { get; private set; }
     public string? Location { get; private set; }
     public int? MaxParticipants { get; private set; }
     public DateTime? RegistrationEndDate { get; private set; }
     public string? BannerImageUrl { get; private set; }
-    public int PointsPerParticipant { get; private set; } = 0;
+    public decimal PointsPerParticipant { get; private set; } = 0;
 
     /// <summary>
     /// Tracks total points distributed from this event's pool.
     /// Used for O(1) remaining pool calculation: Remaining = TotalPointsPool - DistributedPoints.
     /// </summary>
-    public int DistributedPoints { get; private set; } = 0;
+    public decimal DistributedPoints { get; private set; } = 0;
 
     /// <summary>
     /// Concurrency token for optimistic locking on pool operations.
@@ -223,7 +223,7 @@ public class Event : AuditableEntity<Guid>
     /// Gets the remaining points available in the pool.
     /// Returns null if pool is unlimited (TotalPointsPool is null).
     /// </summary>
-    public int? RemainingPoints => TotalPointsPool.HasValue 
+    public decimal? RemainingPoints => TotalPointsPool.HasValue 
         ? TotalPointsPool.Value - DistributedPoints 
         : null;
 
@@ -232,7 +232,7 @@ public class Event : AuditableEntity<Guid>
     /// </summary>
     /// <param name="requestedPoints">Points to distribute</param>
     /// <returns>True if pool is unlimited or has sufficient remaining points</returns>
-    public bool CanDistributePoints(int requestedPoints)
+    public bool CanDistributePoints(decimal requestedPoints)
     {
         if (requestedPoints <= 0)
             return false;
@@ -250,7 +250,7 @@ public class Event : AuditableEntity<Guid>
     /// </summary>
     /// <param name="points">Points to reserve</param>
     /// <exception cref="DomainException">Thrown if insufficient points in pool</exception>
-    public void ReservePoints(int points)
+    public void ReservePoints(decimal points)
     {
         if (points <= 0)
             throw new DomainException("Points to reserve must be positive.");
@@ -268,7 +268,7 @@ public class Event : AuditableEntity<Guid>
     /// Sets the distributed points counter. Used for backfill migration.
     /// </summary>
     /// <param name="totalDistributed">Total distributed points</param>
-    internal void SetDistributedPoints(int totalDistributed)
+    internal void SetDistributedPoints(decimal totalDistributed)
     {
         if (totalDistributed < 0)
             throw new DomainException("Distributed points cannot be negative.");

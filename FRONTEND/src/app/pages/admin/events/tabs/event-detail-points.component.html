@@ -64,6 +64,40 @@
       </div>
     </div>
 
+    <!-- Awarded Participants Card -->
+    <div class="card awarded-participants-card" *ngIf="getAwardedParticipants().length > 0">
+      <h3 class="card-title"><i class="fa-solid fa-award"></i> Awarded Participants</h3>
+      <div class="awarded-table-container">
+        <table class="awarded-table">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-employee-id">Employee ID</th>
+              <th class="col-name">Name</th>
+              <th class="col-points">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of getAwardedParticipants()">
+              <td class="col-rank">
+                <span class="rank-badge" *ngIf="p.eventRank">#{{ p.eventRank }}</span>
+                <span class="no-rank" *ngIf="!p.eventRank">—</span>
+              </td>
+              <td class="col-employee-id">{{ p.employeeId }}</td>
+              <td class="col-name">{{ p.name }}</td>
+              <td class="col-points">{{ p.pointsAwarded | number }}</td>
+            </tr>
+          </tbody>
+          <tfoot *ngIf="getAwardedParticipants().length > 1">
+            <tr class="total-row">
+              <td colspan="3"><strong>Total Awarded</strong></td>
+              <td class="col-points"><strong>{{ getTotalAwardedPoints() | number }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
     <!-- Locked State -->
     <div class="card locked-card" *ngIf="!canAwardPoints()">
       <div class="locked-content">
@@ -77,342 +111,229 @@
     <!-- Award Sections (only when Live) -->
     <ng-container *ngIf="canAwardPoints()">
       
-      <!-- 2. Bulk Points Awarding Section -->
-      <div class="card bulk-award-card">
-        <h3 class="card-title"><i class="fa-solid fa-layer-group"></i> Bulk Points Awarding</h3>
+      <!-- 2. Choose Awarding Option Card -->
+      <div class="card choice-card">
+        <h3 class="card-title"><i class="fa-solid fa-hand-pointer"></i> Choose Awarding Option</h3>
+        <div class="choice-tabs">
+          <button 
+            class="choice-tab"
+            [class.active]="awardingMode === 'Bulk'"
+            (click)="awardingMode = 'Bulk'"
+          >
+            <i class="fa-solid fa-equals"></i>
+            <span>Bulk (Equal Split)</span>
+          </button>
+          <button 
+            class="choice-tab"
+            [class.active]="awardingMode === 'Rank'"
+            (click)="awardingMode = 'Rank'"
+          >
+            <i class="fa-solid fa-trophy"></i>
+            <span>Rank-Based</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3A. Bulk Points Awarding (Equal Split Mode) -->
+      <div class="card bulk-award-card" *ngIf="awardingMode === 'Bulk'">
+        <h3 class="card-title"><i class="fa-solid fa-layer-group"></i> Bulk Points Awarding (Equal Split)</h3>
         
-        <!-- Bulk Amount Input -->
-        <div class="bulk-amount-section">
-          <label class="input-label">Enter Bulk Amount</label>
-          <div class="amount-input-group">
+        <!-- Allocate Entire Pool Option -->
+        <div class="pool-option">
+          <label class="checkbox-label">
             <input 
-              type="number" 
-              class="form-input amount-input"
-              [(ngModel)]="bulkAwardAmount"
-              placeholder="Enter total points to distribute"
-              min="1"
-              [max]="isPoolUnlimited() ? undefined : getRemainingPoints()"
+              type="checkbox" 
+              [(ngModel)]="allocateEntirePool"
+              (change)="calculateRankPoints()"
             />
-            <span class="remaining-hint" *ngIf="!isPoolUnlimited()">
-              Max: {{ getRemainingPoints() | number }}
-            </span>
-          </div>
-          <div class="validation-error" *ngIf="bulkAwardAmount > 0 && !isPoolUnlimited() && bulkAwardAmount > getRemainingPoints()">
-            <i class="fa-solid fa-triangle-exclamation"></i> Amount exceeds remaining points
-          </div>
-        </div>
-
-        <!-- Participants Selection -->
-        <div class="participants-selection">
-          <div class="selection-header">
-            <span class="selection-title">Select Participants</span>
-            <div class="selection-search">
-              <i class="fa-solid fa-magnifying-glass search-icon"></i>
-              <input 
-                type="text" 
-                class="form-input search-input"
-                [(ngModel)]="bulkSearchText"
-                placeholder="Search by name, email, or employee ID..."
-              />
-            </div>
-          </div>
-
-          <div class="selection-table-container">
-            <table class="selection-table">
-              <thead>
-                <tr>
-                  <th class="col-checkbox">
-                    <label class="checkbox-label">
-                      <input 
-                        type="checkbox" 
-                        [checked]="selectAll"
-                        (change)="toggleSelectAll()"
-                      />
-                      <span class="checkmark"></span>
-                    </label>
-                  </th>
-                  <th class="col-name">Name</th>
-                  <th class="col-employee-id">Employee ID</th>
-                  <th class="col-email">Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let p of getFilteredEligibleParticipants()" [class.selected]="isSelected(p.userId)">
-                  <td class="col-checkbox">
-                    <label class="checkbox-label">
-                      <input 
-                        type="checkbox" 
-                        [checked]="isSelected(p.userId)"
-                        (change)="toggleParticipantSelection(p.userId)"
-                      />
-                      <span class="checkmark"></span>
-                    </label>
-                  </td>
-                  <td class="col-name">{{ p.name }}</td>
-                  <td class="col-employee-id">{{ p.employeeId }}</td>
-                  <td class="col-email">{{ p.email }}</td>
-                </tr>
-                <tr *ngIf="getFilteredEligibleParticipants().length === 0">
-                  <td colspan="4" class="empty-message">No eligible participants found</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Bulk Summary -->
-        <div class="bulk-summary" *ngIf="getSelectedCount() > 0 && bulkAwardAmount > 0">
-          <div class="summary-info">
-            <span class="summary-item">
-              <strong>{{ getSelectedCount() }}</strong> participants selected
-            </span>
-            <i class="fa-solid fa-arrow-right summary-arrow"></i>
-            <span class="summary-item highlight">
-              <strong>{{ getPointsPerParticipant() | number }}</strong> points each
-            </span>
-          </div>
-        </div>
-
-        <div class="bulk-actions">
-          <button 
-            class="btn btn-primary"
-            (click)="submitBulkAward()"
-            [disabled]="!canSubmitBulkAward() || isBulkAwarding"
-          >
-            <i class="fa-solid fa-gift" *ngIf="!isBulkAwarding"></i>
-            <i class="fa-solid fa-spinner fa-spin" *ngIf="isBulkAwarding"></i>
-            {{ isBulkAwarding ? 'Awarding...' : 'Award Points' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 3. Award by Rank Section -->
-      <div class="card rank-award-card">
-        <h3 class="card-title"><i class="fa-solid fa-trophy"></i> Award by Rank</h3>
-        
-        <!-- No Eligible Participants Message -->
-        <div class="no-eligible-message" *ngIf="getEligibleRankParticipants().length === 0">
-          <i class="fa-solid fa-circle-info"></i>
-          <p>No eligible participants available for rank awards.</p>
-          <p class="small-text">Eligible participants are those who: are registered/checked-in AND have not yet received points.</p>
-        </div>
-
-        <div class="rank-form" *ngIf="getEligibleRankParticipants().length > 0">
-          <!-- Participant Search -->
-          <div class="form-group">
-            <label class="input-label">Find Participant</label>
-            <div class="participant-search">
-              <i class="fa-solid fa-magnifying-glass search-icon"></i>
-              <input 
-                type="text" 
-                class="form-input"
-                placeholder="Search by name, email, or employee ID..."
-                [value]="rankSearchText"
-                (input)="onRankParticipantSearch($any($event.target).value)"
-                (focus)="showRankDropdown = filteredRankParticipants.length > 0"
-              />
-              <div class="search-dropdown" *ngIf="showRankDropdown && filteredRankParticipants.length > 0">
-                <div 
-                  *ngFor="let p of filteredRankParticipants"
-                  class="dropdown-item"
-                  (click)="selectRankParticipant(p)"
-                >
-                  <span class="item-name">{{ p.name }}</span>
-                  <span class="item-details">{{ p.employeeId }} • {{ p.email }}</span>
-                </div>
-              </div>
-            </div>
-            <div *ngIf="selectedRankParticipant" class="selected-participant">
-              <span class="participant-badge">
-                <i class="fa-solid fa-user-check"></i>
-                {{ selectedRankParticipant.name }} ({{ selectedRankParticipant.employeeId }})
-              </span>
-              <button class="btn-clear" (click)="clearRankSelection()">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- Rank & Points Inputs -->
-          <div class="form-row">
-            <div class="form-group">
-              <label class="input-label">Rank</label>
-              <input 
-                type="number" 
-                class="form-input"
-                [(ngModel)]="rankValue"
-                placeholder="e.g., 1, 2, 3"
-                min="1"
-              />
-            </div>
-            <div class="form-group">
-              <label class="input-label">Points</label>
-              <input 
-                type="number" 
-                class="form-input"
-                [(ngModel)]="rankPoints"
-                placeholder="Enter points"
-                min="1"
-                [max]="isPoolUnlimited() ? undefined : getRemainingPoints()"
-              />
-            </div>
-          </div>
-
-          <div class="validation-error" *ngIf="rankPoints > 0 && !isPoolUnlimited() && rankPoints > getRemainingPoints()">
-            <i class="fa-solid fa-triangle-exclamation"></i> Amount exceeds remaining points ({{ getRemainingPoints() | number }} available)
-          </div>
-
-          <div class="validation-error" *ngIf="rankValue && isRankAlreadyUsed(rankValue)">
-            <i class="fa-solid fa-circle-xmark"></i> Rank #{{ rankValue }} has already been assigned. Please choose a different rank.
-          </div>
-
-          <div class="rank-actions">
-            <button 
-              class="btn btn-primary"
-              (click)="submitRankAward()"
-              [disabled]="!canSubmitRankAward() || isRankAwarding"
-            >
-              <i class="fa-solid fa-gift" *ngIf="!isRankAwarding"></i>
-              <i class="fa-solid fa-spinner fa-spin" *ngIf="isRankAwarding"></i>
-              {{ isRankAwarding ? 'Awarding...' : 'Assign & Award' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. Allocate Entire Prize Pool Section -->
-      <div class="card pool-allocation-card" *ngIf="!isPoolUnlimited() && getRemainingPoints() > 0">
-        <h3 class="card-title"><i class="fa-solid fa-sack-dollar"></i> Allocate Entire Prize Pool</h3>
-        <p class="section-description">
-          Distribute all <strong>{{ getRemainingPoints() | number }}</strong> remaining points to selected participants.
-          This action will exhaust the pool and auto-complete the event.
-        </p>
-
-        <!-- Distribution Mode Toggle -->
-        <div class="mode-toggle">
-          <button 
-            class="mode-btn"
-            [class.active]="poolAllocationMode === 'EqualSplit'"
-            (click)="poolAllocationMode = 'EqualSplit'"
-          >
-            <i class="fa-solid fa-equals"></i> Equal Split
-          </button>
-          <button 
-            class="mode-btn"
-            [class.active]="poolAllocationMode === 'RankBased'"
-            (click)="poolAllocationMode = 'RankBased'"
-          >
-            <i class="fa-solid fa-ranking-star"></i> Rank-Based
-          </button>
-        </div>
-
-        <!-- Rank Points Input (only for RankBased) -->
-        <div class="form-group" *ngIf="poolAllocationMode === 'RankBased'">
-          <label class="input-label">Points per Rank (comma-separated)</label>
-          <input 
-            type="text" 
-            class="form-input"
-            [(ngModel)]="rankPointsInput"
-            placeholder="e.g., 500, 300, 150 (last rank auto-calculated)"
-          />
-          <p class="input-hint">
-            Enter points for Rank 1, 2, 3, etc. The last participant(s) will receive the remaining points automatically.
+            <span class="checkmark"></span>
+            <span class="label-text">Allocate Entire Pool</span>
+          </label>
+          <p class="option-description">
+            Distribute all <strong>{{ getRemainingPoints() | number }}</strong> remaining points equally among all checked-in participants
           </p>
         </div>
 
-        <!-- Participant Selection (reuses bulk selection) -->
-        <div class="selection-info">
-          <span *ngIf="getSelectedCount() === 0" class="text-muted">
-            <i class="fa-solid fa-arrow-up"></i> Select participants from the Bulk Points section above
-          </span>
-          <span *ngIf="getSelectedCount() > 0" class="text-success">
-            <i class="fa-solid fa-check-circle"></i> {{ getSelectedCount() }} participants selected
-          </span>
-        </div>
-
-        <!-- Preview -->
-        <div class="allocation-preview" *ngIf="getSelectedCount() > 0 && canSubmitPoolAllocation()">
+        <!-- Distribution Preview Table -->
+        <div class="preview-section" *ngIf="allocateEntirePool && getBulkDistributionPreview().length > 0">
           <h4 class="preview-title">Distribution Preview</h4>
           <div class="preview-table-container">
             <table class="preview-table">
               <thead>
                 <tr>
-                  <th *ngIf="poolAllocationMode === 'RankBased'">Rank</th>
-                  <th>Participant</th>
-                  <th>Points</th>
+                  <th class="col-sn">S/N</th>
+                  <th class="col-name">Participant Name</th>
+                  <th class="col-email">Email</th>
+                  <th class="col-points">Points</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let item of getPoolAllocationPreview()">
-                  <td *ngIf="poolAllocationMode === 'RankBased'">
-                    <span class="rank-badge">#{{ item.rank }}</span>
-                  </td>
-                  <td>{{ item.name }}</td>
-                  <td class="points-cell">{{ item.points | number }}</td>
+                <tr *ngFor="let item of getBulkDistributionPreview()">
+                  <td class="col-sn">{{ item.sn }}</td>
+                  <td class="col-name" [title]="item.name">{{ item.name }}</td>
+                  <td class="col-email" [title]="item.email">{{ item.email }}</td>
+                  <td class="col-points">{{ item.points | number }}</td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr class="total-row">
-                  <td [attr.colspan]="poolAllocationMode === 'RankBased' ? 2 : 1"><strong>Total</strong></td>
-                  <td class="points-cell"><strong>{{ getRemainingPoints() | number }}</strong></td>
+                  <td colspan="3" class="total-label"><strong>Total Points</strong></td>
+                  <td class="total-value"><strong>{{ getBulkDistributionTotal() | number }}</strong></td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </div>
 
-        <!-- Validation errors -->
-        <div class="validation-error" *ngIf="poolAllocationMode === 'RankBased' && parseRankPoints().length > 0">
-          <ng-container *ngIf="getRankPointsSum() > getRemainingPoints()">
-            <i class="fa-solid fa-triangle-exclamation"></i> 
-            Sum of rank points ({{ getRankPointsSum() | number }}) exceeds remaining pool ({{ getRemainingPoints() | number }})
-          </ng-container>
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="allocateEntirePool && getBulkDistributionPreview().length === 0">
+          <i class="fa-solid fa-users-slash"></i>
+          <p>No eligible participants for bulk allocation</p>
+          <p class="empty-subtext">Participants must be checked-in and have not received points yet</p>
         </div>
 
-        <div class="pool-allocation-actions">
+        <!-- Pre-submit Warnings -->
+        <div class="warnings-section" *ngIf="getBulkAwardWarnings().length > 0">
+          <div class="warning-item" *ngFor="let warning of getBulkAwardWarnings()">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ warning }}</span>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="bulk-actions">
           <button 
-            class="btn btn-warning"
-            (click)="submitPoolAllocation()"
-            [disabled]="!canSubmitPoolAllocation() || isAllocatingPool"
+            class="btn btn-primary btn-lg"
+            (click)="submitBulkAllocation()"
+            [disabled]="!canSubmitBulkAllocation() || isBulkAwarding"
           >
-            <i class="fa-solid fa-bolt" *ngIf="!isAllocatingPool"></i>
-            <i class="fa-solid fa-spinner fa-spin" *ngIf="isAllocatingPool"></i>
-            {{ isAllocatingPool ? 'Allocating...' : 'Allocate Entire Pool' }}
+            <i class="fa-solid fa-gift" *ngIf="!isBulkAwarding"></i>
+            <i class="fa-solid fa-spinner fa-spin" *ngIf="isBulkAwarding"></i>
+            {{ isBulkAwarding ? 'Allocating...' : 'Allocate' }}
           </button>
         </div>
       </div>
-    </ng-container>
 
-    <!-- 4. Rank History Section -->
-    <div class="card history-card" *ngIf="getAwardedParticipants().length > 0">
-      <h3 class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Rank History</h3>
-      
-      <div class="history-table-container">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th class="col-rank">Rank</th>
-              <th class="col-name">Participant Name</th>
-              <th class="col-employee-id">Employee ID</th>
-              <th class="col-points">Points Allotted</th>
-              <th class="col-time">Assigned Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let p of getAwardedParticipants()">
-              <td class="col-rank">
-                <span class="rank-badge" *ngIf="p.eventRank">#{{ p.eventRank }}</span>
-                <span *ngIf="!p.eventRank">—</span>
-              </td>
-              <td class="col-name">{{ p.name }}</td>
-              <td class="col-employee-id">{{ p.employeeId }}</td>
-              <td class="col-points">{{ p.pointsAwarded | number }}</td>
-              <td class="col-time">{{ formatDate(p.awardedAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- 3B. Award by Rank -->
+      <div class="card rank-award-card" *ngIf="awardingMode === 'Rank'" style="overflow: visible;">
+        <h3 class="card-title"><i class="fa-solid fa-trophy"></i> Award by Rank</h3>
+        
+        <!-- Rank Count Selection -->
+        <div class="rank-count-section">
+          <label class="section-label">Number of Rank Positions</label>
+          <div class="rank-count-buttons">
+            <button 
+              *ngFor="let count of [1, 2, 3]"
+              class="rank-count-btn"
+              [class.active]="rankCount === count"
+              [disabled]="getEligibleParticipants().length < count"
+              (click)="onRankCountChange(count)"
+            >
+              {{ count }} Rank{{ count > 1 ? 's' : '' }}
+            </button>
+          </div>
+          <p class="section-hint">
+            Available ranks: {{ Math.min(getEligibleParticipants().length, 3) }} (based on {{ getEligibleParticipants().length }} eligible participants)
+          </p>
+        </div>
+
+        <!-- Split Selection -->
+        <div class="split-section">
+          <label class="section-label">Split Percentage</label>
+          <div class="split-buttons">
+            <button 
+              *ngFor="let option of getAvailableSplits()"
+              class="split-btn"
+              [class.active]="selectedSplit === option.label"
+              (click)="onSplitChange(option.label)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <p class="section-hint">
+            Split applies to entire remaining pool ({{ getRemainingPoints() | number }} points)
+          </p>
+        </div>
+
+        <!-- Rank Assignment Grid -->
+        <div class="rank-grid">
+          <div class="rank-grid-header">
+            <div class="header-rank">Rank</div>
+            <div class="header-participant">Participant</div>
+            <div class="header-points">Points</div>
+            <div class="header-action">Action</div>
+          </div>
+          
+          <div class="rank-row" *ngFor="let assignment of rankAssignments">
+            <div class="row-rank">
+              <span class="rank-badge">#{{ assignment.rank }}</span>
+            </div>
+            
+            <div class="row-participant">
+              <div class="participant-search" *ngIf="!assignment.participant">
+                <input 
+                  type="text" 
+                  class="search-input"
+                  placeholder="Search by name, ID, or email..."
+                  [(ngModel)]="rankSearchText"
+                  (input)="onRankSearch(rankSearchText)"
+                  (focus)="startRankSearch(assignment.rank)"
+                />
+                <div class="search-dropdown" *ngIf="showRankSearchDropdown && currentRankBeingAssigned === assignment.rank">
+                  <div 
+                    *ngFor="let p of filteredRankSearchParticipants"
+                    class="dropdown-item"
+                    (click)="assignParticipantToRank(p, assignment.rank)"
+                  >
+                    <span class="item-name">{{ p.name }}</span>
+                    <span class="item-details">{{ p.employeeId }} • {{ p.email }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="participant-assigned" *ngIf="assignment.participant">
+                <span class="participant-name">{{ assignment.participant.name }}</span>
+                <span class="participant-email">{{ assignment.participant.email }}</span>
+              </div>
+            </div>
+            
+            <div class="row-points">
+              <span class="points-value">{{ assignment.points | number }}</span>
+            </div>
+            
+            <div class="row-action">
+              <button 
+                *ngIf="assignment.participant"
+                class="btn-clear"
+                (click)="clearRankAssignment(assignment.rank)"
+                title="Clear assignment"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Validation Messages -->
+        <div class="validation-info" *ngIf="!canSubmitRankAward() && hasAnyRankAssignment()">
+          <i class="fa-solid fa-circle-info"></i>
+          All ranks must be assigned before awarding
+        </div>
+
+        <!-- Action Button -->
+        <div class="rank-actions">
+          <button 
+            class="btn btn-primary btn-lg"
+            (click)="submitRankAward()"
+            [disabled]="!canSubmitRankAward() || isRankAwarding"
+          >
+            <i class="fa-solid fa-gift" *ngIf="!isRankAwarding"></i>
+            <i class="fa-solid fa-spinner fa-spin" *ngIf="isRankAwarding"></i>
+            {{ isRankAwarding ? 'Awarding...' : 'Award' }}
+          </button>
+        </div>
       </div>
-    </div>
 
+    </ng-container>
   </div>
 </div>

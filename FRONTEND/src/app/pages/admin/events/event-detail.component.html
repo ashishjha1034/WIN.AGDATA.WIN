@@ -45,7 +45,12 @@
               <span class="meta-divider">•</span>
               <span class="event-participants">
                 <i class="fa-solid fa-users"></i>
-                {{ event?.participantCount || event?.registeredCount || 0 }} Participants
+                <ng-container *ngIf="(event?.participantCount || event?.registeredCount || 0) > 0">
+                  {{ event?.participantCount || event?.registeredCount || 0 }} Participants
+                </ng-container>
+                <ng-container *ngIf="(event?.participantCount || event?.registeredCount || 0) === 0">
+                  {{ event?.participantCount || event?.registeredCount || 0 }}
+                </ng-container>
               </span>
             </div>
           </div>

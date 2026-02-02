@@ -27,7 +27,7 @@ import { takeUntil, debounceTime } from 'rxjs/operators';
          [class.taken]="!uniquenessResult.isValid"
          role="status" 
          aria-live="polite">
-      <span class="icon">{{ uniquenessResult.isValid ? '✓' : '✗' }}</span>
+      <i class="fa-solid" [ngClass]="uniquenessResult.isValid ? 'fa-circle-check' : 'fa-circle-xmark'"></i>
       <span>{{ uniquenessResult.message }}</span>
     </div>
 
@@ -39,9 +39,9 @@ import { takeUntil, debounceTime } from 'rxjs/operators';
          [class.warning]="isWarning"
          role="alert"
          aria-live="polite">
-      <span class="icon" *ngIf="control.invalid && (control.dirty || (showImmediately && control.value))">✗</span>
-      <span class="icon" *ngIf="control.valid && control.dirty && !isWarning">✓</span>
-      <span class="icon" *ngIf="isWarning">⚠</span>
+      <i class="fa-solid fa-circle-xmark" *ngIf="control.invalid && (control.dirty || (showImmediately && control.value))"></i>
+      <i class="fa-solid fa-circle-check" *ngIf="control.valid && control.dirty && !isWarning"></i>
+      <i class="fa-solid fa-triangle-exclamation" *ngIf="isWarning"></i>
       <span>{{ smartMessage }}</span>
     </div>
 
@@ -104,8 +104,9 @@ import { takeUntil, debounceTime } from 'rxjs/operators';
       background: #fee2e2;
     }
 
-    .icon {
-      font-weight: bold;
+    .hint i {
+      font-size: 14px;
+      flex-shrink: 0;
     }
 
     .spinner {

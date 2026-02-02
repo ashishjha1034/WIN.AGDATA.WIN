@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { EventService } from '../../../../services/event.service';
 import { EventDetail, EventParticipant } from '../../../../models/event.models';
+import { DialogService } from '../../../../services/dialog.service';
 
 @Component({
   selector: 'app-event-detail-participants',
@@ -35,10 +36,14 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
   // For toggle operations
   togglingParticipantId: string | null = null;
   deletingParticipantId: string | null = null;
+  isCheckingInAll = false;
 
   private destroy$ = new Subject<void>();
 
-  constructor(private eventService: EventService) {}
+  constructor(
+    private eventService: EventService,
+    private dialogService: DialogService
+  ) {}
 
   ngOnInit(): void {
     this.loadParticipants();
@@ -172,30 +177,105 @@ export class EventDetailParticipantsComponent implements OnInit, OnDestroy, OnCh
   deleteParticipant(participant: EventParticipant): void {
     if (!this.eventId || !this.canDelete(participant)) return;
     
-    if (!confirm(`Remove ${participant.name} from this event?`)) return;
+    this.dialogService.confirm(
+      `Remove ${participant.name} from this event?`,
+      'Remove Participant',
+      'Remove',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        this.deletingParticipantId = participant.userId;
+        this.errorMessage = '';
+        
+        this.eventService.removeParticipant(this.eventId, participant.userId)
+          .pipe(
+            takeUntil(this.destroy$),
+            finalize(() => (this.deletingParticipantId = null))
+          )
+          .subscribe({
+            next: () => {
+              console.log('[Participants] Removed successfully');
+              this.participants = this.participants.filter(p => p.userId !== participant.userId);
+              this.applyFilters();
+              this.successMessage = `${participant.name} removed from event`;
+              this.participantsChanged.emit();
+              setTimeout(() => this.successMessage = '', 3000);
+            },
+            error: (error) => {
+              console.error('[Participants] Remove error:', error);
+              this.errorMessage = error?.error?.message || 'Failed to remove participant';
+            }
+          });
+      }
+    });
+  }
+
+  /**
+   * Can batch check-in all registered participants?
+   */
+  canCheckInAll(): boolean {
+    // Event must be Live
+    if (this.event?.status !== 'Live') return false;
+    // Must have registered participants
+    const registeredCount = this.participants.filter(p => p.attendanceStatus === 'Registered').length;
+    return registeredCount > 0;
+  }
+
+  /**
+   * Get tooltip for check-in all button
+   */
+  getCheckInAllTooltip(): string {
+    if (this.event?.status !== 'Live') {
+      return 'Event must be Live to check in participants';
+    }
+    const registeredCount = this.participants.filter(p => p.attendanceStatus === 'Registered').length;
+    if (registeredCount === 0) {
+      return 'No registered participants to check in';
+    }
+    return `Check in all ${registeredCount} registered participants`;
+  }
+
+  /**
+   * Batch check-in all registered participants
+   */
+  checkInAll(): void {
+    if (!this.canCheckInAll()) return;
     
-    this.deletingParticipantId = participant.userId;
-    this.errorMessage = '';
+    const registeredParticipants = this.participants.filter(p => p.attendanceStatus === 'Registered');
+    const count = registeredParticipants.length;
     
-    this.eventService.removeParticipant(this.eventId, participant.userId)
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => (this.deletingParticipantId = null))
-      )
-      .subscribe({
-        next: () => {
-          console.log('[Participants] Removed successfully');
-          this.participants = this.participants.filter(p => p.userId !== participant.userId);
-          this.applyFilters();
-          this.successMessage = `${participant.name} removed from event`;
-          this.participantsChanged.emit();
-          setTimeout(() => this.successMessage = '', 3000);
-        },
-        error: (error) => {
-          console.error('[Participants] Remove error:', error);
-          this.errorMessage = error?.error?.message || 'Failed to remove participant';
-        }
-      });
+    this.dialogService.confirm(
+      `Check in all ${count} registered participants?`,
+      'Batch Check-In',
+      'Check In All',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        this.isCheckingInAll = true;
+        this.errorMessage = '';
+        
+        this.eventService.batchCheckIn(this.eventId)
+          .pipe(
+            takeUntil(this.destroy$),
+            finalize(() => (this.isCheckingInAll = false))
+          )
+          .subscribe({
+            next: (response) => {
+              console.log('[Participants] Batch check-in successful:', response);
+              const updated = response.updated || response.checkedInCount || count;
+              this.successMessage = `Successfully checked in ${updated} participants`;
+              this.loadParticipants();
+              this.participantsChanged.emit();
+              setTimeout(() => this.successMessage = '', 5000);
+            },
+            error: (error) => {
+              console.error('[Participants] Batch check-in error:', error);
+              this.errorMessage = error?.error?.message || 'Failed to check in all participants';
+              this.loadParticipants(); // Refresh to show any partial updates
+            }
+          });
+      }
+    });
   }
 
   /**

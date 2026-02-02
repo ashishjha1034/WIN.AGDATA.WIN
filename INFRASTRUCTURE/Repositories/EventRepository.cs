@@ -82,6 +82,24 @@ public class EventRepository : Repository<Event>, IEventRepository
     }
 
     /// <inheritdoc />
+    public async Task<bool> ExistsByNameAsync(string name, Guid? excludeEventId = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var normalizedName = name.Trim().ToLowerInvariant();
+        
+        var query = _context.Events.Where(e => e.Name.ToLower() == normalizedName);
+        
+        if (excludeEventId.HasValue)
+        {
+            query = query.Where(e => e.Id != excludeEventId.Value);
+        }
+        
+        return await query.AnyAsync();
+    }
+
+    /// <inheritdoc />
     public async Task SaveChangesAsync(CancellationToken ct = default)
     {
         await _context.SaveChangesAsync(ct);

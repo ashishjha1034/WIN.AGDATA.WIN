@@ -32,7 +32,7 @@ public interface ITransactionRepository
     /// <summary>
     /// Get summary statistics for filtered transactions
     /// </summary>
-    Task<(int TotalEarned, int TotalRedeemed, int TotalAdjusted, int TransactionCount)> GetFilteredSummaryAsync(
+    Task<(decimal TotalEarned, decimal TotalRedeemed, decimal TotalAdjusted, int TransactionCount)> GetFilteredSummaryAsync(
         Guid? userId = null,
         PointsTransactionType? transactionType = null,
         DateTime? startDate = null,
@@ -40,10 +40,22 @@ public interface ITransactionRepository
         string? source = null);
 
     Task<int> GetUserTransactionCountAsync(Guid userId);
-    Task<int> GetTotalEarnedAsync();
-    Task<int> GetTotalRedeemedAsync();
-    Task<int> GetTotalAdjustedAsync();
-    Task<IReadOnlyList<(int Month, int Year, int PointsEarned, int PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6);
+    Task<decimal> GetTotalEarnedAsync();
+    Task<decimal> GetTotalRedeemedAsync();
+    Task<decimal> GetTotalAdjustedAsync();
+    Task<IReadOnlyList<(int Month, int Year, decimal PointsEarned, decimal PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6);
+    
+    /// <summary>
+    /// Get monthly points chart data with filters (same filters as GetAllPagedAsync)
+    /// to ensure KPIs, Chart, and Table stay in sync
+    /// </summary>
+    Task<IReadOnlyList<(int Month, int Year, decimal PointsEarned, decimal PointsRedeemed)>> GetFilteredMonthlyPointsChartAsync(
+        Guid? userId = null,
+        PointsTransactionType? transactionType = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? source = null);
+    
     void Add(UserPointsTransaction transaction);
 
     /// <summary>

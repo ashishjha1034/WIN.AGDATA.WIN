@@ -50,4 +50,17 @@ public interface IRedemptionRepository
     /// Used to display soft warnings during user deactivation.
     /// </summary>
     Task<int> GetCompletedRedemptionsCountForUserAsync(Guid userId);
+
+    /// <summary>
+    /// Checks if the user has a pending or approved redemption for a specific product.
+    /// Used to enforce the one-at-a-time redemption rule (user cannot redeem same product
+    /// until previous redemption is delivered).
+    /// </summary>
+    Task<bool> HasPendingRedemptionForProductAsync(Guid userId, Guid productId);
+
+    /// <summary>
+    /// Gets all product IDs that have pending or approved (not yet delivered) redemptions for a user.
+    /// Used by the frontend to disable redemption buttons for products with active redemptions.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetPendingProductIdsForUserAsync(Guid userId);
 }

@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { EventManagementComponent } from './event-management.component';
-import { EventService } from '../../../core/services/event.service';
+import { EventService } from '../../../services/event.service';
 import { of, throwError } from 'rxjs';
-import { Event } from '../../../core/models/event.models';
+import { Event } from '../../../models/event.models';
 import { ChangeDetectorRef } from '@angular/core';
 
 describe('EventManagementComponent - Create & Edit Events', () => {
@@ -19,12 +19,11 @@ describe('EventManagementComponent - Create & Edit Events', () => {
     eventDate: '2026-02-15T14:00:00Z',
     registrationEndDateUtc: '2026-02-10T12:00:00Z',
     location: 'Test Location',
-    status: 'Upcoming',
+    status: 'Upcoming' as any,
     totalPointsPool: 1000,
     maxParticipants: 50,
     participantCount: 10,
-    bannerImageUrl: null,
-    remainingPoints: 900,
+    bannerImageUrl: undefined,
     distributedPoints: 100
   };
 

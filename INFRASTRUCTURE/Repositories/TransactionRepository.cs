@@ -43,21 +43,21 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
             .CountAsync(t => t.UserId == userId);
     }
 
-    public async Task<int> GetTotalEarnedAsync()
+    public async Task<decimal> GetTotalEarnedAsync()
     {
         return await _context.UserPointsTransactions
             .Where(t => t.TransactionType == PointsTransactionType.Earned)
             .SumAsync(t => t.Points);
     }
 
-    public async Task<int> GetTotalRedeemedAsync()
+    public async Task<decimal> GetTotalRedeemedAsync()
     {
         return await _context.UserPointsTransactions
             .Where(t => t.TransactionType == PointsTransactionType.Redeemed)
             .SumAsync(t => t.Points);
     }
 
-    public async Task<int> GetTotalAdjustedAsync()
+    public async Task<decimal> GetTotalAdjustedAsync()
     {
         return await _context.UserPointsTransactions
             .Where(t => t.Source == "Admin")
@@ -171,7 +171,7 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
         return (items, totalCount);
     }
 
-    public async Task<(int TotalEarned, int TotalRedeemed, int TotalAdjusted, int TransactionCount)> GetFilteredSummaryAsync(
+    public async Task<(decimal TotalEarned, decimal TotalRedeemed, decimal TotalAdjusted, int TransactionCount)> GetFilteredSummaryAsync(
         Guid? userId = null,
         PointsTransactionType? transactionType = null,
         DateTime? startDate = null,
@@ -224,7 +224,7 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
         return (totalEarned, totalRedeemed, totalAdjusted, transactions.Count);
     }
 
-    public async Task<IReadOnlyList<(int Month, int Year, int PointsEarned, int PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6)
+    public async Task<IReadOnlyList<(int Month, int Year, decimal PointsEarned, decimal PointsRedeemed)>> GetMonthlyPointsChartAsync(int months = 6)
     {
         var startDate = DateTime.UtcNow.AddMonths(-months);
         
@@ -232,6 +232,62 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
             .AsNoTracking()
             .Where(t => t.Timestamp >= startDate)
             .ToListAsync();
+
+        var chartData = transactions
+            .GroupBy(t => new { t.Timestamp.Year, t.Timestamp.Month })
+            .OrderBy(g => g.Key.Year)
+            .ThenBy(g => g.Key.Month)
+            .Select(g => (
+                Month: g.Key.Month,
+                Year: g.Key.Year,
+                PointsEarned: g.Where(t => t.TransactionType == PointsTransactionType.Earned).Sum(t => t.Points),
+                PointsRedeemed: g.Where(t => t.TransactionType == PointsTransactionType.Redeemed).Sum(t => t.Points)
+            ))
+            .ToList()
+            .AsReadOnly();
+
+        return chartData;
+    }
+
+    public async Task<IReadOnlyList<(int Month, int Year, decimal PointsEarned, decimal PointsRedeemed)>> GetFilteredMonthlyPointsChartAsync(
+        Guid? userId = null,
+        PointsTransactionType? transactionType = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? source = null)
+    {
+        var query = _context.UserPointsTransactions.AsNoTracking().AsQueryable();
+
+        // Apply same filters as GetAllPagedAsync and GetFilteredSummaryAsync
+        if (userId.HasValue)
+        {
+            query = query.Where(t => t.UserId == userId.Value);
+        }
+
+        // Note: For chart, we typically want both Earned and Redeemed regardless of type filter
+        // But if a specific type is selected, we still honor it for consistency
+        if (transactionType.HasValue)
+        {
+            query = query.Where(t => t.TransactionType == transactionType.Value);
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(t => t.Timestamp >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            var endOfDay = endDate.Value.Date.AddDays(1).AddTicks(-1);
+            query = query.Where(t => t.Timestamp <= endOfDay);
+        }
+
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            query = query.Where(t => t.Source == source);
+        }
+
+        var transactions = await query.ToListAsync();
 
         var chartData = transactions
             .GroupBy(t => new { t.Timestamp.Year, t.Timestamp.Month })

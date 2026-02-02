@@ -39,6 +39,15 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
 
     public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken ct)
     {
+        // Enforce quantity = 1 per redemption request
+        if (request.Quantity != 1)
+            throw new DomainException("You can only redeem 1 quantity per request. For additional quantities, please submit separate requests after your current redemption is delivered.");
+
+        // Check if user already has a pending/approved redemption for this product
+        var hasPendingRedemption = await _redemptionRepo.HasPendingRedemptionForProductAsync(request.UserId, request.ProductId);
+        if (hasPendingRedemption)
+            throw new DomainException("You already have a pending redemption for this product. Please wait until your previous redemption is delivered before requesting again.");
+
         var product = await _productRepo.GetActiveWithDetailsAsync(request.ProductId)
                      ?? throw new DomainException("Product not found or inactive");
 

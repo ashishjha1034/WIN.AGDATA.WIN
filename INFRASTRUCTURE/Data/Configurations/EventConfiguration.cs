@@ -17,8 +17,10 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.Property(e => e.Status).HasConversion<int>();
 
-        // Pool tracking
-        builder.Property(e => e.DistributedPoints).HasDefaultValue(0);
+        // Pool tracking - use decimal(18,2) for 2 decimal places
+        builder.Property(e => e.TotalPointsPool).HasPrecision(18, 2);
+        builder.Property(e => e.DistributedPoints).HasPrecision(18, 2).HasDefaultValue(0m);
+        builder.Property(e => e.PointsPerParticipant).HasPrecision(18, 2);
         
         // Optimistic concurrency for pool operations
         builder.Property(e => e.RowVersion)

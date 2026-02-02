@@ -17,6 +17,9 @@ public class EventParticipantConfiguration : IEntityTypeConfiguration<EventParti
 
         builder.Property(ep => ep.AttendanceStatus).HasConversion<int>();
 
+        // Points awarded - use decimal(18,2) for 2 decimal places
+        builder.Property(ep => ep.PointsAwarded).HasPrecision(18, 2);
+
         builder.HasIndex(ep => new { ep.EventId, ep.UserId }).IsUnique();
     }
 }

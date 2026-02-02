@@ -304,25 +304,13 @@
             </table>
 
             <!-- Pagination -->
-            <div class="pagination" *ngIf="totalPages > 1">
-              <button
-                class="page-btn"
-                [disabled]="currentPage === 1"
-                (click)="previousPage()"
-              >
-                <i class="fa-solid fa-chevron-left"></i> Previous
-              </button>
-              <div class="page-info">
-                Page {{ currentPage }} of {{ totalPages }}
-              </div>
-              <button
-                class="page-btn"
-                [disabled]="currentPage === totalPages"
-                (click)="nextPage()"
-              >
-                Next <i class="fa-solid fa-chevron-right"></i>
-              </button>
-            </div>
+            <app-pagination
+              [currentPage]="currentPage"
+              [pageSize]="pageSize"
+              [totalItems]="filteredProducts.length"
+              [itemLabel]="'products'"
+              (pageChange)="changePage($event)"
+            ></app-pagination>
           </div>
         </section>
       </ng-container>

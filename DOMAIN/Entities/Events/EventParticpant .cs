@@ -7,7 +7,7 @@ public class EventParticipant
     public Guid Id { get; private set; }
     public Guid EventId { get; private set; }
     public Guid UserId { get; private set; }
-    public int PointsAwarded { get; private set; }
+    public decimal PointsAwarded { get; private set; }
     public int? EventRank { get; private set; }
     public DateTime RegisteredAt { get; private set; }
     public DateTime? AwardedAt { get; private set; }
@@ -37,7 +37,7 @@ public class EventParticipant
     /// <param name="rank">Optional rank position</param>
     /// <param name="awardedBy">ID of the admin awarding points</param>
     /// <exception cref="DomainException">Thrown if participant is not checked-in or already has points awarded</exception>
-    public void AwardPoints(int points, int? rank, Guid awardedBy)
+    public void AwardPoints(decimal points, int? rank, Guid awardedBy)
     {
         // Prevent double-award
         if (PointsAwarded > 0)

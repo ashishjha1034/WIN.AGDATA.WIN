@@ -46,25 +46,36 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
   // Distribution Mode
   distributionMode: DistributionMode = 'Manual';
   
-  // Bulk Award Section
-  bulkAwardAmount: number = 0;
-  bulkSearchText: string = '';
-  selectedParticipantIds: Set<string> = new Set();
-  selectAll: boolean = false;
+  // Awarding Mode Selection (Bulk or Rank)
+  awardingMode: 'Bulk' | 'Rank' = 'Bulk';
   
-  // Pool Allocation (EqualSplit/RankBased)
-  poolAllocationMode: 'EqualSplit' | 'RankBased' = 'EqualSplit';
-  rankPointsInput: string = ''; // Comma-separated rank points
+  // Bulk Award Section - Redesigned
+  allocateEntirePool: boolean = false;
   
-  // Rank Award Section
+  // Rank-Based Award Section - Redesigned
+  rankCount: 1 | 2 | 3 = 1;
+  selectedSplit: string = '100'; // For 1 rank
+  rankAssignments: Array<{ rank: number; participant: EventParticipant | null; points: number }> = [];
   rankSearchText: string = '';
-  selectedRankParticipant: EventParticipant | null = null;
-  rankPoints: number = 0;
-  rankValue: number | null = null;
-  filteredRankParticipants: EventParticipant[] = [];
-  showRankDropdown: boolean = false;
+  filteredRankSearchParticipants: EventParticipant[] = [];
+  showRankSearchDropdown: boolean = false;
+  currentRankBeingAssigned: number | null = null;
 
   private destroy$ = new Subject<void>();
+
+  // Split options based on rank count
+  private splitOptions = {
+    1: [{ label: '100%', split: [100] }],
+    2: [
+      { label: '60-40', split: [60, 40] },
+      { label: '70-30', split: [70, 30] }
+    ],
+    3: [
+      { label: '50-30-20', split: [50, 30, 20] },
+      { label: '45-35-20', split: [45, 35, 20] },
+      { label: '60-25-15', split: [60, 25, 15] }
+    ]
+  };
 
   constructor(private eventService: EventService) {}
 
@@ -114,9 +125,9 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
           console.log('[Points] Participants loaded:', data.length);
           this.participants = data;
           this.checkedInParticipants = data.filter((p: EventParticipant) => p.attendanceStatus === 'Attended');
-          // Reset selections
-          this.selectedParticipantIds.clear();
-          this.selectAll = false;
+          // Initialize rank count based on checked-in participants
+          this.initializeRankCount();
+          this.initializeRankAssignments();
         },
         error: (err: any) => {
           console.error('[Points] Error loading participants:', err);
@@ -156,84 +167,130 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
     return Math.round((this.getDistributedPoints() / total) * 100);
   }
 
-  // ==================== BULK AWARD ====================
+  // ==================== BULK AWARD (EQUAL SPLIT) ====================
 
+  /**
+   * Get participants eligible for awards:
+   * - Must be checked-in (Attended status)
+   * - Must not have received points yet
+   */
   getEligibleParticipants(): EventParticipant[] {
-    // Eligible = checked-in and not yet awarded
+    // Eligible = checked-in (Attended) and not yet awarded
     return this.checkedInParticipants.filter(p => !p.pointsAwarded || p.pointsAwarded === 0);
   }
 
-  getFilteredEligibleParticipants(): EventParticipant[] {
-    const eligible = this.getEligibleParticipants();
-    if (!this.bulkSearchText) return eligible;
+  /**
+   * Get participants who are NOT eligible with reasons
+   */
+  getIneligibleParticipantsWithReasons(): Array<{ participant: EventParticipant; reason: string }> {
+    const ineligible: Array<{ participant: EventParticipant; reason: string }> = [];
     
-    const search = this.bulkSearchText.toLowerCase();
-    return eligible.filter(p =>
-      p.name?.toLowerCase().includes(search) ||
-      p.employeeId?.toLowerCase().includes(search) ||
-      p.email?.toLowerCase().includes(search)
-    );
-  }
-
-  toggleSelectAll(): void {
-    if (this.selectAll) {
-      // Deselect all
-      this.selectedParticipantIds.clear();
-    } else {
-      // Select all filtered eligible
-      this.getFilteredEligibleParticipants().forEach(p => this.selectedParticipantIds.add(p.userId));
+    for (const p of this.participants) {
+      if (p.attendanceStatus !== 'Attended') {
+        ineligible.push({ participant: p, reason: 'Not checked-in' });
+      } else if (p.pointsAwarded && p.pointsAwarded > 0) {
+        ineligible.push({ participant: p, reason: 'Already awarded points' });
+      }
     }
-    this.selectAll = !this.selectAll;
+    
+    return ineligible;
   }
 
-  toggleParticipantSelection(participantId: string): void {
-    if (this.selectedParticipantIds.has(participantId)) {
-      this.selectedParticipantIds.delete(participantId);
-    } else {
-      this.selectedParticipantIds.add(participantId);
+  /**
+   * Get pre-submit validation warnings for bulk award
+   */
+  getBulkAwardWarnings(): string[] {
+    const warnings: string[] = [];
+    
+    if (this.event?.status !== 'Live') {
+      warnings.push(`Event must be Live to award points. Current status: ${this.event?.status}`);
     }
-    // Update selectAll state
-    const filtered = this.getFilteredEligibleParticipants();
-    this.selectAll = filtered.length > 0 && filtered.every(p => this.selectedParticipantIds.has(p.userId));
+    
+    const eligible = this.getEligibleParticipants();
+    if (eligible.length === 0) {
+      warnings.push('No eligible participants (must be checked-in with no points awarded)');
+    }
+    
+    const remaining = this.getRemainingPoints();
+    if (remaining <= 0) {
+      warnings.push('No remaining points in pool');
+    }
+    
+    return warnings;
   }
 
-  isSelected(participantId: string): boolean {
-    return this.selectedParticipantIds.has(participantId);
+  /**
+   * Get distribution preview for bulk equal split
+   */
+  getBulkDistributionPreview(): Array<{ sn: number; name: string; email: string; points: number }> {
+    const eligible = this.getEligibleParticipants();
+    if (eligible.length === 0 || !this.allocateEntirePool) return [];
+    
+    const remaining = this.getRemainingPoints();
+    const count = eligible.length;
+    const basePoints = Math.floor(remaining / count);
+    const remainder = remaining % count;
+    
+    return eligible.map((p, idx) => ({
+      sn: idx + 1,
+      name: p.name,
+      email: p.email,
+      points: basePoints + (idx < remainder ? 1 : 0)
+    }));
   }
 
-  getSelectedCount(): number {
-    return this.selectedParticipantIds.size;
+  /**
+   * Get total points for bulk distribution
+   */
+  getBulkDistributionTotal(): number {
+    return this.getBulkDistributionPreview().reduce((sum, item) => sum + item.points, 0);
   }
 
-  getPointsPerParticipant(): number {
-    const count = this.getSelectedCount();
-    if (count === 0 || this.bulkAwardAmount <= 0) return 0;
-    // Return integer points (floor division)
-    return Math.floor(this.bulkAwardAmount / count);
-  }
-
-  canSubmitBulkAward(): boolean {
+  /**
+   * Can submit bulk allocation?
+   */
+  canSubmitBulkAllocation(): boolean {
     if (!this.canAwardPoints()) return false;
-    if (this.bulkAwardAmount <= 0) return false;
-    if (this.getSelectedCount() === 0) return false;
-    if (!this.isPoolUnlimited() && this.bulkAwardAmount > this.getRemainingPoints()) return false;
+    if (!this.allocateEntirePool) return false;
+    if (this.getEligibleParticipants().length === 0) return false;
+    if (this.getRemainingPoints() <= 0) return false;
     return true;
   }
 
-  submitBulkAward(): void {
-    if (!this.canSubmitBulkAward()) return;
-
-    const perParticipant = this.getPointsPerParticipant();
-    const awards: BulkAwardItem[] = Array.from(this.selectedParticipantIds).map(id => ({
-      participantId: id,
-      points: Math.floor(perParticipant) // Ensure integer
+  /**
+   * Submit bulk equal split allocation
+   */
+  submitBulkAllocation(): void {
+    if (!this.canSubmitBulkAllocation()) return;
+    
+    const preview = this.getBulkDistributionPreview();
+    const eligible = this.getEligibleParticipants();
+    
+    // Debug logging
+    console.log('[Points] Eligible participants:', eligible.map(p => ({
+      userId: p.userId,
+      name: p.name,
+      attendanceStatus: p.attendanceStatus,
+      pointsAwarded: p.pointsAwarded
+    })));
+    
+    const awards: BulkAwardItem[] = preview.map((item, idx) => ({
+      participantId: eligible[idx].userId,
+      points: item.points
     }));
-
-    const request: BulkAwardRequest = { awards };
-
+    
+    const request: BulkAwardRequest = {
+      awards,
+      mode: 'EqualSplit',
+      consumeEntirePool: true
+    };
+    
+    console.log('[Points] Submitting bulk award request:', JSON.stringify(request, null, 2));
+    console.log('[Points] Event status:', this.event?.status);
+    
     this.isBulkAwarding = true;
     this.errorMessage = '';
-
+    
     this.eventService.bulkAwardPoints(this.eventId, request)
       .pipe(
         takeUntil(this.destroy$),
@@ -241,99 +298,263 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
       )
       .subscribe({
         next: (response) => {
-          console.log('[Points] Bulk award successful:', response);
-          this.successMessage = `Awarded ${response.participantsAwarded} participants with ${perParticipant.toLocaleString()} points each`;
-          this.bulkAwardAmount = 0;
-          this.selectedParticipantIds.clear();
-          this.selectAll = false;
+          console.log('[Points] Bulk allocation successful:', response);
+          this.successMessage = `Awarded ${response.participantsAwarded} participants with ${response.totalPointsAwarded.toLocaleString()} total points`;
+          this.allocateEntirePool = false;
           this.loadData();
           this.pointsAwarded.emit();
           setTimeout(() => this.successMessage = '', 5000);
         },
         error: (error) => {
-          console.error('[Points] Bulk award error:', error);
-          this.errorMessage = error.error?.message || error.message || 'Failed to award points. Please try again.';
-          this.loadData(); // Refresh data on error
+          console.error('[Points] Bulk allocation error:', error);
+          // Surface exact server error message to user
+          this.errorMessage = this.parseServerError(error);
+          this.loadData();
         }
       });
+  }
+
+  /**
+   * Parse server error to user-friendly message
+   */
+  private parseServerError(error: any): string {
+    // Log full error for debugging
+    console.error('[Points] Full error object:', JSON.stringify(error.error, null, 2));
+    
+    // Try to get the exact server message (various formats)
+    const serverMessage = error.error?.message 
+      || error.error?.Message 
+      || error.error?.title 
+      || error.error?.detail;
+    if (serverMessage) {
+      return serverMessage;
+    }
+    
+    // Check for validation errors object (ASP.NET ModelState format)
+    if (error.error?.errors && typeof error.error.errors === 'object') {
+      const errorMessages: string[] = [];
+      for (const key in error.error.errors) {
+        const fieldErrors = error.error.errors[key];
+        if (Array.isArray(fieldErrors)) {
+          errorMessages.push(...fieldErrors);
+        }
+      }
+      if (errorMessages.length > 0) {
+        return errorMessages.join('. ');
+      }
+    }
+    
+    // If error.error is a string, use it directly
+    if (typeof error.error === 'string') {
+      return error.error;
+    }
+    
+    // Check for common HTTP status codes
+    if (error.status === 400) {
+      return 'Invalid request. Please check that all participants are checked-in and have not already received points.';
+    }
+    if (error.status === 403) {
+      return 'You do not have permission to award points.';
+    }
+    if (error.status === 404) {
+      return 'Event or participant not found.';
+    }
+    
+    return error.message || 'Failed to allocate points. Please try again.';
   }
 
   // ==================== RANK AWARD ====================
 
   /**
-   * Get participants eligible for rank award.
-   * Only shows participants who:
-   * 1. Have NOT received points yet (pointsAwarded === 0 or null)
-   * 2. Are registered or checked-in (not NoShow)
-   * 3. Match search criteria if search is active
+   * Initialize rank count based on checked-in participants
    */
-  getEligibleRankParticipants(): EventParticipant[] {
-    return this.checkedInParticipants.filter(p => 
-      (p.pointsAwarded || 0) === 0 && 
-      (p.attendanceStatus === 'Registered' || p.attendanceStatus === 'Attended')
-    );
-  }
-
-  onRankParticipantSearch(search: string): void {
-    this.rankSearchText = search;
-    this.selectedRankParticipant = null;
-    
-    if (!search || search.length < 2) {
-      this.filteredRankParticipants = [];
-      this.showRankDropdown = false;
-      return;
+  private initializeRankCount(): void {
+    const checkedInCount = this.checkedInParticipants.filter(p => !p.pointsAwarded || p.pointsAwarded === 0).length;
+    if (checkedInCount >= 3) {
+      this.rankCount = 3;
+    } else if (checkedInCount >= 2) {
+      this.rankCount = 2;
+    } else {
+      this.rankCount = 1;
     }
+    this.updateSelectedSplit();
+  }
 
-    const searchLower = search.toLowerCase();
-    const eligible = this.getEligibleRankParticipants();
-    this.filteredRankParticipants = eligible.filter(p =>
-      p.name?.toLowerCase().includes(searchLower) ||
-      p.employeeId?.toLowerCase().includes(searchLower) ||
-      p.email?.toLowerCase().includes(searchLower)
-    ).slice(0, 10);
+  /**
+   * Initialize rank assignments array
+   */
+  private initializeRankAssignments(): void {
+    this.rankAssignments = Array.from({ length: this.rankCount }, (_, i) => ({
+      rank: i + 1,
+      participant: null,
+      points: 0
+    }));
+    this.calculateRankPoints();
+  }
+
+  /**
+   * Update selected split when rank count changes
+   */
+  private updateSelectedSplit(): void {
+    const options = this.splitOptions[this.rankCount];
+    if (options && options.length > 0) {
+      this.selectedSplit = options[0].label;
+    }
+  }
+
+  /**
+   * Get available split options for current rank count
+   */
+  getAvailableSplits(): Array<{ label: string; split: number[] }> {
+    return this.splitOptions[this.rankCount] || [];
+  }
+
+  /**
+   * Get current split percentages
+   */
+  getCurrentSplit(): number[] {
+    const option = this.getAvailableSplits().find(o => o.label === this.selectedSplit);
+    return option?.split || [];
+  }
+
+  /**
+   * Calculate points for each rank based on selected split.
+   * Last rank gets remainder to ensure total equals prize pool exactly.
+   */
+  private calculateRankPoints(): void {
+    const split = this.getCurrentSplit();
+    const remaining = this.getRemainingPoints();
     
-    this.showRankDropdown = this.filteredRankParticipants.length > 0;
+    let totalAssigned = 0;
+    this.rankAssignments.forEach((assignment, idx) => {
+      if (idx < split.length) {
+        if (idx === split.length - 1) {
+          // Last rank gets the remainder to ensure exact total
+          assignment.points = remaining - totalAssigned;
+        } else {
+          // Round to 2 decimal places for intermediate ranks
+          assignment.points = Math.round((split[idx] / 100) * remaining * 100) / 100;
+          totalAssigned += assignment.points;
+        }
+      }
+    });
   }
 
-  selectRankParticipant(participant: EventParticipant): void {
-    this.selectedRankParticipant = participant;
-    this.rankSearchText = participant.name;
-    this.showRankDropdown = false;
+  /**
+   * On rank count change
+   */
+  onRankCountChange(count: 1 | 2 | 3): void {
+    this.rankCount = count;
+    this.updateSelectedSplit();
+    this.initializeRankAssignments();
   }
 
-  clearRankSelection(): void {
-    this.selectedRankParticipant = null;
+  /**
+   * On split selection change
+   */
+  onSplitChange(splitLabel: string): void {
+    this.selectedSplit = splitLabel;
+    this.calculateRankPoints();
+  }
+
+  /**
+   * Start assigning participant to a rank - show all eligible immediately
+   */
+  startRankSearch(rank: number): void {
+    this.currentRankBeingAssigned = rank;
     this.rankSearchText = '';
-    this.rankPoints = 0;
-    this.rankValue = null;
+    
+    // Show all eligible participants immediately
+    const eligible = this.getEligibleParticipants();
+    const alreadyAssigned = new Set(this.rankAssignments.map(a => a.participant?.userId).filter(Boolean));
+    
+    this.filteredRankSearchParticipants = eligible
+      .filter(p => !alreadyAssigned.has(p.userId))
+      .slice(0, 15);
+    
+    this.showRankSearchDropdown = this.filteredRankSearchParticipants.length > 0;
   }
 
+  /**
+   * Search participants for rank assignment
+   */
+  onRankSearch(search: string): void {
+    this.rankSearchText = search;
+    
+    const eligible = this.getEligibleParticipants();
+    const alreadyAssigned = new Set(this.rankAssignments.map(a => a.participant?.userId).filter(Boolean));
+    
+    // Filter out already assigned
+    let available = eligible.filter(p => !alreadyAssigned.has(p.userId));
+    
+    // If search text provided, filter by it
+    if (search && search.length > 0) {
+      const searchLower = search.toLowerCase();
+      available = available.filter(p =>
+        p.name?.toLowerCase().includes(searchLower) ||
+        p.employeeId?.toLowerCase().includes(searchLower) ||
+        p.email?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    this.filteredRankSearchParticipants = available.slice(0, 15);
+    this.showRankSearchDropdown = this.filteredRankSearchParticipants.length > 0;
+  }
+
+  /**
+   * Assign participant to rank
+   */
+  assignParticipantToRank(participant: EventParticipant, rank: number): void {
+    const assignment = this.rankAssignments.find(a => a.rank === rank);
+    if (assignment) {
+      assignment.participant = participant;
+      this.rankSearchText = '';
+      this.showRankSearchDropdown = false;
+      this.currentRankBeingAssigned = null;
+    }
+  }
+
+  /**
+   * Clear rank assignment
+   */
+  clearRankAssignment(rank: number): void {
+    const assignment = this.rankAssignments.find(a => a.rank === rank);
+    if (assignment) {
+      assignment.participant = null;
+    }
+  }
+
+  /**
+   * Can submit rank-based award?
+   */
   canSubmitRankAward(): boolean {
     if (!this.canAwardPoints()) return false;
-    if (!this.selectedRankParticipant) return false;
-    if (this.rankPoints <= 0) return false;
-    if (!this.isPoolUnlimited() && this.rankPoints > this.getRemainingPoints()) return false;
-    // Check for duplicate rank
-    if (this.rankValue && this.isRankAlreadyUsed(this.rankValue)) return false;
-    return true;
+    if (this.getRemainingPoints() <= 0) return false;
+    // All ranks must be assigned
+    return this.rankAssignments.every(a => a.participant !== null);
   }
 
-  isRankAlreadyUsed(rank: number): boolean {
-    return this.participants.some(p => p.eventRank === rank && (p.pointsAwarded || 0) > 0);
-  }
-
+  /**
+   * Submit rank-based award
+   */
   submitRankAward(): void {
-    if (!this.canSubmitRankAward() || !this.selectedRankParticipant) return;
-
-    const request: RankAwardRequest = {
-      points: this.rankPoints,
-      rank: this.rankValue || undefined
+    if (!this.canSubmitRankAward()) return;
+    
+    const awards: BulkAwardItem[] = this.rankAssignments.map(assignment => ({
+      participantId: assignment.participant!.userId,
+      points: assignment.points,
+      rank: assignment.rank
+    }));
+    
+    const request: BulkAwardRequest = {
+      awards,
+      mode: 'RankBased'
     };
-
+    
     this.isRankAwarding = true;
     this.errorMessage = '';
-
-    this.eventService.awardPoints(this.eventId, this.selectedRankParticipant.userId, request)
+    
+    this.eventService.bulkAwardPoints(this.eventId, request)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => (this.isRankAwarding = false))
@@ -341,173 +562,29 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
       .subscribe({
         next: (response) => {
           console.log('[Points] Rank award successful:', response);
-          this.successMessage = `Awarded ${this.rankPoints.toLocaleString()} pts to ${this.selectedRankParticipant?.name}${this.rankValue ? ` (Rank #${this.rankValue})` : ''}`;
-          this.clearRankSelection();
+          this.successMessage = `Rank-based award complete! Awarded ${response.participantsAwarded} participants with ${response.totalPointsAwarded.toLocaleString()} total points.`;
+          this.initializeRankAssignments();
           this.loadData();
           this.pointsAwarded.emit();
           setTimeout(() => this.successMessage = '', 5000);
         },
         error: (error) => {
           console.error('[Points] Rank award error:', error);
-          const errMsg = error.error?.message || error.message || 'Failed to award points. Please try again.';
-          this.errorMessage = errMsg;
-          this.loadData(); // Refresh data on error
-        }
-      });
-  }
-
-  // ==================== POOL ALLOCATION (EqualSplit / RankBased) ====================
-
-  /**
-   * Validate if pool allocation can be submitted
-   */
-  canSubmitPoolAllocation(): boolean {
-    if (!this.canAwardPoints()) return false;
-    if (this.isPoolUnlimited()) return false;
-    if (this.getRemainingPoints() <= 0) return false;
-    if (this.getSelectedCount() === 0) return false;
-    
-    if (this.poolAllocationMode === 'RankBased') {
-      const rankPointsArray = this.parseRankPoints();
-      if (rankPointsArray.length === 0) return false;
-      // Sum of rank points must not exceed pool
-      const sum = rankPointsArray.reduce((a, b) => a + b, 0);
-      if (sum > this.getRemainingPoints()) return false;
-    }
-    
-    return true;
-  }
-
-  /**
-   * Parse comma-separated rank points input
-   */
-  parseRankPoints(): number[] {
-    if (!this.rankPointsInput.trim()) return [];
-    return this.rankPointsInput
-      .split(',')
-      .map(s => parseInt(s.trim(), 10))
-      .filter(n => !isNaN(n) && n > 0);
-  }
-
-  /**
-   * Get sum of parsed rank points (for template use)
-   */
-  getRankPointsSum(): number {
-    return this.parseRankPoints().reduce((a, b) => a + b, 0);
-  }
-
-  /**
-   * Preview points distribution for pool allocation
-   */
-  getPoolAllocationPreview(): { participantId: string; name: string; points: number; rank?: number }[] {
-    const selectedParticipants = this.getFilteredEligibleParticipants()
-      .filter(p => this.selectedParticipantIds.has(p.userId));
-    
-    if (selectedParticipants.length === 0) return [];
-    
-    const remaining = this.getRemainingPoints();
-    const count = selectedParticipants.length;
-    
-    if (this.poolAllocationMode === 'EqualSplit') {
-      const basePoints = Math.floor(remaining / count);
-      const remainder = remaining % count;
-      
-      return selectedParticipants.map((p, idx) => ({
-        participantId: p.userId,
-        name: p.name,
-        points: basePoints + (idx < remainder ? 1 : 0)
-      }));
-    } else {
-      // RankBased
-      const rankPointsArray = this.parseRankPoints();
-      const specifiedCount = Math.min(rankPointsArray.length, count - 1);
-      const specifiedSum = rankPointsArray.slice(0, specifiedCount).reduce((a, b) => a + b, 0);
-      const remainingForLast = remaining - specifiedSum;
-      
-      return selectedParticipants.map((p, idx) => {
-        const rank = idx + 1;
-        let points: number;
-        
-        if (idx < specifiedCount) {
-          points = rankPointsArray[idx];
-        } else {
-          // Last rank(s) get remaining
-          const lastCount = count - specifiedCount;
-          if (lastCount === 1) {
-            points = remainingForLast;
-          } else {
-            const lastIdx = idx - specifiedCount;
-            const baseLastPoints = Math.floor(remainingForLast / lastCount);
-            const lastRemainder = remainingForLast % lastCount;
-            points = baseLastPoints + (lastIdx < lastRemainder ? 1 : 0);
-          }
-        }
-        
-        return {
-          participantId: p.userId,
-          name: p.name,
-          points,
-          rank
-        };
-      });
-    }
-  }
-
-  /**
-   * Submit pool allocation (entire pool distribution)
-   */
-  submitPoolAllocation(): void {
-    if (!this.canSubmitPoolAllocation()) return;
-
-    // Build awards from preview
-    const preview = this.getPoolAllocationPreview();
-    const awards: BulkAwardItem[] = preview.map(p => ({
-      participantId: p.participantId,
-      points: p.points,
-      rank: p.rank
-    }));
-
-    const request: BulkAwardRequest = {
-      awards,
-      mode: this.poolAllocationMode,
-      consumeEntirePool: true,
-      rankPoints: this.poolAllocationMode === 'RankBased' ? this.parseRankPoints() : undefined
-    };
-
-    this.isAllocatingPool = true;
-    this.errorMessage = '';
-
-    this.eventService.bulkAwardPoints(this.eventId, request)
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => (this.isAllocatingPool = false))
-      )
-      .subscribe({
-        next: (response) => {
-          console.log('[Points] Pool allocation successful:', response);
-          const mode = this.poolAllocationMode === 'EqualSplit' ? 'Equal Split' : 'Rank-Based';
-          this.successMessage = `${mode} allocation complete! Awarded ${response.participantsAwarded} participants with ${response.totalPointsAwarded.toLocaleString()} total points.`;
-          
-          if (response.remainingPoolPoints === 0) {
-            this.successMessage += ' Event auto-completed (pool exhausted).';
-          }
-          
-          this.selectedParticipantIds.clear();
-          this.selectAll = false;
-          this.rankPointsInput = '';
-          this.loadData();
-          this.pointsAwarded.emit();
-          setTimeout(() => this.successMessage = '', 8000);
-        },
-        error: (error) => {
-          console.error('[Points] Pool allocation error:', error);
-          this.errorMessage = error.error?.message || error.message || 'Failed to allocate pool. Please try again.';
+          // Surface exact server error message to user
+          this.errorMessage = this.parseServerError(error);
           this.loadData();
         }
       });
   }
 
-  // ==================== RANK HISTORY ====================
+  /**
+   * Check if any rank has been assigned
+   */
+  hasAnyRankAssignment(): boolean {
+    return this.rankAssignments.some(a => a.participant !== null);
+  }
+
+  // ==================== AWARDED PARTICIPANTS ====================
 
   getAwardedParticipants(): EventParticipant[] {
     return this.participants.filter(p => p.pointsAwarded && p.pointsAwarded > 0)
@@ -518,6 +595,11 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
         if (b.eventRank) return 1;
         return 0;
       });
+  }
+
+  getTotalAwardedPoints(): number {
+    return this.getAwardedParticipants()
+      .reduce((sum, p) => sum + (p.pointsAwarded || 0), 0);
   }
 
   formatDate(date: string | undefined): string {

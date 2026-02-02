@@ -171,11 +171,11 @@ export interface DrawerAction {
             <div *ngIf="!isLoadingTransactions && transactions.length > 0" class="transactions-list">
               <div *ngFor="let transaction of transactions" class="transaction-item">
                 <div class="transaction-header">
-                  <span class="transaction-type" [class.positive]="transaction.amount > 0" [class.negative]="transaction.amount < 0">
+                  <span class="transaction-type" [class.positive]="isPositiveTransaction(transaction)" [class.negative]="!isPositiveTransaction(transaction)">
                     {{ transaction.transactionType || transaction.type }}
                   </span>
-                  <span class="transaction-amount" [class.positive]="transaction.amount > 0" [class.negative]="transaction.amount < 0">
-                    {{ transaction.amount > 0 ? '+' : '' }}{{ transaction.amount }}
+                  <span class="transaction-amount" [class.positive]="isPositiveTransaction(transaction)" [class.negative]="!isPositiveTransaction(transaction)">
+                    {{ formatTransactionAmount(transaction) }}
                   </span>
                 </div>
                 <div class="transaction-details">
@@ -1195,6 +1195,25 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
         });
       }
     });
+  }
+
+  /** Check if transaction is positive (earned/refunded) or negative (redeemed) */
+  isPositiveTransaction(transaction: any): boolean {
+    const type = (transaction.transactionType || transaction.type || '').toLowerCase();
+    // Redeemed transactions are negative
+    if (type === 'redeemed') return false;
+    // Earned and Refunded are positive
+    return true;
+  }
+
+  /** Format transaction amount with proper sign based on type */
+  formatTransactionAmount(transaction: any): string {
+    const amount = Math.abs(transaction.amount || 0);
+    const type = (transaction.transactionType || transaction.type || '').toLowerCase();
+    // Redeemed shows negative
+    if (type === 'redeemed') return `-${amount.toLocaleString()}`;
+    // Earned/Refunded shows positive
+    return `+${amount.toLocaleString()}`;
   }
 
   ngOnDestroy(): void {

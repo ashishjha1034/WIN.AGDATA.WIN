@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, HostListener } from '@angular/c
 import { CommonModule } from '@angular/common';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { UserListItem } from '../../../../models/user.models';
+import { PaginationComponent } from '../../../../shared/components/pagination.component';
 
 export interface UserTableAction {
   type: 'view' | 'edit' | 'transactions' | 'reset-password' | 'toggle-status' | 'delete';
@@ -12,7 +13,7 @@ export interface UserTableAction {
 @Component({
   selector: 'app-user-table',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, PaginationComponent],
   animations: [
     trigger('fadeInOut', [
       transition(':enter', [
@@ -107,25 +108,13 @@ export interface UserTableAction {
         </tbody>
       </table>
 
-      <div class="pagination" *ngIf="totalPages > 1">
-        <button
-          class="page-btn"
-          [disabled]="currentPage === 1"
-          (click)="previousPage()"
-        >
-          ← Previous
-        </button>
-        <div class="page-info">
-          Page {{ currentPage }} of {{ totalPages }}
-        </div>
-        <button
-          class="page-btn"
-          [disabled]="currentPage === totalPages"
-          (click)="nextPage()"
-        >
-          Next →
-        </button>
-      </div>
+      <app-pagination
+        [currentPage]="currentPage"
+        [pageSize]="pageSize"
+        [totalItems]="totalItems"
+        [itemLabel]="'users'"
+        (pageChange)="onPageChange($event)"
+      ></app-pagination>
     </div>
   `,
   styles: [`
@@ -481,15 +470,7 @@ export class UserTableComponent {
     });
   }
 
-  previousPage(): void {
-    if (this.currentPage > 1) {
-      this.pageChanged.emit(this.currentPage - 1);
-    }
-  }
-
-  nextPage(): void {
-    if (this.currentPage < this.totalPages) {
-      this.pageChanged.emit(this.currentPage + 1);
-    }
+  onPageChange(page: number): void {
+    this.pageChanged.emit(page);
   }
 }

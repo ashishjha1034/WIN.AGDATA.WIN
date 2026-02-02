@@ -2,7 +2,7 @@
 
 public record StatsDto(
     int TotalUsers,
-    int TotalPointsEarned,
-    int TotalPointsRedeemed,
+    decimal TotalPointsEarned,
+    decimal TotalPointsRedeemed,
     int PendingRedemptions
 );

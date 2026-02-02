@@ -7,6 +7,7 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 
 @Component({
   selector: 'app-user-dashboard',
@@ -142,6 +143,14 @@ export class UserDashboardComponent implements OnInit, OnDestroy {
       return `${event.spotsLeft} Spots Left`;
     }
     return 'Available';
+  }
+
+  formatEventDate(dateStr: string): string {
+    if (!dateStr) return '';
+    const istDate = utcToIst(dateStr);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    return `${month} ${day}`;
   }
 
   logout(): void {

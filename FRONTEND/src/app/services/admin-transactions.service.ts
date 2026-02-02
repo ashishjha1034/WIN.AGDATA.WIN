@@ -123,6 +123,33 @@ export class AdminTransactionsService {
   }
 
   /**
+   * Get filtered monthly points chart data (synced with table/KPIs filters)
+   */
+  getFilteredPointsChart(filter: TransactionFilterRequest): Observable<PointsChartResponse> {
+    let params = new HttpParams();
+    
+    if (filter.userId) {
+      params = params.set('userId', filter.userId);
+    }
+    if (filter.type) {
+      params = params.set('type', filter.type);
+    }
+    if (filter.startDate) {
+      params = params.set('startDate', filter.startDate);
+    }
+    if (filter.endDate) {
+      params = params.set('endDate', filter.endDate);
+    }
+    if (filter.source) {
+      params = params.set('source', filter.source);
+    }
+
+    return this.http.get<PointsChartResponse>(`${this.API_URL}/transactions/chart`, { params }).pipe(
+      catchError(error => this.handleError(error))
+    );
+  }
+
+  /**
    * Adjust user points (admin action)
    */
   adjustPoints(request: AdjustPointsRequest): Observable<AdjustPointsResponse> {

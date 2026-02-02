@@ -474,6 +474,63 @@ public class AdminController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get filtered monthly points chart data
+    /// </summary>
+    /// <remarks>
+    /// Retrieve monthly points earned and redeemed data with filters.
+    /// Uses the same filter parameters as the transactions list to keep Chart, KPIs, and Table in sync.
+    /// Admin only endpoint.
+    /// </remarks>
+    /// <param name="filter">Filter parameters (same as transactions list)</param>
+    /// <returns>Monthly points data filtered by the specified criteria</returns>
+    /// <response code="200">Chart data retrieved successfully</response>
+    /// <response code="403">Unauthorized - admin only</response>
+    [HttpGet("transactions/chart")]
+    [SwaggerOperation(Summary = "Get filtered monthly points chart", Description = "Retrieve monthly points statistics with filters")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> GetFilteredPointsChart([FromQuery] TransactionFilterRequest filter)
+    {
+        try
+        {
+            // Parse transaction type if provided
+            PointsTransactionType? transactionType = null;
+            if (!string.IsNullOrWhiteSpace(filter.Type))
+            {
+                if (Enum.TryParse<PointsTransactionType>(filter.Type, true, out var parsedType))
+                {
+                    transactionType = parsedType;
+                }
+            }
+
+            var chartData = await _transactionRepository.GetFilteredMonthlyPointsChartAsync(
+                filter.UserId,
+                transactionType,
+                filter.StartDate,
+                filter.EndDate,
+                filter.Source);
+
+            return Ok(new
+            {
+                data = chartData.Select(d => new
+                {
+                    month = d.Month,
+                    year = d.Year,
+                    monthName = new DateTime(d.Year, d.Month, 1).ToString("MMMM"),
+                    pointsEarned = d.PointsEarned,
+                    pointsRedeemed = d.PointsRedeemed,
+                    netPoints = d.PointsEarned - d.PointsRedeemed
+                }).ToList()
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve filtered chart data", error = ex.Message });
+        }
+    }
+
     #region Transaction Audit Endpoints
 
     /// <summary>

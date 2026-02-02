@@ -35,6 +35,31 @@ export class EventDetailOverviewComponent {
     });
   }
 
+  /**
+   * Format datetime with IST timezone and 12-hour AM/PM format
+   */
+  formatDateTimeIst(dateStr: string): string {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(date.getTime() + istOffset);
+    
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    
+    // Convert to 12-hour format with AM/PM
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const hoursStr = hours.toString().padStart(2, '0');
+    
+    return `${day} ${month} ${year}, ${hoursStr}:${minutes} ${ampm}`;
+  }
+
   getStatusColor(status: string): string {
     const colors: Record<string, string> = {
       'Active': '#16A34A',

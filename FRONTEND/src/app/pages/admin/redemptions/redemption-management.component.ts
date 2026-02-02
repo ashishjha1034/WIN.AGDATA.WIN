@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 
 // ECharts imports
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
@@ -26,6 +27,7 @@ import {
 } from '../../../models/redemption.models';
 import { ProductCategory } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
 
 // Interface for product redemption aggregation
 interface ProductRedemptionCount {
@@ -41,7 +43,7 @@ interface ProductRedemptionCount {
   templateUrl: './redemption-management.component.html',
   styleUrls: ['./redemption-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
   ]
@@ -57,6 +59,15 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   selectedRedemption: RedemptionDetail | null = null;
   currentUser: any;
   categories: ProductCategory[] = [];
+
+  // Chart data - loaded once and NOT affected by filters
+  allRedemptionsForCharts: Redemption[] = [];
+  chartStatusCounts = {
+    pending: 0,
+    approved: 0,
+    delivered: 0,
+    rejected: 0
+  };
 
   // Status counts for charts
   statusCounts = {
@@ -161,6 +172,8 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     this.loadCurrentUser();
     this.loadCategories();
     this.loadRedemptions();
+    // Load chart data once without filters
+    this.loadChartData();
   }
 
   ngOnDestroy(): void {
@@ -231,7 +244,7 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
           });
           
           this.applyFilters();
-          this.updateCharts();
+          // Charts updated only from loadChartData() - not here
         },
         error: (error) => {
           console.error('[RedemptionManagement] Error loading redemptions:', error);
@@ -243,9 +256,36 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
       });
   }
 
+  /**
+   * Load chart data ONCE (without filters) - charts show overall data
+   */
+  loadChartData(): void {
+    this.redemptionService.getAllRedemptions(undefined)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: RedemptionListResponse) => {
+          if (response && response.items) {
+            this.allRedemptionsForCharts = response.items;
+            this.chartStatusCounts = {
+              pending: response.counts?.pending || 0,
+              approved: response.counts?.approved || 0,
+              delivered: response.counts?.delivered || 0,
+              rejected: response.counts?.rejected || 0
+            };
+            // Update redemptionsSignal for topProductsChartData computed
+            this.redemptionsSignal.set(response.items);
+            this.updateCharts();
+          }
+        },
+        error: (error) => {
+          console.error('[RedemptionManagement] Error loading chart data:', error);
+        }
+      });
+  }
+
   // Chart methods
   hasRedemptionStatusData(): boolean {
-    const { approved, pending, delivered, rejected } = this.statusCounts;
+    const { approved, pending, delivered, rejected } = this.chartStatusCounts;
     return (approved + pending + delivered + rejected) > 0;
   }
 
@@ -255,7 +295,7 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   }
 
   updateRedemptionStatusChart(): void {
-    const { approved, pending, delivered, rejected } = this.statusCounts;
+    const { approved, pending, delivered, rejected } = this.chartStatusCounts;
     const total = approved + pending + delivered + rejected;
 
     const data = [
@@ -462,6 +502,27 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     this.selectedStatus = status;
     this.selectedStatusFilter = status !== null ? status.toString() : '';
     this.loadRedemptions();
+  }
+
+  /**
+   * Handle pie chart click to filter by status
+   */
+  onPieChartClick(event: any): void {
+    if (event && event.name) {
+      // Map chart label to RedemptionStatus enum
+      const statusMap: Record<string, RedemptionStatus> = {
+        'Pending': RedemptionStatus.Pending,
+        'Approved': RedemptionStatus.Approved,
+        'Delivered': RedemptionStatus.Delivered,
+        'Rejected': RedemptionStatus.Rejected
+      };
+      
+      const status = statusMap[event.name];
+      if (status !== undefined) {
+        this.filterByStatus(status);
+        this.cdr.markForCheck();
+      }
+    }
   }
 
   onStatusFilterChange(): void {
@@ -745,9 +806,10 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   }
 
   formatDate(date: string): string {
-    const now = new Date();
-    const redemptionDate = new Date(date);
-    const diffMs = now.getTime() - redemptionDate.getTime();
+    // Convert UTC to IST first for accurate comparison
+    const nowIst = utcToIst(new Date());
+    const redemptionIst = utcToIst(date);
+    const diffMs = nowIst.getTime() - redemptionIst.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
@@ -758,11 +820,26 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     if (diffDays === 1) return '1 day ago';
     if (diffDays < 7) return `${diffDays} days ago`;
     
-    return redemptionDate.toLocaleDateString();
+    // Format in IST for older dates
+    const day = redemptionIst.getUTCDate();
+    const month = redemptionIst.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = redemptionIst.getUTCFullYear();
+    return `${month} ${day}, ${year}`;
   }
 
   formatDateTime(date: string): string {
-    return new Date(date).toLocaleString();
+    if (!date) return '';
+    // Convert UTC to IST for display
+    const istDate = utcToIst(date);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${month} ${day}, ${year}, ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   }
 
   getUserInitials(name: string): string {

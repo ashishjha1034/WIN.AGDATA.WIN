@@ -45,63 +45,38 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- Charts Section - 2 charts side by side -->
+        <!-- Charts Section - Event Status Chart with Hide/Show Toggle -->
         <section class="charts-section" aria-label="Event Analytics">
           <div class="charts-grid">
-            <!-- Chart 1: Events Status Pie Chart -->
+            <!-- Chart: Events Status Pie Chart -->
             <div class="chart-card">
               <div class="chart-header">
                 <div class="chart-title-group">
                   <h2 class="chart-title">Events Status</h2>
                   <p class="chart-subtitle">Distribution by status</p>
                 </div>
+                <button 
+                  class="btn-chart-toggle"
+                  (click)="toggleEventStatusChart()"
+                  [attr.aria-label]="eventStatusChartVisible() ? 'Hide chart' : 'Show chart'"
+                  type="button">
+                  <i class="fa-solid" [ngClass]="eventStatusChartVisible() ? 'fa-eye-slash' : 'fa-eye'"></i>
+                  {{ eventStatusChartVisible() ? 'Hide' : 'Show' }}
+                </button>
               </div>
-              <div class="chart-body">
+              <div class="chart-body" *ngIf="eventStatusChartVisible()" @slideDown>
                 <div 
                   *ngIf="hasEventStatusData()"
                   echarts 
                   [options]="eventStatusChartOption" 
                   [merge]="eventStatusChartOption"
+                  (chartClick)="onPieChartClick($event)"
                   class="status-chart"
-                  aria-label="Pie chart showing events status distribution">
+                  aria-label="Pie chart showing events status distribution. Click on a segment to filter by that status.">
                 </div>
                 <div class="chart-empty" *ngIf="!hasEventStatusData()">
                   <i class="fa-regular fa-chart-pie"></i>
                   <p>No event data available</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Chart 2: Enrollment Progress Bar Chart -->
-            <div class="chart-card">
-              <div class="chart-header">
-                <div class="chart-title-group">
-                  <h2 class="chart-title">Participants Enrollment Progress</h2>
-                  <p class="chart-subtitle">Top {{ topNUpcoming }} upcoming events by enrollment</p>
-                </div>
-              </div>
-              <div class="chart-body">
-                <div 
-                  *ngIf="upcomingEventsForChart().length > 0"
-                  echarts 
-                  [options]="enrollmentChartOption" 
-                  [merge]="enrollmentChartOption"
-                  class="enrollment-chart"
-                  aria-label="Horizontal bar chart showing enrollment progress for upcoming events">
-                </div>
-                <div class="chart-empty" *ngIf="upcomingEventsForChart().length === 0">
-                  <i class="fa-regular fa-chart-bar"></i>
-                  <p>No upcoming events found</p>
-                </div>
-              </div>
-              <div class="chart-legend" *ngIf="upcomingEventsForChart().length > 0">
-                <div class="legend-item">
-                  <span class="legend-color enrolled"></span>
-                  <span class="legend-label">Enrolled</span>
-                </div>
-                <div class="legend-item">
-                  <span class="legend-color remaining"></span>
-                  <span class="legend-label">Available Slots</span>
                 </div>
               </div>
             </div>
@@ -174,9 +149,9 @@
                 <tr>
                   <th>Event Name</th>
                   <th>Status</th>
-                  <th>Date</th>
+                  <th>Start Date</th>
                   <th>Participants</th>
-                  <th>Points</th>
+                  <th>Pool</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,7 +176,10 @@
                     </span>
                   </td>
                   <td class="date-cell">
-                    {{ formatDate(event.eventDate) }}
+                    <div class="date-time-badge">
+                      <i class="fa-regular fa-calendar"></i>
+                      {{ formatDateTimeIst(event.eventDate) }}
+                    </div>
                   </td>
                   <td class="participants-cell">
                     <div class="progress-cell">
@@ -212,14 +190,15 @@
                       <span class="progress-counts">{{ event.participantCount }} / {{ event.maxParticipants || '∞' }}</span>
                     </div>
                   </td>
-                  <td class="points-cell">
-                    <div class="progress-cell">
-                      <span class="progress-percent">{{ getPointsPercent(event) }}%</span>
-                      <div class="mini-progress">
-                        <div class="mini-progress-fill" [style.width.%]="getPointsPercent(event)"></div>
-                      </div>
-                      <span class="progress-counts">{{ event.distributedPoints | number }} / {{ event.totalPointsPool | number }}</span>
-                    </div>
+                  <td class="pool-cell">
+                    <span 
+                      class="pool-value"
+                      [class.pool-complete]="isPoolFullyDistributed(event)"
+                      [class.pool-pending]="!isPoolFullyDistributed(event)"
+                      [title]="getPoolTooltip(event)"
+                    >
+                      {{ event.totalPointsPool | number }}
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -233,25 +212,13 @@
             </div>
 
             <!-- Pagination -->
-            <div class="pagination" *ngIf="totalPages > 1">
-              <button
-                class="page-btn"
-                [disabled]="currentPage === 1"
-                (click)="onPageChange(currentPage - 1)"
-              >
-                <i class="fa-solid fa-chevron-left"></i> Previous
-              </button>
-              <div class="page-info">
-                Page {{ currentPage }} of {{ totalPages }}
-              </div>
-              <button
-                class="page-btn"
-                [disabled]="currentPage >= totalPages"
-                (click)="onPageChange(currentPage + 1)"
-              >
-                Next <i class="fa-solid fa-chevron-right"></i>
-              </button>
-            </div>
+            <app-pagination
+              [currentPage]="currentPage"
+              [pageSize]="pageSize"
+              [totalItems]="filteredEvents.length"
+              [itemLabel]="'events'"
+              (pageChange)="onPageChange($event)"
+            ></app-pagination>
           </div>
         </section>
       </ng-container>
@@ -260,7 +227,7 @@
 
   <!-- Create/Edit Event Modal -->
   <div class="modal-overlay" *ngIf="showCreateEventModal || showEditEventModal" (click)="closeEventModal()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-content modal-large" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <h3>{{ showEditEventModal ? 'Edit Event' : 'Create New Event' }}</h3>
         <button class="modal-close" (click)="closeEventModal()">
@@ -268,23 +235,46 @@
         </button>
       </div>
       
-      <form class="modal-form" (ngSubmit)="showEditEventModal ? submitEditEvent() : submitNewEvent()">
+      <form class="modal-form" [formGroup]="eventForm" (ngSubmit)="showEditEventModal ? submitEditEvent() : submitNewEvent()">
         <!-- Event Name -->
         <div class="form-group">
           <label class="form-label" for="eventName">
             Event Name <span class="required">*</span>
           </label>
-          <input 
-            type="text" 
-            id="eventName"
-            class="form-input"
-            [(ngModel)]="newEvent.name"
-            name="name"
-            placeholder="Enter event name"
-            required
-            minlength="3"
-            maxlength="100"
-          />
+          <div class="input-with-action">
+            <input 
+              type="text" 
+              id="eventName"
+              class="form-input"
+              formControlName="name"
+              placeholder="e.g., Spring Sales Contest"
+              [class.is-invalid]="ef['name'].invalid && ef['name'].touched"
+              [class.is-valid]="ef['name'].valid && nameUniquenessResult()?.isValid"
+            />
+            <button 
+              type="button" 
+              class="btn btn-sm btn-outline check-btn"
+              (click)="checkEventNameAvailability()"
+              [disabled]="ef['name'].invalid || nameUniquenessChecking()">
+              <span *ngIf="!nameUniquenessChecking()">Check</span>
+              <span *ngIf="nameUniquenessChecking()">...</span>
+            </button>
+          </div>
+          <div class="field-meta">
+            <span class="counter">
+              {{ nameCharCount() }}/{{ validationConstants.EVENT_NAME_MAX_LENGTH }} chars • 
+              {{ nameWordCount() }}/{{ validationConstants.EVENT_NAME_MAX_WORDS }} words
+            </span>
+          </div>
+          <app-validation-hint
+            [control]="ef['name']"
+            fieldName="Event Name"
+            fieldType="productName"
+            [checking]="nameUniquenessChecking()"
+            [uniquenessResult]="nameUniquenessResult()"
+            helperText="1-7 alphanumeric words, single spaces only"
+            [showImmediately]="true"
+          ></app-validation-hint>
         </div>
 
         <!-- Description -->
@@ -295,14 +285,27 @@
           <textarea 
             id="eventDescription"
             class="form-input form-textarea"
-            [(ngModel)]="newEvent.description"
-            name="description"
-            placeholder="Enter event description"
-            required
-            minlength="10"
-            maxlength="500"
+            formControlName="description"
+            placeholder="Describe the event purpose, activities, and key details..."
             rows="3"
+            [class.is-invalid]="ef['description'].invalid && ef['description'].touched"
+            [class.is-valid]="ef['description'].valid && ef['description'].dirty"
           ></textarea>
+          <div class="field-meta">
+            <span class="counter">
+              {{ descCharCount() }}/{{ validationConstants.EVENT_DESCRIPTION_MAX_LENGTH }} chars • 
+              {{ descWordCount() }}/{{ validationConstants.EVENT_DESCRIPTION_MAX_WORDS }} words
+            </span>
+          </div>
+          <app-validation-hint
+            [control]="ef['description']"
+            fieldName="Description"
+            fieldType="description"
+            [minLength]="validationConstants.EVENT_DESCRIPTION_MIN_LENGTH"
+            [maxLength]="validationConstants.EVENT_DESCRIPTION_MAX_LENGTH"
+            helperText="Minimum {{ validationConstants.EVENT_DESCRIPTION_MIN_LENGTH }} characters and {{ validationConstants.EVENT_DESCRIPTION_MIN_WORDS }} words"
+            [showImmediately]="true"
+          ></app-validation-hint>
         </div>
 
         <div class="form-row">
@@ -315,10 +318,18 @@
               type="datetime-local" 
               id="eventDate"
               class="form-input"
-              [(ngModel)]="newEvent.eventDate"
-              name="eventDate"
-              required
+              formControlName="eventDate"
+              [min]="minDateTime()"
+              [class.is-invalid]="ef['eventDate'].invalid && ef['eventDate'].touched"
+              [class.is-valid]="ef['eventDate'].valid"
             />
+            <app-validation-hint
+              [control]="ef['eventDate']"
+              fieldName="Event Date"
+              fieldType="generic"
+              helperText="Must be a future date and time"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
 
           <!-- Registration End Date -->
@@ -330,10 +341,19 @@
               type="datetime-local" 
               id="registrationEndDate"
               class="form-input"
-              [(ngModel)]="newEvent.registrationEndDateUtc"
-              name="registrationEndDateUtc"
-              required
+              formControlName="registrationEndDate"
+              [min]="minDateTime()"
+              [max]="maxRegistrationDateTime()"
+              [class.is-invalid]="ef['registrationEndDate'].invalid && ef['registrationEndDate'].touched"
+              [class.is-valid]="ef['registrationEndDate'].valid"
             />
+            <app-validation-hint
+              [control]="ef['registrationEndDate']"
+              fieldName="Registration Deadline"
+              fieldType="generic"
+              helperText="Must be before event date"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
         </div>
 
@@ -347,11 +367,20 @@
               type="number" 
               id="maxParticipants"
               class="form-input"
-              [(ngModel)]="newEvent.maxParticipants"
-              name="maxParticipants"
+              formControlName="maxParticipants"
               placeholder="Leave empty for unlimited"
-              min="0"
+              [class.is-invalid]="ef['maxParticipants'].invalid && ef['maxParticipants'].touched"
+              [class.is-valid]="ef['maxParticipants'].valid && ef['maxParticipants'].value"
             />
+            <app-validation-hint
+              [control]="ef['maxParticipants']"
+              fieldName="Max Participants"
+              fieldType="number"
+              [minValue]="1"
+              [maxValue]="validationConstants.EVENT_MAX_PARTICIPANTS_MAX"
+              helperText="Optional. 1-{{ validationConstants.EVENT_MAX_PARTICIPANTS_MAX | number }} participants"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
 
           <!-- Total Points Pool -->
@@ -363,12 +392,20 @@
               type="number" 
               id="totalPointsPool"
               class="form-input"
-              [(ngModel)]="newEvent.totalPointsPool"
-              name="totalPointsPool"
+              formControlName="totalPointsPool"
               placeholder="Enter points pool"
-              required
-              min="1"
+              [class.is-invalid]="ef['totalPointsPool'].invalid && ef['totalPointsPool'].touched"
+              [class.is-valid]="ef['totalPointsPool'].valid && ef['totalPointsPool'].value"
             />
+            <app-validation-hint
+              [control]="ef['totalPointsPool']"
+              fieldName="Total Points Pool"
+              fieldType="number"
+              [minValue]="1"
+              [maxValue]="validationConstants.EVENT_POINTS_POOL_MAX"
+              helperText="1-{{ validationConstants.EVENT_POINTS_POOL_MAX | number }} points"
+              [showImmediately]="true"
+            ></app-validation-hint>
           </div>
         </div>
 
@@ -381,11 +418,45 @@
             type="text" 
             id="location"
             class="form-input"
-            [(ngModel)]="newEvent.location"
-            name="location"
+            formControlName="location"
             placeholder="Enter location (optional)"
-            maxlength="200"
+            [class.is-invalid]="ef['location'].invalid && ef['location'].touched"
+            [class.is-valid]="ef['location'].valid && ef['location'].value"
           />
+          <div class="field-meta" *ngIf="ef['location'].value">
+            <span class="counter">
+              {{ locationCharCount() }}/{{ validationConstants.EVENT_LOCATION_MAX_LENGTH }} chars • 
+              {{ locationWordCount() }}/{{ validationConstants.EVENT_LOCATION_MAX_WORDS }} words
+            </span>
+          </div>
+          <app-validation-hint
+            [control]="ef['location']"
+            fieldName="Location"
+            fieldType="generic"
+            helperText="Optional. Max {{ validationConstants.EVENT_LOCATION_MAX_LENGTH }} characters"
+            [showImmediately]="true"
+          ></app-validation-hint>
+        </div>
+
+        <!-- Form Validation Summary -->
+        <app-form-errors-summary
+          *ngIf="eventForm.invalid && (eventForm.dirty || eventForm.touched)"
+          [form]="eventForm"
+          [fieldLabels]="{
+            name: 'Event Name',
+            description: 'Description',
+            eventDate: 'Event Date',
+            registrationEndDate: 'Registration Deadline',
+            location: 'Location',
+            maxParticipants: 'Max Participants',
+            totalPointsPool: 'Total Points Pool'
+          }"
+        ></app-form-errors-summary>
+
+        <!-- Submit Disabled Reason -->
+        <div *ngIf="!canSubmitEventForm() && !isSubmittingEvent" class="submit-disabled-reason">
+          <i class="fa-solid fa-info-circle"></i>
+          {{ getSubmitDisabledMessage() }}
         </div>
 
         <!-- Form Actions -->
@@ -401,7 +472,7 @@
           <button 
             type="submit" 
             class="btn-primary"
-            [disabled]="isSubmittingEvent"
+            [disabled]="!canSubmitEventForm() || isSubmittingEvent"
           >
             <span *ngIf="isSubmittingEvent">
               <i class="fa-solid fa-spinner fa-spin"></i> Saving...

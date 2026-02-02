@@ -11,6 +11,7 @@ import { ValidationService, ValidationResult } from '../../../services/validatio
 import { CustomValidators, ValidationConstants } from '../../../shared/validators/custom-validators';
 import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
 import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
+import { DialogService } from '../../../services/dialog.service';
 
 @Component({
   selector: 'app-product-detail',
@@ -87,7 +88,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     private productsService: ProductsService,
     private validationService: ValidationService,
     private fb: FormBuilder,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
   ) {
     this.initForms();
   }
@@ -510,12 +512,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
-            alert('Product updated successfully');
+            this.dialogService.success('Product updated successfully');
             this.loadProduct(this.product!.id);
           },
           error: (error) => {
             console.error('Error updating product:', error);
-            alert('Failed to update product: ' + (error?.error?.message || 'Unknown error'));
+            this.dialogService.error('Failed to update product: ' + (error?.error?.message || 'Unknown error'));
           }
         });
     }
@@ -536,13 +538,13 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
-            alert('Stock adjusted successfully');
+            this.dialogService.success('Stock adjusted successfully');
             this.loadProduct(this.product!.id);
             this.stockAdjustment = { amount: 0, operation: 'adjust' };
           },
           error: (error) => {
             console.error('Error adjusting stock:', error);
-            alert('Failed to adjust stock');
+            this.dialogService.error('Failed to adjust stock');
           }
         });
     }
@@ -571,7 +573,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (this.product) {
             this.product.isActive = false;
           }
-          alert('Product deactivated successfully');
+          this.dialogService.success('Product deactivated successfully');
           this.pendingDeactivationProductId = null;
         },
         error: (error) => {
@@ -589,12 +591,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
             const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
             this.deactivationBlockedMessage = message;
             this.showDeactivateDialog = false;
-            alert(message);
+            this.dialogService.error(message);
             this.pendingDeactivationProductId = null;
           }
           // Other error
           else {
-            alert('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+            this.dialogService.error('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
             this.pendingDeactivationProductId = null;
           }
         }
@@ -623,7 +625,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (this.product) {
             this.product.isActive = false;
           }
-          alert('Product deactivated successfully');
+          this.dialogService.success('Product deactivated successfully');
           this.pendingDeactivationProductId = null;
           this.deactivateWarningData = null;
         },
@@ -634,9 +636,9 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (error?.status === 400 && error?.error?.code === 'DEACTIVATE_BLOCKED') {
             const blocked: DeactivateProductBlocked = error.error;
             const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
-            alert(message);
+            this.dialogService.error(message);
           } else {
-            alert('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+            this.dialogService.error('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
           }
           this.pendingDeactivationProductId = null;
           this.deactivateWarningData = null;
@@ -651,57 +653,75 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   }
 
   activateProduct(): void {
-    if (this.product && confirm(`Are you sure you want to activate "${this.product.name}"?`)) {
-      this.isLoading = true;
-      this.productsService.activateProduct(this.product.id)
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => {
-            setTimeout(() => {
-              this.isLoading = false;
-              this.cdr.detectChanges();
-            }, 0);
-          })
-        )
-        .subscribe({
-          next: () => {
-            // Update the product status locally to reflect the change
-            if (this.product) {
-              this.product.isActive = true;
+    if (!this.product) return;
+    
+    this.dialogService.confirm(
+      `Are you sure you want to activate "${this.product.name}"?`,
+      'Activate Product',
+      'Activate',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed && this.product) {
+        this.isLoading = true;
+        this.productsService.activateProduct(this.product.id)
+          .pipe(
+            takeUntil(this.destroy$),
+            finalize(() => {
+              setTimeout(() => {
+                this.isLoading = false;
+                this.cdr.detectChanges();
+              }, 0);
+            })
+          )
+          .subscribe({
+            next: () => {
+              // Update the product status locally to reflect the change
+              if (this.product) {
+                this.product.isActive = true;
+              }
+              this.dialogService.success('Product activated successfully');
+            },
+            error: (error) => {
+              console.error('Error activating product:', error);
+              this.dialogService.error('Failed to activate product: ' + (error?.error?.message || 'Unknown error'));
             }
-            alert('Product activated successfully');
-          },
-          error: (error) => {
-            console.error('Error activating product:', error);
-            alert('Failed to activate product: ' + (error?.error?.message || 'Unknown error'));
-          }
-        });
-    }
+          });
+      }
+    });
   }
 
   deleteProduct(): void {
-    if (this.product && confirm(`Are you sure you want to DELETE "${this.product.name}"? This cannot be undone.`)) {
-      this.isLoading = true;
-      this.productsService.deleteProduct(this.product.id)
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => {
-            setTimeout(() => {
-              this.isLoading = false;
-              this.cdr.detectChanges();
-            }, 0);
-          })
-        )
-        .subscribe({
-          next: () => {
-            alert('Product deleted successfully');
-            this.goBack(); // Return to products list
-          },
-          error: (error) => {
-            console.error('Error deleting product:', error);
-            alert('Failed to delete product: ' + (error?.error?.message || 'Unknown error'));
-          }
-        });
-    }
+    if (!this.product) return;
+    
+    this.dialogService.confirm(
+      `Are you sure you want to DELETE "${this.product.name}"? This cannot be undone.`,
+      'Delete Product',
+      'Delete',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed && this.product) {
+        this.isLoading = true;
+        this.productsService.deleteProduct(this.product.id)
+          .pipe(
+            takeUntil(this.destroy$),
+            finalize(() => {
+              setTimeout(() => {
+                this.isLoading = false;
+                this.cdr.detectChanges();
+              }, 0);
+            })
+          )
+          .subscribe({
+            next: () => {
+              this.dialogService.success('Product deleted successfully');
+              this.goBack(); // Return to products list
+            },
+            error: (error) => {
+              console.error('Error deleting product:', error);
+              this.dialogService.error('Failed to delete product: ' + (error?.error?.message || 'Unknown error'));
+            }
+          });
+      }
+    });
   }
 }

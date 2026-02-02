@@ -295,6 +295,88 @@ form {
   background-color: var(--ag-color-layer-hover);
 }
 
+/* Small/Outline Button Styles */
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid var(--ag-button-primary);
+  color: var(--ag-button-primary);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background-color: var(--ag-button-primary);
+  color: white;
+}
+
+/* Input with Action (e.g., Check Availability button) */
+.input-with-action {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.input-with-action .form-input {
+  flex: 1;
+}
+
+.check-btn {
+  white-space: nowrap;
+  margin-top: 0;
+}
+
+/* Field Meta (counters) */
+.field-meta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.counter {
+  font-size: 0.75rem;
+  color: var(--ag-color-text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+
+/* Section description */
+.section-desc {
+  font-size: 0.85rem;
+  color: var(--ag-color-text-secondary);
+  margin: -0.5rem 0 0.5rem 0;
+}
+
+/* Valid input state */
+.form-input.is-valid,
+.form-textarea.is-valid {
+  border-color: var(--ag-color-support-success);
+}
+
+.form-input.is-valid:focus,
+.form-textarea.is-valid:focus {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+/* Submit disabled message */
+.submit-disabled-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--ag-tag-yellow-bg);
+  border: 1px solid var(--ag-color-support-warning);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--ag-tag-yellow-text);
+  margin-top: 1rem;
+}
+
+.submit-disabled-msg .icon {
+  font-size: 1rem;
+}
+
 /* Help Section */
 .help-section {
   background-color: var(--ag-color-layer-01);
@@ -364,6 +446,14 @@ form {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+
+  .input-with-action {
+    flex-direction: column;
+  }
+
+  .check-btn {
+    align-self: flex-end;
   }
 }
 

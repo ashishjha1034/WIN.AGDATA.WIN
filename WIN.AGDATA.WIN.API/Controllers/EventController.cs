@@ -599,6 +599,56 @@ public class EventController : ControllerBase
     }
 
     /// <summary>
+    /// Batch check-in all registered participants
+    /// </summary>
+    /// <remarks>
+    /// Admin-only. Checks in all registered participants for an event at once.
+    /// 
+    /// **Batch Check-in Rules:**
+    /// - Event must be in Active status
+    /// - Already checked-in participants are skipped
+    /// - Returns count of newly checked-in, already checked-in, and failed
+    /// </remarks>
+    /// <param name="id">Event ID</param>
+    /// <returns>Batch check-in result with counts</returns>
+    /// <response code="200">Batch check-in completed</response>
+    /// <response code="400">Event not active</response>
+    /// <response code="403">Forbidden - admin only</response>
+    [HttpPost("{id:guid}/batch-check-in")]
+    [Authorize(Policy = "AdminOnly")]
+    [SwaggerOperation(Summary = "Batch check-in all participants", Description = "Admin only. Check in all registered participants at once. Event must be Active.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> BatchCheckInParticipants(Guid id)
+    {
+        try
+        {
+            var command = new BatchCheckInCommand(id);
+            var result = await _mediator.Send(command);
+
+            return Ok(new 
+            { 
+                message = "Batch check-in completed",
+                eventId = id,
+                totalRegistered = result.TotalRegistered,
+                checkedIn = result.CheckedIn,
+                alreadyCheckedIn = result.AlreadyCheckedIn,
+                failed = result.Failed
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message, eventId = id });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to batch check in participants", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Update participant attendance status
     /// </summary>
     /// <remarks>

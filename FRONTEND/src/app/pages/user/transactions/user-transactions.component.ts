@@ -7,6 +7,8 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserSidebarComponent } from '../../../components/user-sidebar/user-sidebar.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 
 export interface Transaction {
   id: string;
@@ -22,7 +24,7 @@ export interface Transaction {
 }
 
 export interface TransactionFilters {
-  type: 'all' | 'earned' | 'redeemed';
+  type: 'all' | 'earned' | 'redeemed' | 'refunded' | 'adjusted';
   startDate: string | null;
   endDate: string | null;
   searchQuery: string;
@@ -33,7 +35,7 @@ export interface TransactionFilters {
   templateUrl: './user-transactions.component.html',
   styleUrls: ['./user-transactions.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, UserSidebarComponent]
+  imports: [CommonModule, FormsModule, UserSidebarComponent, PaginationComponent]
 })
 export class UserTransactionsComponent implements OnInit, OnDestroy {
   currentUser: any;
@@ -52,7 +54,7 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
   
   // Pagination
   currentPage = 1;
-  pageSize = 20;
+  pageSize = 10;
   totalTransactions = 0;
   pageSizeOptions = [10, 20, 50, 100];
   
@@ -163,9 +165,13 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
       filtered = filtered.filter(t => {
         const type = t.type.toLowerCase();
         if (this.filters.type === 'earned') {
-          return type === 'earned' || t.points > 0;
+          return type === 'earned';
         } else if (this.filters.type === 'redeemed') {
-          return type === 'redeemed' || t.points < 0;
+          return type === 'redeemed';
+        } else if (this.filters.type === 'refunded') {
+          return type === 'refunded';
+        } else if (this.filters.type === 'adjusted') {
+          return type === 'adjusted';
         }
         return true;
       });
@@ -331,13 +337,47 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
   }
 
   // Helper methods
-  getTransactionClass(points: number): string {
+  getTransactionClass(points: number, type?: string): string {
+    // If type is provided, use it to determine class
+    if (type) {
+      const typeLower = type.toLowerCase();
+      // Redeemed transactions should always show as negative (red)
+      if (typeLower === 'redeemed') return 'negative';
+      // Earned and Refunded transactions should show as positive (green)
+      if (typeLower === 'earned' || typeLower === 'refunded') return 'positive';
+    }
+    // Fallback to points-based logic
     return points >= 0 ? 'positive' : 'negative';
   }
 
-  formatPoints(points: number): string {
+  formatPoints(points: number, type?: string): string {
+    // Determine the effective sign based on transaction type
+    if (type) {
+      const typeLower = type.toLowerCase();
+      // Redeemed transactions should show as negative
+      if (typeLower === 'redeemed') {
+        return `-${Math.abs(points).toLocaleString()}`;
+      }
+      // Earned and Refunded transactions should show as positive
+      if (typeLower === 'earned' || typeLower === 'refunded') {
+        return `+${Math.abs(points).toLocaleString()}`;
+      }
+    }
+    // Fallback to original logic
     const prefix = points > 0 ? '+' : '';
     return `${prefix}${points.toLocaleString()}`;
+  }
+
+  getBalanceBefore(transaction: Transaction): number {
+    // Calculate balance before based on transaction type
+    // Points are stored as positive values
+    const type = transaction.type?.toLowerCase();
+    if (type === 'redeemed') {
+      // For redeemed, balance before was higher (add back the points)
+      return transaction.balanceAfter + Math.abs(transaction.points);
+    }
+    // For earned/refunded, balance before was lower (subtract the points)
+    return transaction.balanceAfter - Math.abs(transaction.points);
   }
 
   getSourceIcon(source: string): string {
@@ -353,6 +393,19 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     }
   }
 
+  getSourceFontAwesomeClass(source: string): string {
+    switch (source.toLowerCase()) {
+      case 'event':
+        return 'fa-solid fa-calendar-check';
+      case 'product':
+        return 'fa-solid fa-gift';
+      case 'admin':
+        return 'fa-solid fa-gear';
+      default:
+        return 'fa-solid fa-clipboard-list';
+    }
+  }
+
   getSourceClass(source: string): string {
     return `source-${source.toLowerCase()}`;
   }
@@ -361,6 +414,8 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     const typeLower = type.toLowerCase();
     if (typeLower === 'earned') return 'Earned';
     if (typeLower === 'redeemed') return 'Redeemed';
+    if (typeLower === 'refunded') return 'Refunded';
+    if (typeLower === 'adjusted') return 'Adjusted';
     return type;
   }
 
@@ -368,19 +423,34 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     const typeLower = type.toLowerCase();
     if (typeLower === 'earned') return 'type-earned';
     if (typeLower === 'redeemed') return 'type-redeemed';
+    if (typeLower === 'refunded') return 'type-refunded';
+    if (typeLower === 'adjusted') return 'type-adjusted';
     return '';
   }
 
   formatFullDate(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return '';
+    // Convert UTC to IST for display
+    const istDate = utcToIst(dateString);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    const weekday = istDate.toLocaleString('en-US', { weekday: 'long', timeZone: 'UTC' });
+    let hours = istDate.getUTCHours();
+    const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${weekday}, ${month} ${day}, ${year}, ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  }
+
+  formatShortDate(dateString: string): string {
+    if (!dateString) return '';
+    const istDate = utcToIst(dateString);
+    const day = istDate.getUTCDate();
+    const month = istDate.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = istDate.getUTCFullYear();
+    return `${month} ${day}, ${year}`;
   }
 
   getProcessedByLabel(processedBy: string | null): string {

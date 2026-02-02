@@ -25,7 +25,33 @@ export const ValidationConstants = {
   STOCK_MAX: 1_000_000,
   IMAGE_URL_MAX_LENGTH: 1000,
   
-  DEBOUNCE_TIME_MS: 500
+  DEBOUNCE_TIME_MS: 500,
+  
+  // =============================================
+  // EVENT VALIDATION CONSTANTS (matching backend)
+  // =============================================
+  EVENT_NAME_MIN_LENGTH: 2,
+  EVENT_NAME_MAX_LENGTH: 50,
+  EVENT_NAME_MIN_WORDS: 1,
+  EVENT_NAME_MAX_WORDS: 7,
+  
+  EVENT_DESCRIPTION_MIN_LENGTH: 20,
+  EVENT_DESCRIPTION_MAX_LENGTH: 500,
+  EVENT_DESCRIPTION_MIN_WORDS: 3,
+  EVENT_DESCRIPTION_MAX_WORDS: 100,
+  
+  EVENT_LOCATION_MIN_LENGTH: 2,
+  EVENT_LOCATION_MAX_LENGTH: 100,
+  EVENT_LOCATION_MAX_WORDS: 16,
+  
+  EVENT_MAX_PARTICIPANTS_MIN: 1,
+  EVENT_MAX_PARTICIPANTS_MAX: 100_000,
+  
+  EVENT_POINTS_POOL_MIN: 1,
+  EVENT_POINTS_POOL_MAX: 1_000_000,
+  
+  // IST Timezone offset in hours (UTC+5:30)
+  IST_OFFSET_HOURS: 5.5
 };
 
 /**
@@ -253,6 +279,245 @@ export class CustomValidators {
       
       const valid = Number.isInteger(Number(value));
       return valid ? null : { integer: { message: 'Must be a whole number' } };
+    };
+  }
+
+  // =============================================
+  // EVENT VALIDATORS
+  // =============================================
+
+  /**
+   * Validates event name: 1-7 alphanumeric words, single spaces only, no consecutive/leading/trailing spaces.
+   * Characters are counted after trimming (excluding spaces); words are counted by spaces.
+   * Returns specific error messages in priority order for live validation feedback.
+   */
+  static eventNameFormat(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const name = control.value;
+      if (!name) return null;
+
+      const trimmed = name.trim();
+
+      // Priority 1: Check for leading/trailing spaces
+      if (name !== trimmed && trimmed.length > 0) {
+        return { eventNameFormat: { message: 'Event name cannot have leading or trailing spaces' } };
+      }
+
+      // Priority 2: Check for consecutive spaces
+      if (name.includes('  ')) {
+        return { eventNameFormat: { message: 'Use single spaces only. Remove consecutive spaces.' } };
+      }
+
+      // Priority 3: Check for special symbols FIRST (most common user error)
+      const words = trimmed.split(' ').filter((w: string) => w.length > 0);
+      const alphanumericPattern = /^[a-zA-Z0-9]+$/;
+      for (const word of words) {
+        if (!alphanumericPattern.test(word)) {
+          // Determine the specific character issue
+          if (/[!@#$%^&*()_+=\[\]{};':"\\|,.<>\/?~`-]/.test(word)) {
+            return { eventNameFormat: { message: 'No special symbols allowed' } };
+          }
+          return { eventNameFormat: { message: 'Each word must be alphanumeric only (letters and numbers)' } };
+        }
+      }
+
+      // Priority 4: Count characters (excluding spaces)
+      const charCountNoSpaces = trimmed.replace(/ /g, '').length;
+      if (charCountNoSpaces < ValidationConstants.EVENT_NAME_MIN_LENGTH) {
+        return { eventNameFormat: { message: `At least ${ValidationConstants.EVENT_NAME_MIN_LENGTH} characters required (excluding spaces). Currently: ${charCountNoSpaces}` } };
+      }
+      if (charCountNoSpaces > ValidationConstants.EVENT_NAME_MAX_LENGTH) {
+        return { eventNameFormat: { message: `Maximum ${ValidationConstants.EVENT_NAME_MAX_LENGTH} characters (excluding spaces). Currently: ${charCountNoSpaces}` } };
+      }
+
+      // Priority 5: Count words
+      if (words.length < ValidationConstants.EVENT_NAME_MIN_WORDS) {
+        return { eventNameFormat: { message: `At least ${ValidationConstants.EVENT_NAME_MIN_WORDS} word required` } };
+      }
+      if (words.length > ValidationConstants.EVENT_NAME_MAX_WORDS) {
+        return { eventNameFormat: { message: `Maximum ${ValidationConstants.EVENT_NAME_MAX_WORDS} words allowed. Currently: ${words.length}. Remove extra words or abbreviate.` } };
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates event description: required, min/max chars and words.
+   */
+  static eventDescriptionFormat(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const desc = control.value;
+      if (!desc) return null;
+
+      const trimmed = desc.trim();
+
+      // Count characters
+      if (trimmed.length < ValidationConstants.EVENT_DESCRIPTION_MIN_LENGTH) {
+        return { eventDescriptionFormat: { message: `At least ${ValidationConstants.EVENT_DESCRIPTION_MIN_LENGTH} characters required. Currently: ${trimmed.length}` } };
+      }
+      if (trimmed.length > ValidationConstants.EVENT_DESCRIPTION_MAX_LENGTH) {
+        return { eventDescriptionFormat: { message: `Maximum ${ValidationConstants.EVENT_DESCRIPTION_MAX_LENGTH} characters allowed. Currently: ${trimmed.length}` } };
+      }
+
+      // Count words
+      const words = trimmed.split(/\s+/).filter((w: string) => w.length > 0);
+      if (words.length < ValidationConstants.EVENT_DESCRIPTION_MIN_WORDS) {
+        return { eventDescriptionFormat: { message: `At least ${ValidationConstants.EVENT_DESCRIPTION_MIN_WORDS} words required. Currently: ${words.length}` } };
+      }
+      if (words.length > ValidationConstants.EVENT_DESCRIPTION_MAX_WORDS) {
+        return { eventDescriptionFormat: { message: `Maximum ${ValidationConstants.EVENT_DESCRIPTION_MAX_WORDS} words allowed. Currently: ${words.length}` } };
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates event location: alphanumeric words with single spaces, min/max chars, max 16 words.
+   */
+  static eventLocationFormat(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const loc = control.value;
+      if (!loc || !loc.trim()) return null; // Optional field
+
+      const trimmed = loc.trim();
+
+      // Check for leading/trailing spaces
+      if (loc !== trimmed) {
+        return { eventLocationFormat: { message: 'Location cannot have leading or trailing spaces' } };
+      }
+
+      // Check for consecutive spaces
+      if (loc.includes('  ')) {
+        return { eventLocationFormat: { message: 'Use single spaces only. Remove consecutive spaces.' } };
+      }
+
+      // Count characters (excluding spaces)
+      const charCountNoSpaces = trimmed.replace(/ /g, '').length;
+      if (charCountNoSpaces < ValidationConstants.EVENT_LOCATION_MIN_LENGTH) {
+        return { eventLocationFormat: { message: `At least ${ValidationConstants.EVENT_LOCATION_MIN_LENGTH} characters required (excluding spaces)` } };
+      }
+      if (charCountNoSpaces > ValidationConstants.EVENT_LOCATION_MAX_LENGTH) {
+        return { eventLocationFormat: { message: `Maximum ${ValidationConstants.EVENT_LOCATION_MAX_LENGTH} characters (excluding spaces). Currently: ${charCountNoSpaces}` } };
+      }
+
+      // Count words
+      const words = trimmed.split(' ').filter((w: string) => w.length > 0);
+      if (words.length > ValidationConstants.EVENT_LOCATION_MAX_WORDS) {
+        return { eventLocationFormat: { message: `Maximum ${ValidationConstants.EVENT_LOCATION_MAX_WORDS} words allowed. Currently: ${words.length}` } };
+      }
+
+      // Each word must be alphanumeric only
+      const alphanumericPattern = /^[a-zA-Z0-9]+$/;
+      for (const word of words) {
+        if (!alphanumericPattern.test(word)) {
+          return { eventLocationFormat: { message: `Each word must be alphanumeric only. Invalid: "${word}"` } };
+        }
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates max participants: integer only, 1-100,000.
+   */
+  static eventMaxParticipants(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (value === null || value === undefined || value === '') return null;
+
+      const numValue = Number(value);
+
+      if (!Number.isInteger(numValue)) {
+        return { eventMaxParticipants: { message: 'Must be a whole number (no decimals)' } };
+      }
+
+      if (numValue < ValidationConstants.EVENT_MAX_PARTICIPANTS_MIN) {
+        return { eventMaxParticipants: { message: `Minimum ${ValidationConstants.EVENT_MAX_PARTICIPANTS_MIN}. Zero is not allowed.` } };
+      }
+
+      if (numValue > ValidationConstants.EVENT_MAX_PARTICIPANTS_MAX) {
+        return { eventMaxParticipants: { message: `Maximum ${ValidationConstants.EVENT_MAX_PARTICIPANTS_MAX.toLocaleString()}` } };
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates total points pool: integer only, 1-1,000,000.
+   */
+  static eventPointsPool(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (value === null || value === undefined || value === '') return null;
+
+      const numValue = Number(value);
+
+      if (!Number.isInteger(numValue)) {
+        return { eventPointsPool: { message: 'Must be a whole number (no decimals)' } };
+      }
+
+      if (numValue < ValidationConstants.EVENT_POINTS_POOL_MIN) {
+        return { eventPointsPool: { message: `Minimum ${ValidationConstants.EVENT_POINTS_POOL_MIN}. Zero is not allowed.` } };
+      }
+
+      if (numValue > ValidationConstants.EVENT_POINTS_POOL_MAX) {
+        return { eventPointsPool: { message: `Maximum ${ValidationConstants.EVENT_POINTS_POOL_MAX.toLocaleString()}` } };
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates that a date is in the future.
+   * Allows a 1-minute buffer to account for timing differences.
+   */
+  static futureDate(): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (!value) return null;
+
+      const date = new Date(value);
+      const now = new Date();
+      
+      // Add 1-minute buffer to avoid timing issues
+      const nowMinusBuffer = new Date(now.getTime() - 60000); // 1 minute ago
+
+      if (date <= nowMinusBuffer) {
+        return { futureDate: { message: 'Date must be in the future' } };
+      }
+
+      return null;
+    };
+  }
+
+  /**
+   * Validates that registration deadline is before event date.
+   * @param eventDateControlName The name of the event date form control
+   */
+  static registrationBeforeEvent(eventDateControlName: string): ValidatorFn {
+    return (control: AbstractControl): ValidationErrors | null => {
+      const regEndValue = control.value;
+      if (!regEndValue) return null;
+
+      const parent = control.parent;
+      if (!parent) return null;
+
+      const eventDateControl = parent.get(eventDateControlName);
+      if (!eventDateControl || !eventDateControl.value) return null;
+
+      const regEndDate = new Date(regEndValue);
+      const eventDate = new Date(eventDateControl.value);
+
+      if (regEndDate >= eventDate) {
+        return { registrationBeforeEvent: { message: 'Registration deadline must be before event date' } };
+      }
+
+      return null;
     };
   }
 }

@@ -19,6 +19,7 @@ import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-s
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AuthService } from '../../../services/auth.service';
 import { UserListItem, UserFilterCriteria, InviteUserRequest, DeactivateUserWarnings, DeactivateUserBlocked, DeactivateUserWarningData } from '../../../models/user.models';
+import { DialogService } from '../../../services/dialog.service';
 
 import { UserTableComponent, UserTableAction } from './components/user-table.component';
 import { UserDetailDrawerComponent, DrawerAction } from './components/user-detail-drawer.component';
@@ -200,7 +201,8 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   constructor(
     private adminUsersService: AdminUsersService,
     private authService: AuthService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
   ) {
     // Debounce search
     this.searchSubject.pipe(
@@ -561,10 +563,17 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    * Reset user password
    */
   private resetUserPassword(userId: string): void {
-    if (confirm('Send password reset email to this user?')) {
-      console.log('Resetting password for user:', userId);
-      this.showSuccess('Password reset email sent!');
-    }
+    this.dialogService.confirm(
+      'Send password reset email to this user?',
+      'Reset Password',
+      'Send Email',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        console.log('Resetting password for user:', userId);
+        this.showSuccess('Password reset email sent!');
+      }
+    });
   }
 
   /**
@@ -578,22 +587,29 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
       this.deactivateUser(user.id);
     } else {
       // Activating - simple confirm and activate
-      if (confirm(`Are you sure you want to activate this user?`)) {
-        this.adminUsersService.activateUser(user.id).pipe(
-          takeUntil(this.destroy$)
-        ).subscribe({
-          next: () => {
-            this.showSuccess('User activated successfully!');
-            this.loadUsers();
-            if (this.isDrawerOpen) {
-              this.closeDrawer();
+      this.dialogService.confirm(
+        'Are you sure you want to activate this user?',
+        'Activate User',
+        'Activate',
+        'Cancel'
+      ).subscribe(result => {
+        if (result.confirmed) {
+          this.adminUsersService.activateUser(user.id).pipe(
+            takeUntil(this.destroy$)
+          ).subscribe({
+            next: () => {
+              this.showSuccess('User activated successfully!');
+              this.loadUsers();
+              if (this.isDrawerOpen) {
+                this.closeDrawer();
+              }
+            },
+            error: () => {
+              this.showError('Failed to activate user');
             }
-          },
-          error: () => {
-            this.showError('Failed to activate user');
-          }
-        });
-      }
+          });
+        }
+      });
     }
   }
 
@@ -732,19 +748,26 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    * Delete user
    */
   private deleteUser(userId: string): void {
-    if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      this.adminUsersService.deleteUser(userId).pipe(
-        takeUntil(this.destroy$)
-      ).subscribe({
-        next: () => {
-          this.showSuccess('User deleted successfully!');
-          this.loadUsers();
-        },
-        error: () => {
-          this.showError('Failed to delete user');
-        }
-      });
-    }
+    this.dialogService.confirm(
+      'Are you sure you want to delete this user? This action cannot be undone.',
+      'Delete User',
+      'Delete',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        this.adminUsersService.deleteUser(userId).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
+          next: () => {
+            this.showSuccess('User deleted successfully!');
+            this.loadUsers();
+          },
+          error: () => {
+            this.showError('Failed to delete user');
+          }
+        });
+      }
+    });
   }
 
   ngOnDestroy(): void {

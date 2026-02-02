@@ -8,12 +8,12 @@ namespace WIN.AGDATA.WIN.Domain.Entities.Transactions;
 public class UserPointsTransaction : Entity<Guid>
 {
     public Guid UserId { get; private set; }
-    public int Points { get; private set; } // positive = earn, negative = spend
+    public decimal Points { get; private set; } // positive = earn, negative = spend
     public PointsTransactionType TransactionType { get; private set; }
     public string Source { get; private set; } = null!;
     public Guid? SourceId { get; private set; }
     public string Description { get; private set; } = null!;
-    public int BalanceAfter { get; private set; }
+    public decimal BalanceAfter { get; private set; }
     public DateTime Timestamp { get; private set; }
     public Guid? ProcessedBy { get; private set; }
 
@@ -23,12 +23,12 @@ public class UserPointsTransaction : Entity<Guid>
 
     public UserPointsTransaction(
         Guid userId,
-        int points,
+        decimal points,
         PointsTransactionType type,
         string source,
         Guid? sourceId,
         string description,
-        int balanceAfter,
+        decimal balanceAfter,
         Guid processedBy)
         : base(Guid.NewGuid())
     {
@@ -46,35 +46,45 @@ public class UserPointsTransaction : Entity<Guid>
     // Factory method for easy creation
     public static UserPointsTransaction CreateEarned(
         Guid userId,
-        int points,
+        decimal points,
         string source,
         Guid? sourceId,
         string description,
-        int balanceAfter,
+        decimal balanceAfter,
         Guid processedBy)
         => new(userId, points, PointsTransactionType.Earned, source, sourceId, description, balanceAfter, processedBy);
 
     public static UserPointsTransaction CreateRedeemed(
         Guid userId,
-        int points,
+        decimal points,
         string source,
         Guid? sourceId,
         string description,
-        int balanceAfter,
+        decimal balanceAfter,
         Guid processedBy)
         => new(userId, points, PointsTransactionType.Redeemed, source, sourceId, description, balanceAfter, processedBy);
 
     public static UserPointsTransaction CreateAdjusted(
         Guid userId,
-        int points,
+        decimal points,
         string source,
         Guid? sourceId,
         string description,
-        int balanceAfter,
+        decimal balanceAfter,
         Guid processedBy)
     {
         var transactionType = points > 0 ? PointsTransactionType.Earned : PointsTransactionType.Redeemed;
         var absPoints = Math.Abs(points);
         return new(userId, absPoints, transactionType, source, sourceId, description, balanceAfter, processedBy);
     }
+
+    public static UserPointsTransaction CreateRefunded(
+        Guid userId,
+        decimal points,
+        string source,
+        Guid? sourceId,
+        string description,
+        decimal balanceAfter,
+        Guid processedBy)
+        => new(userId, points, PointsTransactionType.Refunded, source, sourceId, description, balanceAfter, processedBy);
 }

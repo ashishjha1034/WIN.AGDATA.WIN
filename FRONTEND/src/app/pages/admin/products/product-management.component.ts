@@ -22,6 +22,8 @@ import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { ProductFormModalComponent } from './product-form-modal.component';
 import { DeactivateConfirmationDialogComponent, DeactivateWarningData } from './deactivate-confirmation-dialog.component';
+import { PaginationComponent } from '../../../shared/components/pagination.component';
+import { DialogService } from '../../../services/dialog.service';
 
 // Low stock product interface for chart
 interface LowStockChartProduct {
@@ -36,7 +38,7 @@ interface LowStockChartProduct {
   templateUrl: './product-management.component.html',
   styleUrls: ['./product-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent, DeactivateConfirmationDialogComponent],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent, DeactivateConfirmationDialogComponent, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
   ]
@@ -155,7 +157,8 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     private productsService: ProductsService,
     private authService: AuthService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
   ) {
     // Bind the click handler in constructor to maintain reference
     this.documentClickHandler = this.onDocumentClick.bind(this);
@@ -872,21 +875,29 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     const product = this.products.find(p => p.id === productId);
     if (!product) return;
     
-    if (confirm(`Are you sure you want to activate "${product.name}"?`)) {
-      this.isLoading = true;
-      this.productsService.activateProduct(productId).subscribe({
-        next: (response) => {
-          console.log('Product activated successfully:', response);
-          this.loadProducts(); // Reload products to reflect changes
-        },
-        error: (error) => {
-          console.error('Error activating product:', error);
-          this.isLoading = false;
-          // Handle error appropriately
-          alert('Failed to activate product. Please try again.');
-        }
-      });
-    }
+    this.dialogService.confirm(
+      `Are you sure you want to activate "${product.name}"?`,
+      'Activate Product',
+      'Activate',
+      'Cancel'
+    ).subscribe(result => {
+      if (result.confirmed) {
+        this.isLoading = true;
+        this.productsService.activateProduct(productId).subscribe({
+          next: (response) => {
+            console.log('Product activated successfully:', response);
+            this.dialogService.success('Product activated successfully');
+            this.loadProducts(); // Reload products to reflect changes
+          },
+          error: (error) => {
+            console.error('Error activating product:', error);
+            this.isLoading = false;
+            // Handle error appropriately
+            this.dialogService.error('Failed to activate product. Please try again.');
+          }
+        });
+      }
+    });
   }
 
   /**

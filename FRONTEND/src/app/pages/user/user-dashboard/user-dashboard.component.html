@@ -1,249 +1,226 @@
 <div class="user-dashboard-wrapper">
   <app-user-sidebar></app-user-sidebar>
 
-  <div class="user-dashboard-main">
-    <!-- Top Header -->
-    <div class="dashboard-header">
-      <div class="search-container">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="11" cy="11" r="8"></circle>
-          <path d="m21 21-4.35-4.35"></path>
-        </svg>
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search..."
-          [(ngModel)]="searchQuery"
-          (input)="onSearch(searchQuery)"
-        />
-      </div>
-
-      <div class="header-right">
-        <div class="user-menu">
-          <span class="user-label">Employee</span>
-          <div class="user-avatar-small">
-            {{ currentUser?.firstName?.charAt(0) || '' }}{{ currentUser?.lastName?.charAt(0) || '' }}
-          </div>
-        </div>
-        <button class="logout-btn" (click)="logout()">Logout</button>
-      </div>
-    </div>
-
-    <!-- Dashboard Content -->
-    <div class="dashboard-content">
+  <main class="user-dashboard-main">
+    <!-- Page Header -->
+    <header class="page-header">
       <h1 class="page-title">Dashboard</h1>
+      <div class="user-info">
+        <div class="user-avatar">{{ currentUser?.firstName?.charAt(0) || 'U' }}</div>
+        <div class="user-details">
+          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
+          <span class="role-badge">Employee</span>
+        </div>
+      </div>
+    </header>
 
+    <!-- Main Content Area -->
+    <div class="main-content">
       <!-- Error Message -->
       <div *ngIf="errorMessage" class="error-alert">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-        </svg>
+        <i class="fa-solid fa-triangle-exclamation"></i>
         <span>{{ errorMessage }}</span>
       </div>
 
-      <!-- Loading Indicator -->
-      <div *ngIf="isLoading" class="loading-indicator">
-        <div class="spinner"></div>
+      <!-- Loading State -->
+      <div *ngIf="isLoading" class="loading-state">
+        <div class="loading-spinner"></div>
         <p>Loading dashboard data...</p>
       </div>
 
-      <!-- Points Summary Cards (Top Row) -->
-      <div class="stats-grid" *ngIf="!isLoading && stats">
-        <!-- Current Balance Card - Primary -->
-        <div class="stat-card primary">
-          <div class="stat-icon balance">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <h3 class="stat-label">Current Balance</h3>
-            <p class="stat-value">{{ stats.currentBalance | number }}</p>
-            <span class="stat-unit">Points</span>
-          </div>
-        </div>
-
-        <!-- Points Earned Card -->
-        <div class="stat-card">
-          <div class="stat-icon earned">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 14l5-5 5 5z"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <h3 class="stat-label">Points Earned</h3>
-            <p class="stat-value">{{ stats.pointsEarned | number }}</p>
-            <span class="stat-unit">Points</span>
-          </div>
-        </div>
-
-        <!-- Points Redeemed Card -->
-        <div class="stat-card">
-          <div class="stat-icon redeemed">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 10l5 5 5-5z"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <h3 class="stat-label">Points Redeemed</h3>
-            <p class="stat-value">{{ stats.pointsRedeemed | number }}</p>
-            <span class="stat-unit">Points</span>
-          </div>
-        </div>
-
-        <!-- Events Registered Card -->
-        <div class="stat-card">
-          <div class="stat-icon events">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <h3 class="stat-label">Events Registered</h3>
-            <p class="stat-value">{{ stats.eventsRegistered }}</p>
-            <span class="stat-unit">Events</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Middle Section: Recent Transactions & Upcoming Events -->
-      <div class="dashboard-grid" *ngIf="!isLoading">
-        <!-- Recent Transactions -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Recent Transactions</h2>
-          </div>
-          <div class="card-body">
-            <div class="transactions-list" *ngIf="recentTransactions && recentTransactions.length > 0; else noTransactions">
-              <div class="transaction-item" *ngFor="let transaction of recentTransactions">
-                <div class="transaction-info">
-                  <span class="transaction-desc">{{ transaction.description || transaction.type }}</span>
-                </div>
-                <span class="transaction-points" [ngClass]="getTransactionClass(transaction.points)">
-                  {{ transaction.points >= 0 ? '+' : '' }}{{ transaction.points | number }} Points
-                </span>
+      <ng-container *ngIf="!isLoading">
+        <!-- KPI Stats Grid -->
+        <section class="kpi-section" *ngIf="stats">
+          <div class="kpi-grid">
+            <!-- Current Balance Card - Primary -->
+            <div class="kpi-card primary">
+              <div class="kpi-icon">
+                <i class="fa-solid fa-wallet"></i>
+              </div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ stats.currentBalance | number }}</div>
+                <div class="kpi-label">Current Balance</div>
+                <span class="kpi-unit">Points</span>
               </div>
             </div>
-            <ng-template #noTransactions>
-              <p class="empty-state">No transactions yet</p>
-            </ng-template>
-          </div>
-          <div class="card-footer">
-            <button class="btn-link" (click)="viewAllTransactions()">View All →</button>
-          </div>
-        </div>
 
-        <!-- Upcoming Events -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Upcoming Events</h2>
+            <!-- Points Earned Card -->
+            <div class="kpi-card">
+              <div class="kpi-icon earned">
+                <i class="fa-solid fa-arrow-trend-up"></i>
+              </div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ stats.pointsEarned | number }}</div>
+                <div class="kpi-label">Points Earned</div>
+                <span class="kpi-unit">Points</span>
+              </div>
+            </div>
+
+            <!-- Points Redeemed Card -->
+            <div class="kpi-card">
+              <div class="kpi-icon redeemed">
+                <i class="fa-solid fa-arrow-trend-down"></i>
+              </div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ stats.pointsRedeemed | number }}</div>
+                <div class="kpi-label">Points Redeemed</div>
+                <span class="kpi-unit">Points</span>
+              </div>
+            </div>
+
+            <!-- Events Registered Card -->
+            <div class="kpi-card">
+              <div class="kpi-icon events">
+                <i class="fa-solid fa-calendar-check"></i>
+              </div>
+              <div class="kpi-content">
+                <div class="kpi-value">{{ stats.eventsRegistered }}</div>
+                <div class="kpi-label">Events Registered</div>
+                <span class="kpi-unit">Events</span>
+              </div>
+            </div>
           </div>
-          <div class="card-body">
-            <div class="events-list" *ngIf="upcomingEvents && upcomingEvents.length > 0; else noEvents">
-              <div class="event-item" *ngFor="let event of upcomingEvents">
-                <div class="event-icon">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
-                  </svg>
-                </div>
-                <div class="event-info">
-                  <h3 class="event-name">{{ event.name }}</h3>
-                  <span class="event-badge" [ngClass]="getEventStatusBadgeClass(event)">
-                    {{ getEventStatusText(event) }}
+        </section>
+
+        <!-- Middle Grid: Transactions & Events -->
+        <section class="dashboard-grid">
+          <!-- Recent Transactions -->
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <i class="fa-solid fa-receipt"></i>
+                Recent Transactions
+              </h2>
+            </div>
+            <div class="card-body">
+              <div class="transactions-list" *ngIf="recentTransactions && recentTransactions.length > 0; else noTransactions">
+                <div class="transaction-item" *ngFor="let transaction of recentTransactions">
+                  <div class="transaction-info">
+                    <i class="fa-solid fa-circle-dot transaction-dot" [ngClass]="getTransactionClass(transaction.points)"></i>
+                    <span class="transaction-desc">{{ transaction.description || transaction.type }}</span>
+                  </div>
+                  <span class="transaction-points" [ngClass]="getTransactionClass(transaction.points)">
+                    {{ transaction.points >= 0 ? '+' : '' }}{{ transaction.points | number }}
                   </span>
                 </div>
-                <div class="event-date">
-                  {{ event.eventDate | date: 'MMM d, yyyy' }}
+              </div>
+              <ng-template #noTransactions>
+                <div class="empty-state-mini">
+                  <i class="fa-solid fa-receipt"></i>
+                  <p>No transactions yet</p>
+                </div>
+              </ng-template>
+            </div>
+            <div class="card-footer">
+              <button class="btn-link" (click)="viewAllTransactions()">
+                View All
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Upcoming Events -->
+          <div class="dashboard-card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <i class="fa-solid fa-calendar-days"></i>
+                Upcoming Events
+              </h2>
+            </div>
+            <div class="card-body">
+              <div class="events-list" *ngIf="upcomingEvents && upcomingEvents.length > 0; else noEvents">
+                <div class="event-item" *ngFor="let event of upcomingEvents">
+                  <div class="event-icon">
+                    <i class="fa-solid fa-calendar"></i>
+                  </div>
+                  <div class="event-info">
+                    <h3 class="event-name">{{ event.name }}</h3>
+                    <span class="event-badge" [ngClass]="getEventStatusBadgeClass(event)">
+                      {{ getEventStatusText(event) }}
+                    </span>
+                  </div>
+                  <div class="event-date">
+                    {{ formatEventDate(event.eventDate) }}
+                  </div>
+                </div>
+              </div>
+              <ng-template #noEvents>
+                <div class="empty-state-mini">
+                  <i class="fa-solid fa-calendar-xmark"></i>
+                  <p>No upcoming events</p>
+                </div>
+              </ng-template>
+            </div>
+            <div class="card-footer">
+              <button class="btn-link" (click)="viewAllEvents()">
+                See All
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bottom Grid: Rewards & Redemptions -->
+        <section class="dashboard-grid-bottom">
+          <!-- Top Rewards Available -->
+          <div class="dashboard-card rewards-card">
+            <div class="rewards-content">
+              <div class="rewards-icon">
+                <i class="fa-solid fa-gift"></i>
+              </div>
+              <h2 class="rewards-title">Top Rewards Available</h2>
+              <p class="rewards-subtitle">Browse and redeem exciting rewards with your points</p>
+              <button class="btn-primary" (click)="browseRewards()">
+                <i class="fa-solid fa-store"></i>
+                Browse Rewards
+              </button>
+            </div>
+          </div>
+
+          <!-- Redemption Status -->
+          <div class="dashboard-card" *ngIf="redemptionCounts">
+            <div class="card-header">
+              <h2 class="card-title">
+                <i class="fa-solid fa-box"></i>
+                Redemption Status
+              </h2>
+            </div>
+            <div class="card-body">
+              <div class="redemption-status-grid">
+                <div class="status-item">
+                  <div class="status-icon pending">
+                    <i class="fa-regular fa-clock"></i>
+                  </div>
+                  <div class="status-info">
+                    <span class="status-count">{{ redemptionCounts.pending }}</span>
+                    <span class="status-label">Pending</span>
+                  </div>
+                </div>
+
+                <div class="status-item">
+                  <div class="status-icon approved">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </div>
+                  <div class="status-info">
+                    <span class="status-count">{{ redemptionCounts.approved }}</span>
+                    <span class="status-label">Approved</span>
+                  </div>
+                </div>
+
+                <div class="status-item">
+                  <div class="status-icon delivered">
+                    <i class="fa-solid fa-truck"></i>
+                  </div>
+                  <div class="status-info">
+                    <span class="status-count">{{ redemptionCounts.delivered }}</span>
+                    <span class="status-label">Delivered</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <ng-template #noEvents>
-              <p class="empty-state">No upcoming events</p>
-            </ng-template>
           </div>
-          <div class="card-footer">
-            <button class="btn-link" (click)="viewAllEvents()">See All →</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom Section: Top Rewards & Redemption Status -->
-      <div class="dashboard-grid-bottom" *ngIf="!isLoading">
-        <!-- Top Rewards Available -->
-        <div class="card rewards-card">
-          <div class="card-body rewards-content">
-            <h2 class="rewards-title">Top Rewards Available</h2>
-            <div class="rewards-illustration">
-              <svg viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <!-- Gift boxes illustration -->
-                <rect x="20" y="40" width="50" height="50" fill="#2c5f3f" rx="4"/>
-                <rect x="20" y="35" width="50" height="10" fill="#1e4620" rx="2"/>
-                <rect x="42" y="25" width="6" height="20" fill="#1e4620"/>
-                
-                <rect x="80" y="50" width="40" height="40" fill="#d97706" rx="4"/>
-                <rect x="80" y="45" width="40" height="10" fill="#b45309" rx="2"/>
-                <rect x="97" y="35" width="6" height="20" fill="#b45309"/>
-                
-                <rect x="130" y="30" width="55" height="55" fill="#0284c7" rx="4"/>
-                <rect x="130" y="25" width="55" height="10" fill="#0369a1" rx="2"/>
-                <rect x="155" y="15" width="6" height="20" fill="#0369a1"/>
-              </svg>
-            </div>
-            <button class="btn-primary rewards-btn" (click)="browseRewards()">
-              Browse Rewards →
-            </button>
-          </div>
-        </div>
-
-        <!-- Redemption Status -->
-        <div class="card" *ngIf="redemptionCounts">
-          <div class="card-header">
-            <h2 class="card-title">Redemption Status</h2>
-          </div>
-          <div class="card-body">
-            <div class="redemption-status-grid">
-              <div class="status-item">
-                <div class="status-icon pending">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                  </svg>
-                </div>
-                <div class="status-info">
-                  <span class="status-label">Pending Approvals</span>
-                  <span class="status-count">{{ redemptionCounts.pending }}</span>
-                  <span class="status-unit">Requests</span>
-                </div>
-              </div>
-
-              <div class="status-item">
-                <div class="status-icon approved">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                  </svg>
-                </div>
-                <div class="status-info">
-                  <span class="status-label">Approved</span>
-                  <span class="status-count">{{ redemptionCounts.approved }}</span>
-                  <span class="status-unit">Redemptions</span>
-                </div>
-              </div>
-
-              <div class="status-item">
-                <div class="status-icon delivered">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l6.09-6.09L17.5 9.5 10 17z"/>
-                  </svg>
-                </div>
-                <div class="status-info">
-                  <span class="status-label">Delivered</span>
-                  <span class="status-count">{{ redemptionCounts.delivered }}</span>
-                  <span class="status-unit">Shipment</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        </section>
+      </ng-container>
     </div>
-  </div>
+  </main>
 </div>

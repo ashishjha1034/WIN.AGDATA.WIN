@@ -18,7 +18,7 @@ public record BulkAwardEventPointsCommand(
     IReadOnlyList<ParticipantAward> Awards,
     DistributionMode Mode = DistributionMode.Manual,
     bool ConsumeEntirePool = false,
-    IReadOnlyList<int>? RankPoints = null
+    IReadOnlyList<decimal>? RankPoints = null
 ) : IRequest<BulkAwardResult>;
 
 /// <summary>
@@ -29,7 +29,7 @@ public record BulkAwardEventPointsCommand(
 /// <param name="Rank">Optional rank position</param>
 public record ParticipantAward(
     Guid ParticipantId,
-    int Points,
+    decimal Points,
     int? Rank = null
 );
 
@@ -42,7 +42,7 @@ public record ParticipantAward(
 /// <param name="RemainingPoolPoints">Remaining points in event pool after operation (null if unlimited)</param>
 public record BulkAwardResult(
     bool Success,
-    int TotalPointsAwarded,
+    decimal TotalPointsAwarded,
     int ParticipantsAwarded,
-    int? RemainingPoolPoints
+    decimal? RemainingPoolPoints
 );

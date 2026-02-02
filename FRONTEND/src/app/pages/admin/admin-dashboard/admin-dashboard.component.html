@@ -44,38 +44,44 @@
             <app-kpi-card
               label="Total Users"
               [value]="kpiData.totalUsers"
-              iconType="users">
+              iconType="users"
+              [routerLink]="['/admin/users']">
             </app-kpi-card>
             
             <app-kpi-card
               label="Total Events"
               [value]="kpiData.totalEvents"
-              iconType="events">
+              iconType="events"
+              [routerLink]="['/admin/events']">
             </app-kpi-card>
             
             <app-kpi-card
               label="Total Products"
               [value]="kpiData.totalProducts"
-              iconType="products">
+              iconType="products"
+              [routerLink]="['/admin/products']">
             </app-kpi-card>
             
             <!-- Row 2 -->
             <app-kpi-card
               label="Low Stock Products"
               [value]="kpiData.lowStockProducts"
-              iconType="low-stock">
+              iconType="low-stock"
+              [routerLink]="['/admin/products']">
             </app-kpi-card>
             
             <app-kpi-card
               label="Pending Redemptions"
               [value]="kpiData.pendingRedemptions"
-              iconType="pending">
+              iconType="pending"
+              [routerLink]="['/admin/redemptions']">
             </app-kpi-card>
             
             <app-kpi-card
               label="Live Events"
               [value]="kpiData.liveEvents"
-              iconType="live">
+              iconType="live"
+              [routerLink]="['/admin/events']">
             </app-kpi-card>
           </div>
         </section>
