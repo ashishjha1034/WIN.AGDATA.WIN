@@ -4,7 +4,7 @@
   <div class="user-products-main">
     <!-- Shared Header Component with Points Badge -->
     <app-user-page-header 
-      pageTitle="Rewards"
+      pageTitle="Products"
       [showPointsBadge]="true"
       [pointsValue]="userPoints">
     </app-user-page-header>
@@ -14,7 +14,7 @@
       <!-- Loading State -->
       <div *ngIf="isLoading" class="loading-container">
         <div class="loading-spinner"></div>
-        <p>Loading rewards...</p>
+        <p>Loading products...</p>
       </div>
 
       <ng-container *ngIf="!isLoading">
@@ -22,41 +22,105 @@
         <section class="controls-section">
           <div class="controls-card">
             <div class="controls-row">
-              <!-- Search -->
-              <div class="search-group">
+              <!-- Search - Extended width -->
+              <div class="search-group expanded">
                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
                 <input
                   type="text"
                   class="search-input"
-                  placeholder="Search rewards..."
+                  placeholder="Search products..."
                   [(ngModel)]="searchQuery"
                   (input)="onSearch()"
-                  aria-label="Search rewards"
+                  aria-label="Search products"
                 />
               </div>
 
-              <!-- Category Filter -->
-              <div class="filter-group">
-                <select class="filter-select" [(ngModel)]="selectedCategory" (change)="onCategoryChange()">
-                  <option value="">All Categories</option>
-                  <option *ngFor="let cat of categories" [value]="cat.id">{{ cat.name }}</option>
-                </select>
+              <!-- Filters Toggle Button -->
+              <button class="btn-filters" (click)="toggleFilters()">
+                <i class="fa-solid fa-sliders"></i>
+                Filters
+                <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="showFilters"></i>
+              </button>
+            </div>
+
+            <!-- Expandable Filters Panel -->
+            <div class="filters-panel" *ngIf="showFilters">
+              <div class="filters-grid">
+                <!-- Sort By -->
+                <div class="filter-group">
+                  <label>Sort By</label>
+                  <select [(ngModel)]="sortField" (change)="onSortChange()">
+                    <option value="points">Points</option>
+                    <option value="name">Name</option>
+                  </select>
+                </div>
+
+                <!-- Order By -->
+                <div class="filter-group">
+                  <label>Order</label>
+                  <div class="order-toggle">
+                    <button 
+                      class="order-btn" 
+                      [class.active]="sortOrder === 'asc'"
+                      (click)="setSortOrder('asc')"
+                      title="Ascending">
+                      <i class="fa-solid fa-arrow-up-wide-short"></i>
+                    </button>
+                    <button 
+                      class="order-btn" 
+                      [class.active]="sortOrder === 'desc'"
+                      (click)="setSortOrder('desc')"
+                      title="Descending">
+                      <i class="fa-solid fa-arrow-down-wide-short"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Category Filter -->
+                <div class="filter-group">
+                  <label>Category</label>
+                  <select [(ngModel)]="selectedCategory" (change)="onCategoryChange()">
+                    <option value="">All Categories</option>
+                    <option *ngFor="let cat of categories" [value]="cat.id">{{ cat.name }}</option>
+                  </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-group">
+                  <label>Status</label>
+                  <select [(ngModel)]="selectedStatus" (change)="applyFilters()">
+                    <option value="">All Status</option>
+                    <option value="in-stock">In Stock</option>
+                    <option value="out-of-stock">Out of Stock</option>
+                    <option value="redemption-pending">Redemption Pending</option>
+                    <option value="out-of-budget">Out of Budget</option>
+                  </select>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="filter-group filter-actions">
+                  <button class="btn-reset" (click)="resetFilters()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                  </button>
+                </div>
               </div>
 
-              <!-- Sort -->
-              <div class="filter-group">
-                <select class="filter-select" [(ngModel)]="sortBy" (change)="onSortChange()">
-                  <option value="points-low">Points: Low to High</option>
-                  <option value="points-high">Points: High to Low</option>
-                  <option value="name-asc">Name: A-Z</option>
-                  <option value="name-desc">Name: Z-A</option>
-                </select>
+              <!-- Can Redeem Toggle -->
+              <div class="can-redeem-toggle">
+                <button 
+                  class="btn-can-redeem" 
+                  [class.active]="showOnlyRedeemable"
+                  (click)="toggleShowOnlyRedeemable()">
+                  <i class="fa-solid fa-check-circle"></i>
+                  Only show products I can redeem
+                </button>
               </div>
             </div>
 
             <!-- Results Summary -->
             <div class="results-summary">
-              <span>{{ filteredProducts.length }} reward{{ filteredProducts.length !== 1 ? 's' : '' }} found</span>
+              <span>{{ filteredProducts.length }} product{{ filteredProducts.length !== 1 ? 's' : '' }} found</span>
             </div>
           </div>
         </section>
@@ -75,6 +139,12 @@
               </div>
               <div class="stock-badge out-of-stock" *ngIf="product.stockStatus === 'out-of-stock'">
                 Out of Stock
+              </div>
+
+              <!-- Redemption Count Badge -->
+              <div class="redemption-count-badge" *ngIf="product.redemptionCount > 0">
+                <i class="fa-solid fa-users"></i>
+                <span>{{ product.redemptionCount }}</span>
               </div>
 
               <!-- Product Image -->
@@ -131,7 +201,7 @@
           <!-- Empty State -->
           <div *ngIf="filteredProducts.length === 0" class="empty-state">
             <i class="fa-regular fa-face-frown"></i>
-            <h3>No rewards found</h3>
+            <h3>No products found</h3>
             <p *ngIf="searchQuery || selectedCategory">Try adjusting your filters</p>
           </div>
 

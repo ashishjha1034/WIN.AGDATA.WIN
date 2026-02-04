@@ -60,6 +60,18 @@
               </div>
             </div>
           </div>
+          <!-- Header Action Icons -->
+          <div class="header-actions">
+            <button class="btn-icon btn-icon-edit" (click)="openEditModal()" title="Edit Product" *ngIf="product.isActive">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button class="btn-icon btn-icon-deactivate" (click)="deactivateProduct()" title="Deactivate Product" *ngIf="product.isActive">
+              <i class="fa-solid fa-ban"></i>
+            </button>
+            <button class="btn-icon btn-icon-activate" (click)="activateProduct()" title="Activate Product" *ngIf="!product.isActive">
+              <i class="fa-solid fa-check-circle"></i>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -86,162 +98,54 @@
           </button>
         </div>
 
-        <!-- Tab Content: Product Info -->
-        <div class="tab-content" *ngIf="activeTab === 'info'" [class.read-only-content]="!product.isActive">
-          <form [formGroup]="editForm" class="form-section">
-            <h3 class="section-title">Basic Information</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="name">Product Name</label>
-                <div class="input-with-action">
-                  <input 
-                    id="name"
-                    type="text" 
-                    formControlName="name" 
-                    class="form-input" 
-                    [class.error]="isFieldInvalid('name') || (productNameResult && !productNameResult.isValid)"
-                    [class.valid]="isFieldValid('name') && (!productNameResult || productNameResult.isValid)"
-                    [readonly]="!product.isActive" 
-                    [attr.disabled]="!product.isActive ? true : null"
-                    maxlength="50"
-                    aria-describedby="name-hint" />
-                  <button 
-                    type="button" 
-                    class="check-btn" 
-                    (click)="checkProductNameNow()"
-                    [disabled]="checkingProductName || !editForm.get('name')?.value || editForm.get('name')?.invalid || !product.isActive"
-                    *ngIf="product.isActive">
-                    Check
-                  </button>
-                </div>
-                <app-validation-hint
-                  id="name-hint"
-                  [control]="editForm.get('name')!"
-                  fieldName="Product name"
-                  fieldType="productName"
-                  [minLength]="ValidationConstants.NAME_MIN_LENGTH"
-                  [maxLength]="ValidationConstants.NAME_MAX_LENGTH"
-                  helperText="1-4 words, alphanumeric only, 2-50 characters"
-                  [checking]="checkingProductName"
-                  [uniquenessResult]="productNameResult"
-                  *ngIf="product.isActive">
-                </app-validation-hint>
+        <!-- Tab Content: Product Info (Read-Only) -->
+        <div class="tab-content" *ngIf="activeTab === 'info'">
+          <div class="form-section">
+            <div class="section-header-with-action">
+              <h3 class="section-title">Basic Information</h3>
+              <button class="btn btn-outline-primary btn-sm" (click)="openEditModal()" *ngIf="product.isActive">
+                <i class="fa-solid fa-pen-to-square"></i> Edit Info
+              </button>
+            </div>
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Product Name</label>
+                <div class="info-value">{{ product.name }}</div>
               </div>
-              <div class="form-group">
-                <label for="imageUrl">Image URL</label>
-                <input 
-                  id="imageUrl"
-                  type="url" 
-                  formControlName="imageUrl" 
-                  class="form-input" 
-                  [class.error]="isFieldInvalid('imageUrl')"
-                  [class.valid]="isFieldValid('imageUrl')"
-                  placeholder="https://example.com/image.jpg" 
-                  [readonly]="!product.isActive" 
-                  [attr.disabled]="!product.isActive ? true : null"
-                  maxlength="1000"
-                  aria-describedby="imageUrl-hint" />
-                <app-validation-hint
-                  id="imageUrl-hint"
-                  [control]="editForm.get('imageUrl')!"
-                  fieldName="Image URL"
-                  fieldType="url"
-                  helperText="HTTPS URL only, max 1000 characters (optional)"
-                  *ngIf="product.isActive">
-                </app-validation-hint>
-              </div>
-              <div class="form-group full-width">
-                <label for="description">Description</label>
-                <textarea 
-                  id="description"
-                  formControlName="description" 
-                  class="form-textarea" 
-                  [class.error]="isFieldInvalid('description')"
-                  [class.valid]="isFieldValid('description')"
-                  rows="4" 
-                  [readonly]="!product.isActive" 
-                  [attr.disabled]="!product.isActive ? true : null"
-                  maxlength="500"
-                  aria-describedby="description-hint"></textarea>
-                <div class="char-count" *ngIf="product.isActive">
-                  {{ getTrimmedLength('description') }} / 500 characters
-                  | {{ getWordCount('description') }} words
+              <div class="info-item">
+                <label>Image URL</label>
+                <div class="info-value">
+                  <a *ngIf="product.imageUrl" [href]="product.imageUrl" target="_blank" rel="noopener noreferrer" class="url-link">
+                    {{ product.imageUrl | slice:0:50 }}{{ product.imageUrl.length > 50 ? '...' : '' }}
+                    <i class="fa-solid fa-external-link-alt"></i>
+                  </a>
+                  <span *ngIf="!product.imageUrl" class="no-value">No image URL</span>
                 </div>
-                <app-validation-hint
-                  id="description-hint"
-                  [control]="editForm.get('description')!"
-                  fieldName="Description"
-                  fieldType="description"
-                  [minLength]="ValidationConstants.DESCRIPTION_MIN_LENGTH"
-                  [maxLength]="ValidationConstants.DESCRIPTION_MAX_LENGTH"
-                  helperText="20-500 characters, 3-100 words"
-                  *ngIf="product.isActive">
-                </app-validation-hint>
+              </div>
+              <div class="info-item full-width">
+                <label>Description</label>
+                <div class="info-value description-text">{{ product.description || 'No description' }}</div>
               </div>
             </div>
-          </form>
+          </div>
 
-          <form [formGroup]="editForm" class="form-section">
+          <div class="form-section">
             <h3 class="section-title">Category & Pricing</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="categoryId">Category</label>
-                <select 
-                  id="categoryId"
-                  formControlName="categoryId" 
-                  class="form-input" 
-                  [class.error]="isFieldInvalid('categoryId')"
-                  [disabled]="!product.isActive">
-                  <option value="">Select a category</option>
-                  <option *ngFor="let category of categories" [value]="category.id">
-                    {{ category.name }}
-                  </option>
-                </select>
-                <app-validation-hint
-                  [control]="editForm.get('categoryId')!"
-                  fieldName="Category"
-                  *ngIf="product.isActive">
-                </app-validation-hint>
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Category</label>
+                <div class="info-value">
+                  <span class="category-badge-inline">{{ product.categoryName }}</span>
+                </div>
               </div>
-              <div class="form-group">
-                <label for="pointsCost">Redemption Cost (Points)</label>
-                <input 
-                  id="pointsCost"
-                  type="number" 
-                  formControlName="pointsCost" 
-                  class="form-input" 
-                  [class.error]="isFieldInvalid('pointsCost')"
-                  [class.valid]="isFieldValid('pointsCost')"
-                  min="1" 
-                  max="10000000"
-                  [readonly]="!product.isActive" 
-                  [attr.disabled]="!product.isActive ? true : null"
-                  aria-describedby="pointsCost-hint" />
-                <app-validation-hint
-                  id="pointsCost-hint"
-                  [control]="editForm.get('pointsCost')!"
-                  fieldName="Points cost"
-                  fieldType="number"
-                  [minValue]="ValidationConstants.POINTS_COST_MIN"
-                  [maxValue]="ValidationConstants.POINTS_COST_MAX"
-                  helperText="Whole number from 1 to 10,000,000 (must be positive)"
-                  *ngIf="product.isActive">
-                </app-validation-hint>
+              <div class="info-item">
+                <label>Redemption Cost</label>
+                <div class="info-value points-value">
+                  <i class="fa-solid fa-star"></i>
+                  {{ product.pointsCost | number }} points
+                </div>
               </div>
             </div>
-          </form>
-
-          <!-- Form Errors Summary - Toggle to show all errors -->
-          <app-form-errors-summary
-            [form]="editForm"
-            [fieldLabels]="editFormFieldLabels"
-            *ngIf="product.isActive">
-          </app-form-errors-summary>
-
-          <div class="form-actions" *ngIf="product.isActive">
-            <button class="btn btn-primary" (click)="saveChanges()" [disabled]="!canSave">
-              <i class="fa-solid fa-floppy-disk"></i> Save Changes
-            </button>
           </div>
         </div>
 
@@ -323,20 +227,6 @@
             </div>
           </div>
 
-          <div class="form-section danger-zone">
-            <h3 class="section-title">Product Control</h3>
-            <div class="danger-actions">
-              <button *ngIf="product.isActive" class="btn btn-warning-outline" (click)="deactivateProduct()">
-                <i class="fa-solid fa-ban"></i> Deactivate Product
-              </button>
-              <button *ngIf="!product.isActive" class="btn btn-success-outline" (click)="activateProduct()">
-                <i class="fa-solid fa-check-circle"></i> Activate Product
-              </button>
-              <button class="btn btn-danger-outline" (click)="deleteProduct()" [disabled]="!product.isActive">
-                <i class="fa-solid fa-trash"></i> Delete Product
-              </button>
-            </div>
-          </div>
         </div>
 
         <!-- Tab Content: Redemptions -->
@@ -490,3 +380,13 @@
       </div>
     </div>
   </div>
+
+<!-- Edit Product Modal -->
+<app-product-form-modal
+  [isOpen]="showEditModal"
+  [editMode]="true"
+  [categories]="categories"
+  [initialData]="editModalInitialData"
+  (productSaved)="onProductUpdated($event)"
+  (closed)="closeEditModal()">
+</app-product-form-modal>

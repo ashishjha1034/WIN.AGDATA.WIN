@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, signal, computed, ChangeDetectionStrategy } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, of } from 'rxjs';
@@ -19,9 +19,11 @@ echarts.use([BarChart, PieChart, GridComponent, TooltipComponent, LegendComponen
 
 import { EventService } from '../../../services/event.service';
 import { ValidationService, ValidationResult } from '../../../services/validation.service';
+import { ToastService } from '../../../services/toast.service';
 import { Event, EventStatus, EventFilter, EventKPI, CreateEventRequest, UpdateEventRequest } from '../../../models/event.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
 import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
@@ -38,7 +40,7 @@ import {
   templateUrl: './event-management.component.html',
   styleUrls: ['./event-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, NgxEchartsDirective, ValidationHintComponent, FormErrorsSummaryComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, AdminHeaderComponent, NgxEchartsDirective, ValidationHintComponent, FormErrorsSummaryComponent, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
   ],
@@ -73,7 +75,9 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   currentPage = 1;
   pageSize = 10;
   sortBy = 'eventDate';
-  successMessage: string | null = null;
+  showFilters = false;
+  poolStatusFilter = 'all';
+  capacityFilter = 'all';
   
   // Chart visibility state
   eventStatusChartVisible = signal(true);
@@ -170,7 +174,9 @@ export class EventManagementComponent implements OnInit, OnDestroy {
     private eventService: EventService,
     private authService: AuthService,
     private validationService: ValidationService,
+    private toastService: ToastService,
     private router: Router,
+    private activatedRoute: ActivatedRoute,
     private cdr: ChangeDetectorRef,
     private fb: FormBuilder
   ) {}
@@ -183,6 +189,16 @@ export class EventManagementComponent implements OnInit, OnDestroy {
     this.setupNameUniquenessCheck();
     this.updateMinDateTime();
     this.loadChartVisibilityPreference();
+    
+    // Check for status query param and set active tab
+    this.activatedRoute.queryParams.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(params => {
+      if (params['status'] === 'Live') {
+        this.activeStatusTab = 'Live';
+        this.applyStatusFilter();
+      }
+    });
     
     // Setup search debounce
     this.searchSubject$.pipe(
@@ -501,8 +517,7 @@ export class EventManagementComponent implements OnInit, OnDestroy {
         formatter: (name: string) => {
           const key = name.toLowerCase() as keyof typeof statusCounts;
           const count = statusCounts[key] || 0;
-          const percent = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-          return `${name}: ${count} (${percent}%)`;
+          return `${name}: ${count}`;
         },
         textStyle: {
           fontSize: 12,
@@ -515,21 +530,38 @@ export class EventManagementComponent implements OnInit, OnDestroy {
           type: 'pie',
           radius: ['45%', '70%'],
           center: ['35%', '50%'],
-          avoidLabelOverlap: false,
+          avoidLabelOverlap: true,
           itemStyle: {
             borderRadius: 4,
             borderColor: '#fff',
             borderWidth: 2
           },
-          label: { show: false },
+          label: {
+            show: true,
+            position: 'outside',
+            formatter: (params: any) => {
+              const percent = total > 0 ? ((params.value / total) * 100).toFixed(0) : 0;
+              return `${percent}%`;
+            },
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#374151'
+          },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 15,
+            smooth: true
+          },
           emphasis: {
             label: {
               show: true,
               fontSize: 14,
               fontWeight: 'bold'
-            }
+            },
+            scale: true,
+            scaleSize: 5
           },
-          labelLine: { show: false },
           data: [
             { value: statusCounts.upcoming, name: 'Upcoming', itemStyle: { color: this.chartColors.upcoming } },
             { value: statusCounts.live, name: 'Live', itemStyle: { color: this.chartColors.live } },
@@ -755,6 +787,26 @@ export class EventManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Toggle filters panel
+   */
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  /**
+   * Reset all filters to defaults
+   */
+  resetFilters(): void {
+    this.sortBy = 'eventDate';
+    this.poolStatusFilter = 'all';
+    this.capacityFilter = 'all';
+    this.searchText = '';
+    this.currentPage = 1;
+    this.applyStatusFilter();
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Apply status tab filter to events for display
    */
   applyStatusFilter(): void {
@@ -772,6 +824,28 @@ export class EventManagementComponent implements OnInit, OnDestroy {
         e.name.toLowerCase().includes(search) ||
         e.description?.toLowerCase().includes(search)
       );
+    }
+
+    // Filter by pool status
+    if (this.poolStatusFilter !== 'all') {
+      filtered = filtered.filter(e => {
+        const isFullyDistributed = e.totalPointsPool > 0 && e.distributedPoints >= e.totalPointsPool;
+        return this.poolStatusFilter === 'distributed' ? isFullyDistributed : !isFullyDistributed;
+      });
+    }
+
+    // Filter by participant capacity
+    if (this.capacityFilter !== 'all') {
+      filtered = filtered.filter(e => {
+        const percent = e.maxParticipants ? (e.participantCount / e.maxParticipants) * 100 : 0;
+        switch (this.capacityFilter) {
+          case 'full': return percent >= 100;
+          case 'high': return percent >= 75 && percent < 100;
+          case 'medium': return percent >= 50 && percent < 75;
+          case 'low': return percent < 50;
+          default: return true;
+        }
+      });
     }
     
     // Apply sorting
@@ -1092,23 +1166,17 @@ export class EventManagementComponent implements OnInit, OnDestroy {
           console.log('[EventMgmt] Event created:', event);
           this.isSubmittingEvent = false;
           this.closeEventModal();
-          this.successMessage = `Event "${event.name}" created successfully!`;
+          this.toastService.success('Event Created', `Event "${event.name}" created successfully!`);
           this.loadEvents();
           this.cdr.markForCheck();
-          
-          // Clear success message after 3 seconds
-          setTimeout(() => {
-            this.successMessage = null;
-            this.cdr.markForCheck();
-          }, 3000);
         },
         error: (error) => {
           console.error('[EventMgmt] Error creating event:', error);
           this.isSubmittingEvent = false;
           
           // Extract validation error message from ProblemDetails or response
-          this.errorMessage = this.extractErrorMessage(error, 'Failed to create event');
-          this.showErrorAlert = true;
+          const errorMsg = this.extractErrorMessage(error, 'Failed to create event');
+          this.toastService.error('Error', errorMsg);
           this.cdr.markForCheck();
         }
       });
@@ -1152,23 +1220,17 @@ export class EventManagementComponent implements OnInit, OnDestroy {
           console.log('[EventMgmt] Event updated:', event);
           this.isSubmittingEvent = false;
           this.closeEventModal();
-          this.successMessage = `Event "${event.name}" updated successfully!`;
+          this.toastService.success('Event Updated', `Event "${event.name}" updated successfully!`);
           this.loadEvents();
           this.cdr.markForCheck();
-          
-          // Clear success message after 3 seconds
-          setTimeout(() => {
-            this.successMessage = null;
-            this.cdr.markForCheck();
-          }, 3000);
         },
         error: (error) => {
           console.error('[EventMgmt] Error updating event:', error);
           this.isSubmittingEvent = false;
           
           // Extract validation error message from ProblemDetails or response
-          this.errorMessage = this.extractErrorMessage(error, 'Failed to update event');
-          this.showErrorAlert = true;
+          const errorMsg = this.extractErrorMessage(error, 'Failed to update event');
+          this.toastService.error('Error', errorMsg);
           this.cdr.markForCheck();
         }
       });

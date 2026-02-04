@@ -11,10 +11,10 @@ import { PaginationComponent } from '../../../shared/components/pagination.compo
 import { UserPageHeaderComponent } from '../../../components/user-page-header/user-page-header.component';
 
 interface StatusTab {
-  key: 'pending' | 'approved' | 'delivered' | 'rejected';
+  key: 'all' | 'pending' | 'approved' | 'delivered' | 'rejected';
   label: string;
   count: number;
-  statusCode: number;
+  statusCode: number | null;
 }
 
 @Component({
@@ -33,12 +33,13 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
   
   // Status tabs
   statusTabs: StatusTab[] = [
+    { key: 'all', label: 'All Redemptions', count: 0, statusCode: null },
     { key: 'pending', label: 'Pending', count: 0, statusCode: 0 },
     { key: 'approved', label: 'Approved', count: 0, statusCode: 1 },
     { key: 'delivered', label: 'Delivered', count: 0, statusCode: 3 },
     { key: 'rejected', label: 'Rejected', count: 0, statusCode: 2 }
   ];
-  activeTab: 'pending' | 'approved' | 'delivered' | 'rejected' = 'pending';
+  activeTab: 'all' | 'pending' | 'approved' | 'delivered' | 'rejected' = 'all';
   
   // Pagination
   currentPage = 1;
@@ -61,9 +62,9 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
       .subscribe(params => {
         if (params['status']) {
           const statusParam = params['status'].toLowerCase();
-          const validStatuses: ('pending' | 'approved' | 'delivered' | 'rejected')[] = ['pending', 'approved', 'delivered', 'rejected'];
+          const validStatuses: ('all' | 'pending' | 'approved' | 'delivered' | 'rejected')[] = ['all', 'pending', 'approved', 'delivered', 'rejected'];
           if (validStatuses.includes(statusParam as any)) {
-            this.activeTab = statusParam as 'pending' | 'approved' | 'delivered' | 'rejected';
+            this.activeTab = statusParam as 'all' | 'pending' | 'approved' | 'delivered' | 'rejected';
             // Re-apply filter if data is already loaded
             if (this.redemptions.length > 0) {
               this.filterByStatus();
@@ -124,14 +125,21 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
     
     // Calculate counts from redemptions
     this.redemptions.forEach(r => {
+      // Count for individual status tabs
       const tab = this.statusTabs.find(t => t.statusCode === r.statusCode);
       if (tab) {
         tab.count++;
       }
     });
+    
+    // Set "All" count to total redemptions
+    const allTab = this.statusTabs.find(t => t.key === 'all');
+    if (allTab) {
+      allTab.count = this.redemptions.length;
+    }
   }
 
-  selectTab(tabKey: 'pending' | 'approved' | 'delivered' | 'rejected'): void {
+  selectTab(tabKey: 'all' | 'pending' | 'approved' | 'delivered' | 'rejected'): void {
     this.activeTab = tabKey;
     this.filterRedemptionsByTab();
     
@@ -149,11 +157,16 @@ export class UserRedemptionsComponent implements OnInit, OnDestroy {
   }
 
   filterRedemptionsByTab(): void {
-    const activeTabConfig = this.statusTabs.find(t => t.key === this.activeTab);
-    if (activeTabConfig) {
-      this.filteredRedemptions = this.redemptions.filter(r => r.statusCode === activeTabConfig.statusCode);
-      this.currentPage = 1; // Reset to first page when changing tabs
+    if (this.activeTab === 'all') {
+      // Show all redemptions
+      this.filteredRedemptions = [...this.redemptions];
+    } else {
+      const activeTabConfig = this.statusTabs.find(t => t.key === this.activeTab);
+      if (activeTabConfig) {
+        this.filteredRedemptions = this.redemptions.filter(r => r.statusCode === activeTabConfig.statusCode);
+      }
     }
+    this.currentPage = 1; // Reset to first page when changing tabs
   }
 
   get paginatedRedemptions(): UserRedemption[] {

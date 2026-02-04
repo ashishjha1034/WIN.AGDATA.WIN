@@ -1,9 +1,10 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, signal, computed } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize, debounceTime } from 'rxjs/operators';
+import { trigger, transition, style, animate } from '@angular/animations';
 
 // ECharts imports
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
@@ -17,9 +18,11 @@ import type { EChartsOption } from 'echarts';
 echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 import { ProductsService } from '../../../services/products.service';
+import { ToastService } from '../../../services/toast.service';
 import { Product, ProductKPI, ProductFilter, ProductCategory, CreateProductRequest, DeactivateProductWarnings, DeactivateProductBlocked } from '../../../models/product.models';
 import { AuthService } from '../../../services/auth.service';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { ProductFormModalComponent } from './product-form-modal.component';
 import { DeactivateConfirmationDialogComponent, DeactivateWarningData } from './deactivate-confirmation-dialog.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
@@ -38,9 +41,21 @@ interface LowStockChartProduct {
   templateUrl: './product-management.component.html',
   styleUrls: ['./product-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, ProductFormModalComponent, DeactivateConfirmationDialogComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, AdminHeaderComponent, NgxEchartsDirective, ProductFormModalComponent, DeactivateConfirmationDialogComponent, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
+  ],
+  animations: [
+    trigger('slideDown', [
+      transition(':enter', [
+        style({ height: 0, opacity: 0, overflow: 'hidden' }),
+        animate('300ms ease-out', style({ height: '*', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        style({ height: '*', opacity: 1, overflow: 'hidden' }),
+        animate('300ms ease-in', style({ height: 0, opacity: 0 }))
+      ])
+    ])
   ]
 })
 export class ProductManagementComponent implements OnInit, OnDestroy {
@@ -81,6 +96,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   lowStockThreshold = 10;
   topNProducts = 4;
   chartOption: EChartsOption = {};
+  
+  // Chart visibility toggle (matches Events page pattern)
+  inventoryChartVisible = signal(true);
+  private readonly CHART_VISIBILITY_KEY = 'products_inventory_chart_visible';
   
   // Products signal for chart
   private productsSignal = signal<Product[]>([]);
@@ -157,8 +176,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     private productsService: ProductsService,
     private authService: AuthService,
     private router: Router,
+    private activatedRoute: ActivatedRoute,
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private toastService: ToastService
   ) {
     // Bind the click handler in constructor to maintain reference
     this.documentClickHandler = this.onDocumentClick.bind(this);
@@ -179,9 +200,39 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     this.loadCurrentUser();
     this.loadCategories();
     this.loadProducts();
+    this.loadChartVisibilityPreference();
+    
+    // Check for filter query param and apply low stock filter
+    this.activatedRoute.queryParams.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(params => {
+      if (params['filter'] === 'lowstock') {
+        this.activeFilter.stockLevel = 'low';
+        this.applyFiltersAndPagination();
+      }
+    });
     
     // Close dropdown on outside click
     document.addEventListener('click', this.documentClickHandler);
+  }
+
+  /**
+   * Load chart visibility preference from localStorage
+   */
+  private loadChartVisibilityPreference(): void {
+    const saved = localStorage.getItem(this.CHART_VISIBILITY_KEY);
+    if (saved !== null) {
+      this.inventoryChartVisible.set(saved === 'true');
+    }
+  }
+
+  /**
+   * Toggle chart visibility (matches Events page pattern)
+   */
+  toggleInventoryChart(): void {
+    const newValue = !this.inventoryChartVisible();
+    this.inventoryChartVisible.set(newValue);
+    localStorage.setItem(this.CHART_VISIBILITY_KEY, String(newValue));
   }
 
   ngOnDestroy(): void {
@@ -330,7 +381,15 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
           data: reversedProducts.map(p => ({
             value: p.stock,
             itemStyle: {
-              color: p.isLowStock ? '#dc2626' : '#2c5f3f',
+              color: p.isLowStock 
+                ? new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                    { offset: 0, color: '#991b1b' },
+                    { offset: 1, color: '#f87171' }
+                  ])
+                : new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                    { offset: 0, color: '#2c5f3f' },
+                    { offset: 1, color: '#4ade80' }
+                  ]),
               borderRadius: [0, 4, 4, 0]
             }
           })),
@@ -704,15 +763,10 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Show success message
+   * Show success message using toast
    */
   private showSuccess(message: string): void {
-    this.successMessage = message;
-    this.cdr.markForCheck();
-    setTimeout(() => {
-      this.successMessage = null;
-      this.cdr.markForCheck();
-    }, 3000);
+    this.toastService.success('Success', message);
   }
 
   /**
@@ -765,17 +819,18 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     if (!product) return;
     
     // First attempt without force - let server check for warnings/blocks
-    this.isLoading = true;
     this.productsService.deactivateProduct(productId, false).subscribe({
       next: (response) => {
         console.log('Product deactivated successfully:', response);
-        this.isLoading = false;
-        this.showSuccess(`Product "${product.name}" deactivated successfully!`);
-        this.loadProducts(); // Reload products to reflect changes
+        // Update local state instead of reloading
+        product.isActive = false;
+        this.products = [...this.products];
+        this.applyFiltersAndPagination();
+        this.toastService.success('Product Deactivated', `"${product.name}" has been deactivated successfully.`);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error deactivating product:', error);
-        this.isLoading = false;
         
         // Check if it's a soft warning (409 Conflict)
         if (this.productsService.isDeactivationWarning(error)) {
@@ -798,18 +853,13 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
         // Check if it's a hard block (400 Bad Request)
         if (this.productsService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateProductBlocked;
-          this.deactivationBlockedMessage = `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist. Please resolve these redemptions first.`;
-          this.errorMessage = this.deactivationBlockedMessage;
-          setTimeout(() => {
-            this.errorMessage = null;
-            this.deactivationBlockedMessage = null;
-          }, 8000);
+          const message = `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist. Please resolve these redemptions first.`;
+          this.toastService.error('Deactivation Blocked', message);
           return;
         }
         
         // Generic error
-        this.errorMessage = error?.error?.message || 'Failed to deactivate product. Please try again.';
-        setTimeout(() => this.errorMessage = null, 5000);
+        this.toastService.error('Deactivation Failed', error?.error?.message || 'Failed to deactivate product. Please try again.');
       }
     });
   }
@@ -825,30 +875,32 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
     
     this.showDeactivateDialog = false;
     this.deactivateWarningData = null;
-    this.isLoading = true;
     
     // Retry with force=true to bypass soft warnings
     this.productsService.deactivateProduct(productId, true).subscribe({
       next: (response) => {
         console.log('Product deactivated successfully (forced):', response);
-        this.isLoading = false;
         this.pendingDeactivationProductId = null;
-        this.showSuccess(`Product "${product?.name}" deactivated successfully!`);
-        this.loadProducts();
+        // Update local state instead of reloading
+        if (product) {
+          product.isActive = false;
+          this.products = [...this.products];
+          this.applyFiltersAndPagination();
+        }
+        this.toastService.success('Product Deactivated', `"${product?.name}" has been deactivated successfully.`);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error deactivating product (forced):', error);
-        this.isLoading = false;
         this.pendingDeactivationProductId = null;
         
         // Even with force, hard blocks cannot be bypassed
         if (this.productsService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateProductBlocked;
-          this.errorMessage = `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist.`;
+          this.toastService.error('Deactivation Blocked', `Cannot deactivate: ${blocked.pending} Pending and ${blocked.approved} Approved redemptions exist.`);
         } else {
-          this.errorMessage = error?.error?.message || 'Failed to deactivate product. Please try again.';
+          this.toastService.error('Deactivation Failed', error?.error?.message || 'Failed to deactivate product. Please try again.');
         }
-        setTimeout(() => this.errorMessage = null, 5000);
       }
     });
   }
@@ -882,18 +934,19 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
       'Cancel'
     ).subscribe(result => {
       if (result.confirmed) {
-        this.isLoading = true;
         this.productsService.activateProduct(productId).subscribe({
           next: (response) => {
             console.log('Product activated successfully:', response);
-            this.dialogService.success('Product activated successfully');
-            this.loadProducts(); // Reload products to reflect changes
+            // Update local state instead of reloading
+            product.isActive = true;
+            this.products = [...this.products];
+            this.applyFiltersAndPagination();
+            this.toastService.success('Product Activated', `"${product.name}" has been activated successfully.`);
+            this.cdr.markForCheck();
           },
           error: (error) => {
             console.error('Error activating product:', error);
-            this.isLoading = false;
-            // Handle error appropriately
-            this.dialogService.error('Failed to activate product. Please try again.');
+            this.toastService.error('Activation Failed', error?.error?.message || 'Failed to activate product. Please try again.');
           }
         });
       }
@@ -995,7 +1048,16 @@ export class ProductManagementComponent implements OnInit, OnDestroy {
   goToPage(page: number): void {
     if (page >= 1 && page <= this.totalPages) {
       this.currentPage = page;
+      this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Handle pagination page change
+   */
+  changePage(page: number): void {
+    this.currentPage = page;
+    this.cdr.markForCheck();
   }
 
   nextPage(): void {

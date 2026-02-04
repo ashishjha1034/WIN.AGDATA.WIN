@@ -87,6 +87,8 @@ export class CustomValidators {
    * - Start with letter or number
    * - Contain letters, numbers, and limited symbols (. _ + -) only
    * - Not be only symbols
+   * - No consecutive dots
+   * - No leading or trailing dots in local part
    */
   static corporateEmail(): ValidatorFn {
     return (control: AbstractControl): ValidationErrors | null => {
@@ -109,6 +111,16 @@ export class CustomValidators {
       // Check local-part starts with letter or number
       if (!/^[a-z0-9]/.test(localPart)) {
         return { corporateEmailStart: { message: 'Email must start with a letter or number' } };
+      }
+      
+      // Check for leading or trailing dots in local part
+      if (localPart.startsWith('.') || localPart.endsWith('.')) {
+        return { corporateEmailFormat: { message: 'Email cannot start or end with a dot' } };
+      }
+      
+      // Check for consecutive dots
+      if (/\.{2,}/.test(localPart)) {
+        return { corporateEmailFormat: { message: 'Email cannot contain consecutive dots' } };
       }
       
       // Check local-part contains only allowed characters (letters, numbers, . _ + -)
@@ -134,6 +146,11 @@ export class CustomValidators {
     return (control: AbstractControl): ValidationErrors | null => {
       const value = control.value;
       if (!value) return null;
+      
+      // Priority 0: Check for whitespace-only input (reject completely empty trimmed values)
+      if (value.trim().length === 0) {
+        return { nameWhitespaceOnly: { message: 'Cannot be only whitespace' } };
+      }
       
       // Priority 1: Check for spaces (highest priority - most common mistake)
       if (/\s/.test(value)) {
@@ -170,7 +187,8 @@ export class CustomValidators {
 
   /**
    * Strong password validator with detailed checks
-   * Note: Personal info checks (name/ID) removed per requirements
+   * Validates: min length, uppercase, lowercase, digit, special character, no spaces
+   * Also prevents password from containing personal information (firstName, lastName, employeeId)
    */
   static strongPassword(firstNameControl?: AbstractControl, lastNameControl?: AbstractControl, employeeIdControl?: AbstractControl): ValidatorFn {
     return (control: AbstractControl): ValidationErrors | null => {
@@ -179,23 +197,58 @@ export class CustomValidators {
 
       const errors: string[] = [];
 
+      // Check minimum length
       if (password.length < ValidationConstants.PASSWORD_MIN_LENGTH) {
         errors.push(`At least ${ValidationConstants.PASSWORD_MIN_LENGTH} characters`);
       }
+
+      // Check for uppercase letter
       if (!/[A-Z]/.test(password)) {
         errors.push('One uppercase letter');
       }
+
+      // Check for lowercase letter
       if (!/[a-z]/.test(password)) {
         errors.push('One lowercase letter');
       }
+
+      // Check for digit
       if (!/[0-9]/.test(password)) {
         errors.push('One digit');
       }
+
+      // Check for special character
       if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
         errors.push('One special character');
       }
+
+      // Check for spaces
       if (/\s/.test(password)) {
         errors.push('No spaces allowed');
+      }
+
+      // Check for personal information (firstName, lastName, employeeId)
+      const passwordLower = password.toLowerCase();
+      
+      if (firstNameControl?.value) {
+        const firstName = firstNameControl.value.toString().toLowerCase();
+        if (firstName && passwordLower.includes(firstName)) {
+          errors.push('Cannot contain your first name');
+        }
+      }
+
+      if (lastNameControl?.value) {
+        const lastName = lastNameControl.value.toString().toLowerCase();
+        if (lastName && passwordLower.includes(lastName)) {
+          errors.push('Cannot contain your last name');
+        }
+      }
+
+      if (employeeIdControl?.value) {
+        const employeeId = employeeIdControl.value.toString().toLowerCase();
+        if (employeeId && passwordLower.includes(employeeId)) {
+          errors.push('Cannot contain your employee ID');
+        }
       }
 
       return errors.length > 0 ? { strongPassword: { requirements: errors } } : null;
@@ -291,7 +344,7 @@ export class CustomValidators {
   // =============================================
 
   /**
-   * Validates event name: 1-7 alphanumeric words, single spaces only, no consecutive/leading/trailing spaces.
+   * Validates event name: 1-7 words (letters, numbers, and special characters allowed), single spaces only, no consecutive/leading/trailing spaces.
    * Characters are counted after trimming (excluding spaces); words are counted by spaces.
    * Returns specific error messages in priority order for live validation feedback.
    */
@@ -312,20 +365,8 @@ export class CustomValidators {
         return { eventNameFormat: { message: 'Use single spaces only. Remove consecutive spaces.' } };
       }
 
-      // Priority 3: Check for special symbols FIRST (most common user error)
+      // Priority 3: Count characters (excluding spaces) - special characters ARE allowed
       const words = trimmed.split(' ').filter((w: string) => w.length > 0);
-      const alphanumericPattern = /^[a-zA-Z0-9]+$/;
-      for (const word of words) {
-        if (!alphanumericPattern.test(word)) {
-          // Determine the specific character issue
-          if (/[!@#$%^&*()_+=\[\]{};':"\\|,.<>\/?~`-]/.test(word)) {
-            return { eventNameFormat: { message: 'No special symbols allowed' } };
-          }
-          return { eventNameFormat: { message: 'Each word must be alphanumeric only (letters and numbers)' } };
-        }
-      }
-
-      // Priority 4: Count characters (excluding spaces)
       const charCountNoSpaces = trimmed.replace(/ /g, '').length;
       if (charCountNoSpaces < ValidationConstants.EVENT_NAME_MIN_LENGTH) {
         return { eventNameFormat: { message: `At least ${ValidationConstants.EVENT_NAME_MIN_LENGTH} characters required (excluding spaces). Currently: ${charCountNoSpaces}` } };
@@ -334,7 +375,7 @@ export class CustomValidators {
         return { eventNameFormat: { message: `Maximum ${ValidationConstants.EVENT_NAME_MAX_LENGTH} characters (excluding spaces). Currently: ${charCountNoSpaces}` } };
       }
 
-      // Priority 5: Count words
+      // Priority 4: Count words
       if (words.length < ValidationConstants.EVENT_NAME_MIN_WORDS) {
         return { eventNameFormat: { message: `At least ${ValidationConstants.EVENT_NAME_MIN_WORDS} word required` } };
       }

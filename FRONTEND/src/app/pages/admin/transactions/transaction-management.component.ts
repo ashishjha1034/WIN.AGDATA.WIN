@@ -8,6 +8,7 @@ import { EChartsOption } from 'echarts';
 import { AdminTransactionsService } from '../../../services/admin-transactions.service';
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AuthService } from '../../../services/auth.service';
+import { ToastService } from '../../../services/toast.service';
 import {
   AdminTransaction,
   TransactionFilterRequest,
@@ -18,15 +19,17 @@ import {
   UserOption
 } from '../../../models/admin-transaction.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
 import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
+import { ValidationConstants } from '../../../shared/validators/custom-validators';
 
 @Component({
   selector: 'app-transaction-management',
   templateUrl: './transaction-management.component.html',
   styleUrls: ['./transaction-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsModule, PaginationComponent],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, AdminHeaderComponent, NgxEchartsModule, PaginationComponent],
   providers: [
     {
       provide: NGX_ECHARTS_CONFIG,
@@ -37,6 +40,9 @@ import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 export class TransactionManagementComponent implements OnInit, OnDestroy {
   // Expose Math for template
   public Math = Math;
+
+  // Expose ValidationConstants for template
+  public ValidationConstants = ValidationConstants;
 
   // Data
   transactions: AdminTransaction[] = [];
@@ -73,6 +79,9 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   endDate: string | null = null;
   datePreset: string | null = null;
 
+  // KPI filter tracking
+  activeKpiFilter: 'earned' | 'redeemed' | 'adjusted' | 'all' | null = null;
+
   // Type filter options
   typeOptions = [
     { value: null, label: 'All Types' },
@@ -102,6 +111,7 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
     amount: 0,
     reason: ''
   };
+  adjustFormTouched = false;
 
   // Error & Success States
   errorMessage = '';
@@ -116,6 +126,7 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
     private transactionsService: AdminTransactionsService,
     private usersService: AdminUsersService,
     private authService: AuthService,
+    private toastService: ToastService,
     private cdr: ChangeDetectorRef
   ) {
     // Debounce search input
@@ -196,6 +207,41 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
     this.filters.type = this.selectedType || undefined;
     this.filters.startDate = this.startDate || undefined;
     this.filters.endDate = this.endDate || undefined;
+  }
+
+  /**
+   * Filter transactions by KPI card click
+   * @param kpiType The KPI type to filter by
+   */
+  filterByKpi(kpiType: 'earned' | 'redeemed' | 'adjusted' | 'all'): void {
+    // Toggle off if clicking the same KPI
+    if (this.activeKpiFilter === kpiType) {
+      this.activeKpiFilter = null;
+      this.selectedType = null;
+    } else {
+      this.activeKpiFilter = kpiType;
+      
+      // Map KPI to transaction type
+      switch (kpiType) {
+        case 'earned':
+          this.selectedType = 'Earned';
+          break;
+        case 'redeemed':
+          this.selectedType = 'Redeemed';
+          break;
+        case 'adjusted':
+          this.selectedType = 'Adjusted';
+          break;
+        case 'all':
+        default:
+          this.selectedType = null;
+          break;
+      }
+    }
+    
+    // Reset to first page when filtering
+    this.currentPage = 1;
+    this.loadAllData();
   }
 
   /**
@@ -356,12 +402,16 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          this.userOptions = (response.users || []).map((u: any) => ({
-            id: u.id,
-            name: `${u.firstName} ${u.lastName}`,
-            email: u.email,
-            employeeId: u.employeeId
-          }));
+          // Filter out the current admin user from the list
+          const currentUserId = this.currentUser?.id;
+          this.userOptions = (response.users || [])
+            .filter((u: any) => u.id !== currentUserId) // Exclude self
+            .map((u: any) => ({
+              id: u.id,
+              name: `${u.firstName} ${u.lastName}`,
+              email: u.email,
+              employeeId: u.employeeId
+            }));
         },
         error: (error) => {
           console.error('Error loading users:', error);
@@ -493,6 +543,7 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       amount: 0,
       reason: ''
     };
+    this.adjustFormTouched = false;
   }
 
   onAdjustUserChange(): void {
@@ -503,8 +554,38 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
   }
 
   submitAdjustPoints(): void {
-    if (!this.adjustPointsForm.userId || !this.adjustPointsForm.reason.trim()) {
-      this.errorMessage = 'Please select a user and provide a reason';
+    // Mark form as touched for validation display
+    this.adjustFormTouched = true;
+    
+    // Validation checks
+    if (!this.adjustPointsForm.userId) {
+      this.errorMessage = 'Please select a user';
+      this.showErrorAlert = true;
+      return;
+    }
+    
+    if (this.adjustPointsForm.amount === 0) {
+      this.errorMessage = 'Amount cannot be zero';
+      this.showErrorAlert = true;
+      return;
+    }
+
+    // Validate min/max range
+    const maxAmount = ValidationConstants.POINTS_COST_MAX;
+    if (this.adjustPointsForm.amount < -maxAmount || this.adjustPointsForm.amount > maxAmount) {
+      this.errorMessage = `Amount must be between -${maxAmount.toLocaleString()} and +${maxAmount.toLocaleString()}`;
+      this.showErrorAlert = true;
+      return;
+    }
+    
+    if (!this.adjustPointsForm.reason.trim()) {
+      this.errorMessage = 'Please provide a reason';
+      this.showErrorAlert = true;
+      return;
+    }
+    
+    if (this.adjustPointsForm.reason.trim().length < 10) {
+      this.errorMessage = 'Reason must be at least 10 characters';
       this.showErrorAlert = true;
       return;
     }
@@ -529,11 +610,13 @@ export class TransactionManagementComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (response) => {
-          this.successMessage = response.message;
-          this.showSuccessAlert = true;
+          // Show success toast instead of alert
+          this.toastService.success(
+            'Points Adjusted',
+            `${response.message}. Updated balance for ${this.adjustPointsForm.userName || 'user'}.`
+          );
           this.closeAdjustPointsModal();
           this.loadAllData(); // Refresh all data
-          setTimeout(() => this.showSuccessAlert = false, 5000);
         },
         error: (error) => {
           this.errorMessage = error.message || 'Failed to adjust points';

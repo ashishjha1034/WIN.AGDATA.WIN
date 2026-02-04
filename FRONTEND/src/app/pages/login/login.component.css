@@ -6,7 +6,7 @@
 
 .login-sidebar {
   width: 40%;
-  background: var(--ag-color-background-brand);
+  background: linear-gradient(135deg, #1a5c3a 0%, #2d8659 50%, #1a5c3a 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,24 +21,65 @@
   right: 0;
   width: 500px;
   height: 500px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 50%;
   transform: translate(25%, -25%);
+}
+
+.login-sidebar::after {
+  content: '';
+  position: absolute;
+  bottom: -100px;
+  left: -100px;
+  width: 400px;
+  height: 400px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 50%;
 }
 
 .logo-container {
   position: relative;
   z-index: 1;
   text-align: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.agdata-logo {
+.sidebar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.logo-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agdata-logo-overlay {
   width: 300px;
   height: auto;
   max-width: 90%;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  position: relative;
+  z-index: 2;
 }
 
 .login-main {
@@ -143,10 +184,21 @@ form {
   justify-content: center;
   color: var(--ag-color-text-secondary);
   transition: color 0.2s;
+  z-index: 1;
 }
 
 .toggle-password:hover {
   color: var(--ag-color-text-primary);
+}
+
+.toggle-password:focus {
+  outline: 2px solid var(--ag-color-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.toggle-password:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .eye-icon {
@@ -156,6 +208,14 @@ form {
 
 .password-wrapper .check-icon {
   right: 44px;
+}
+
+.password-wrapper .password-check {
+  right: 48px;
+}
+
+.toggle-password i {
+  font-size: 18px;
 }
 
 .error-text {
@@ -389,13 +449,22 @@ form {
 
   .login-sidebar {
     width: 100%;
-    min-height: 200px;
+    min-height: 250px;
     padding: 20px;
   }
 
-  .agdata-logo {
-    width: 200px;
-    height: 100px;
+  .sidebar-image {
+    position: relative;
+    width: 100%;
+    height: auto;
+  }
+
+  .logo-overlay {
+    padding: 0;
+  }
+
+  .agdata-logo-overlay {
+    width: 250px;
   }
 
   .login-main {

@@ -2,21 +2,8 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-redemptions-main">
-    <!-- Header - Matches Products/Users/Events -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Redemptions Management</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Redemptions Management"></app-admin-header>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -49,12 +36,19 @@
         <section class="charts-section" aria-label="Redemption Analytics">
           <div class="charts-grid">
             <!-- Chart 1: Redemptions Status Pie/Donut Chart -->
-            <div class="chart-card">
+            <div class="chart-card" *ngIf="statusChartVisible()">
               <div class="chart-header">
                 <div class="chart-title-group">
                   <h2 class="chart-title">Redemptions Status</h2>
-                  <p class="chart-subtitle">Distribution by status</p>
+                  <p class="chart-subtitle">Distribution by status (click slice to filter)</p>
                 </div>
+                <button 
+                  class="chart-toggle-btn" 
+                  (click)="toggleStatusChart()"
+                  title="Hide chart"
+                  aria-label="Hide redemptions status chart">
+                  <i class="fa-solid fa-eye-slash"></i>
+                </button>
               </div>
               <div class="chart-body">
                 <div 
@@ -73,25 +67,24 @@
               </div>
             </div>
 
+            <!-- Show chart toggle button when hidden -->
+            <div class="chart-card chart-hidden-placeholder" *ngIf="!statusChartVisible()">
+              <button 
+                class="chart-show-btn" 
+                (click)="toggleStatusChart()"
+                title="Show redemptions status chart"
+                aria-label="Show redemptions status chart">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Show Status Chart</span>
+              </button>
+            </div>
+
             <!-- Chart 2: Top 5 Products by Redemptions -->
             <div class="chart-card">
               <div class="chart-header">
                 <div class="chart-title-group">
                   <h2 class="chart-title">Top 5 Products by Redemptions</h2>
                   <p class="chart-subtitle">Most redeemed products</p>
-                </div>
-                <!-- Category Filter -->
-                <div class="chart-category-selector">
-                  <select 
-                    [(ngModel)]="selectedChartCategory" 
-                    (change)="onChartCategoryChange()"
-                    class="category-select"
-                    aria-label="Select category for chart">
-                    <option value="all">All Categories</option>
-                    <option *ngFor="let category of categories" [value]="category.id">
-                      {{ category.name }}
-                    </option>
-                  </select>
                 </div>
               </div>
               <div class="chart-body">
@@ -105,7 +98,7 @@
                 </div>
                 <div class="chart-empty" *ngIf="topProductsChartData().length === 0">
                   <i class="fa-regular fa-chart-bar"></i>
-                  <p>No product redemption data for this category</p>
+                  <p>No product redemption data available</p>
                 </div>
               </div>
               <div class="chart-legend" *ngIf="topProductsChartData().length > 0">
@@ -333,16 +326,12 @@
           </div>
           <div class="info-grid">
             <div class="info-item">
-              <span class="info-label">Current Balance</span>
+              <span class="info-label">Balance Before</span>
+              <span class="info-value highlight">{{ (selectedRedemption.userCurrentBalance + selectedRedemption.pointsSpent) | number }} pts</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Balance After</span>
               <span class="info-value highlight">{{ selectedRedemption.userCurrentBalance | number }} pts</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Total Earned</span>
-              <span class="info-value">{{ selectedRedemption.userTotalEarned | number }} pts</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Total Redeemed</span>
-              <span class="info-value">{{ selectedRedemption.userTotalRedeemed | number }} pts</span>
             </div>
           </div>
         </div>
@@ -368,14 +357,6 @@
             <div class="info-item">
               <span class="info-label">Points per Unit</span>
               <span class="info-value">{{ selectedRedemption.productPointsPerUnit | number }} pts</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Quantity</span>
-              <span class="info-value">{{ selectedRedemption.quantity }}</span>
-            </div>
-            <div class="info-item full-width">
-              <span class="info-label">Total Points Spent</span>
-              <span class="info-value highlight-lg">{{ selectedRedemption.pointsSpent | number }} pts</span>
             </div>
           </div>
         </div>

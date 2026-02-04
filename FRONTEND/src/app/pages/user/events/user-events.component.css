@@ -65,9 +65,9 @@
 .split-view-container {
   display: flex;
   gap: 24px;
-  height: calc(100vh - 180px); /* Fixed height based on viewport */
-  min-height: 500px;
-  max-height: 800px;
+  height: calc(100vh - 140px); /* Increased height to fill more viewport */
+  min-height: 600px;
+  max-height: none; /* Remove max-height to allow full expansion */
   overflow: hidden;
 }
 

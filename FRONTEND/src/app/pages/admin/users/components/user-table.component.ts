@@ -5,7 +5,7 @@ import { UserListItem } from '../../../../models/user.models';
 import { PaginationComponent } from '../../../../shared/components/pagination.component';
 
 export interface UserTableAction {
-  type: 'view' | 'edit' | 'reset-password' | 'toggle-status' | 'delete';
+  type: 'view' | 'edit' | 'toggle-status' | 'delete';
   userId: string;
   user: UserListItem;
 }
@@ -91,7 +91,6 @@ export interface UserTableAction {
                 <div class="menu-dropdown" *ngIf="activeMenuId === user.id" @fadeInOut [class.open-up]="shouldOpenUp(user)">
                   <button (click)="onAction('view', user)">View Details</button>
                   <button (click)="onAction('edit', user)">Edit</button>
-                  <button (click)="onAction('reset-password', user)">Reset Password</button>
                   <div class="menu-divider"></div>
                   <button class="delete" (click)="onAction('delete', user)">Delete</button>
                 </div>

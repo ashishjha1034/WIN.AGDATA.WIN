@@ -3,7 +3,11 @@
 
   <div class="user-transactions-main">
     <!-- Header - Uses shared component with admin-style header -->
-    <app-user-page-header pageTitle="Transactions"></app-user-page-header>
+    <app-user-page-header 
+      pageTitle="Transactions"
+      [showPointsBadge]="true"
+      [pointsValue]="userPoints">
+    </app-user-page-header>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -14,107 +18,104 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- KPI Card -->
-        <section class="kpi-section">
-          <div class="kpi-card">
-            <div class="kpi-icon">
-              <i class="fa-solid fa-wallet"></i>
-            </div>
-            <div class="kpi-content">
-              <div class="kpi-value">{{ stats?.currentBalance | number }}</div>
-              <div class="kpi-label">Current Balance</div>
-            </div>
-          </div>
-        </section>
-
         <!-- Controls Card -->
         <section class="controls-section">
           <div class="controls-card">
-            <div class="controls-row">
-              <!-- Search -->
-              <div class="search-group">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input
-                  type="text"
-                  class="search-input"
-                  placeholder="Search transactions..."
-                  [(ngModel)]="filters.searchQuery"
-                  (input)="onSearchChange()"
-                  aria-label="Search transactions"
-                />
-              </div>
-
-              <!-- Filter Tabs -->
-              <div class="filter-tabs">
-                <button 
-                  class="filter-tab" 
-                  [class.active]="filters.type === 'all'"
-                  (click)="setTypeFilter('all')"
-                >
-                  All
-                </button>
-                <button 
-                  class="filter-tab" 
-                  [class.active]="filters.type === 'earned'"
-                  (click)="setTypeFilter('earned')"
-                >
-                  Earned
-                </button>
-                <button 
-                  class="filter-tab" 
-                  [class.active]="filters.type === 'redeemed'"
-                  (click)="setTypeFilter('redeemed')"
-                >
-                  Redeemed
-                </button>
-                <button 
-                  class="filter-tab" 
-                  [class.active]="filters.type === 'refunded'"
-                  (click)="setTypeFilter('refunded')"
-                >
-                  Refunded
-                </button>
-                <button 
-                  class="filter-tab" 
-                  [class.active]="filters.type === 'adjusted'"
-                  (click)="setTypeFilter('adjusted')"
-                >
-                  Adjusted
-                </button>
-              </div>
-
-              <!-- Date Range -->
-              <div class="date-range-group">
-                <i class="fa-regular fa-calendar date-icon"></i>
-                <input 
-                  type="date" 
-                  class="date-input" 
-                  [(ngModel)]="filters.startDate"
-                  (change)="onDateChange()"
-                  placeholder="From"
-                />
-                <span class="date-separator">to</span>
-                <input 
-                  type="date" 
-                  class="date-input" 
-                  [(ngModel)]="filters.endDate"
-                  (change)="onDateChange()"
-                  placeholder="To"
-                />
-              </div>
+            <div class="controls-header">
+              <h3 class="controls-title">Filter Transactions</h3>
+              <button 
+                class="filter-toggle-btn"
+                [class.active]="showFilters"
+                (click)="showFilters = !showFilters"
+                [attr.aria-expanded]="showFilters"
+              >
+                <i class="fa-solid fa-sliders"></i>
+                <span>Filters</span>
+                <i class="fa-solid fa-chevron-down" [class.rotated]="showFilters"></i>
+              </button>
             </div>
 
-            <!-- Results Summary & Reset -->
-            <div class="results-summary">
-              <span class="result-count">{{ filteredTransactions.length }} transactions found</span>
-              <button 
-                class="reset-btn"
-                *ngIf="hasFiltersApplied"
-                (click)="resetFilters()"
-              >
-                <i class="fa-solid fa-rotate-left"></i>
-                Reset
-              </button>
+            <div class="filters-panel" [class.collapsed]="!showFilters">
+              <div class="filters-content">
+                <!-- Type Filter -->
+                <div class="filter-group">
+                  <label class="filter-label">
+                    <i class="fa-solid fa-tag"></i>
+                    Transaction Type
+                  </label>
+                  <div class="type-filter-group">
+                    <button 
+                      class="type-filter-btn"
+                      [class.active]="filters.type === 'all'"
+                      (click)="onTypeFilter('all')">
+                      All Types
+                    </button>
+                    <button 
+                      class="type-filter-btn"
+                      [class.active]="filters.type === 'earned'"
+                      (click)="onTypeFilter('earned')">
+                      <i class="fa-solid fa-arrow-up"></i>
+                      Earned
+                    </button>
+                    <button 
+                      class="type-filter-btn"
+                      [class.active]="filters.type === 'redeemed'"
+                      (click)="onTypeFilter('redeemed')">
+                      <i class="fa-solid fa-arrow-down"></i>
+                      Redeemed
+                    </button>
+                    <button 
+                      class="type-filter-btn"
+                      [class.active]="filters.type === 'adjusted'"
+                      (click)="onTypeFilter('adjusted')">
+                      <i class="fa-solid fa-sliders"></i>
+                      Adjusted
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Date Range Filter -->
+                <div class="filter-group">
+                  <label class="filter-label">
+                    <i class="fa-regular fa-calendar"></i>
+                    Date Range
+                  </label>
+                  <div class="date-range-group">
+                    <div class="date-input-wrapper">
+                      <label class="date-label">From</label>
+                      <input 
+                        type="date" 
+                        class="date-input" 
+                        [(ngModel)]="filters.startDate"
+                        (change)="onDateChange()"
+                      />
+                    </div>
+                    <div class="date-separator">—</div>
+                    <div class="date-input-wrapper">
+                      <label class="date-label">To</label>
+                      <input 
+                        type="date" 
+                        class="date-input" 
+                        [(ngModel)]="filters.endDate"
+                        (change)="onDateChange()"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Results Summary & Reset -->
+              <div class="filters-footer">
+                <span class="result-count">{{ filteredTransactions.length }} transactions found</span>
+                <button 
+                  class="reset-btn"
+                  *ngIf="hasFiltersApplied"
+                  (click)="resetFilters()"
+                >
+                  <i class="fa-solid fa-rotate-left"></i>
+                  Reset All
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -126,8 +127,8 @@
               <thead>
                 <tr>
                   <th class="col-date">Date</th>
-                  <th class="col-description">Description</th>
-                  <th class="col-type">Type</th>
+                  <th class="col-name">Name</th>
+                  <th class="col-tag">Tags</th>
                   <th class="col-points">Points</th>
                   <th class="col-balance">Balance After</th>
                 </tr>
@@ -141,16 +142,14 @@
                   <td class="col-date">
                     {{ formatShortDate(transaction.timestamp) }}
                   </td>
-                  <td class="col-description">
-                    <div class="description-cell">
-                      <span class="source-icon" [ngClass]="getSourceClass(transaction.source)">
-                        <i [class]="getSourceFontAwesomeClass(transaction.source)"></i>
-                      </span>
-                      <span class="description-text">{{ transaction.description }}</span>
+                  <td class="col-name">
+                    <div class="name-cell">
+                      <i [class]="getSourceFontAwesomeClass(transaction.source)" class="name-icon"></i>
+                      <span class="name-text">{{ getTransactionName(transaction) }}</span>
                     </div>
                   </td>
-                  <td class="col-type">
-                    <span class="type-badge" [ngClass]="getTypeBadgeClass(transaction.type)">
+                  <td class="col-tag">
+                    <span class="transaction-tag" [ngClass]="getTypeBadgeClass(transaction.type)">
                       {{ getTypeLabel(transaction.type) }}
                     </span>
                   </td>
@@ -158,7 +157,7 @@
                     {{ formatPoints(transaction.points, transaction.type) }}
                   </td>
                   <td class="col-balance">
-                    {{ transaction.balanceAfter | number }} pts
+                    {{ transaction.balanceAfter | number }}
                   </td>
                 </tr>
               </tbody>

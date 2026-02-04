@@ -231,8 +231,40 @@
   margin: 0;
 }
 
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 .chart-category-selector {
   flex-shrink: 0;
+}
+
+.btn-chart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-chart-toggle:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.btn-chart-toggle i {
+  font-size: 12px;
 }
 
 .category-select {
@@ -485,7 +517,7 @@
   box-shadow: 0 0 0 3px rgba(44, 95, 63, 0.1);
 }
 
-/* Range Filter */
+/* Range Filter - Simple & Clean */
 .range-filter {
   min-width: 200px;
 }
@@ -500,8 +532,20 @@
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: #374151;
+}
+
+.range-values span:first-child::before {
+  content: 'Min: ';
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.range-values span:last-child::before {
+  content: 'Max: ';
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .range-inputs-dual {
@@ -512,30 +556,47 @@
 .range-slider {
   position: absolute;
   width: 100%;
-  height: 6px;
-  background: transparent;
+  height: 4px;
+  background: #e5e7eb;
   -webkit-appearance: none;
   appearance: none;
   pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+}
+
+.range-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.range-slider::-moz-range-track {
+  height: 4px;
+  background: transparent;
 }
 
 .range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  background: #2c5f3f;
+  width: 14px;
+  height: 14px;
+  background: #6b7280;
   border-radius: 50%;
   cursor: pointer;
   pointer-events: all;
   border: 2px solid #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  background: #4b5563;
 }
 
 .range-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: #2c5f3f;
+  width: 14px;
+  height: 14px;
+  background: #6b7280;
   border-radius: 50%;
   cursor: pointer;
   pointer-events: all;
@@ -543,12 +604,16 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+.range-slider::-moz-range-thumb:hover {
+  background: #4b5563;
+}
+
 .range-min {
-  z-index: 1;
+  z-index: 2;
 }
 
 .range-max {
-  z-index: 2;
+  z-index: 1;
 }
 
 .range-scale {
@@ -556,6 +621,7 @@
   justify-content: space-between;
   font-size: 10px;
   color: #9ca3af;
+  padding: 0 4px;
 }
 
 .filter-actions {
@@ -788,21 +854,40 @@
 .menu-dropdown {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  min-width: 180px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
   z-index: 1000;
   overflow: hidden;
-  animation: fadeIn 0.15s ease;
 }
 
-@keyframes fadeIn {
+.menu-dropdown.dropdown-down {
+  top: calc(100% + 4px);
+  animation: slideDown 0.15s ease;
+}
+
+.menu-dropdown.dropdown-up {
+  bottom: calc(100% + 4px);
+  animation: slideUp 0.15s ease;
+}
+
+@keyframes slideDown {
   from {
     opacity: 0;
     transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;

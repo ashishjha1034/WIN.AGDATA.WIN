@@ -100,6 +100,12 @@ public class EventRepository : Repository<Event>, IEventRepository
     }
 
     /// <inheritdoc />
+    public async Task<int> GetTotalEventRegistrationsAsync()
+    {
+        return await _context.EventParticipants.CountAsync();
+    }
+
+    /// <inheritdoc />
     public async Task SaveChangesAsync(CancellationToken ct = default)
     {
         await _context.SaveChangesAsync(ct);

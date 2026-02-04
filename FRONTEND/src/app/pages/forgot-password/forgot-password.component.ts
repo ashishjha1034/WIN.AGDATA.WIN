@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
@@ -17,16 +18,15 @@ import { CustomValidators } from '../../shared/validators/custom-validators';
 export class ForgotPasswordComponent implements OnInit, OnDestroy {
   forgotForm!: FormGroup;
   loading = false;
-  error: string | null = null;
   success = false;
-  successMessage = '';
 
   private destroy$ = new Subject<void>();
 
   constructor(
     private formBuilder: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private toastService: ToastService
   ) { }
 
   ngOnInit(): void {
@@ -53,28 +53,42 @@ export class ForgotPasswordComponent implements OnInit, OnDestroy {
     }
 
     this.loading = true;
-    this.error = null;
     this.success = false;
 
     this.authService.forgotPassword(this.forgotForm.value.email)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (response) => {
-          console.log('Forgot password request successful');
+        next: () => {
           this.success = true;
-          this.successMessage = response.message || 'If the account exists, a password reset link has been sent to your email.';
           this.forgotForm.reset();
           this.loading = false;
+          
+          // Show non-revealing toast message for security
+          this.toastService.success(
+            'Reset Email Sent',
+            'If the email exists, you will receive a reset link'
+          );
 
-          // Redirect to login after 3 seconds
+          // Redirect to login after 2 seconds
           setTimeout(() => {
             this.router.navigateByUrl('/login');
-          }, 3000);
+          }, 2000);
         },
-        error: (error) => {
-          console.error('Forgot password error:', error);
-          this.error = error?.error?.message || 'An error occurred. Please try again.';
+        error: () => {
+          // Always show success message for security (don't reveal if email exists)
+          this.success = true;
+          this.forgotForm.reset();
           this.loading = false;
+          
+          this.toastService.info(
+            'Reset Email Sent',
+            'If the email exists, you will receive a reset link'
+          );
+
+          // Redirect to login after 2 seconds
+          setTimeout(() => {
+            this.router.navigateByUrl('/login');
+          }, 2000);
         }
       });
   }

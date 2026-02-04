@@ -42,6 +42,7 @@ export interface StatsDto {
   totalPointsEarned: number;
   totalPointsRedeemed: number;
   pendingRedemptions: number;
+  totalEventRegistrations: number;
 }
 
 // Request to invite/create a user - matches backend InviteUserRequest

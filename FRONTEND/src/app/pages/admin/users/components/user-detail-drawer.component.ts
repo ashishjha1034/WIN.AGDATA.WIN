@@ -819,12 +819,19 @@ export interface DrawerAction {
     }
 
     .btn-success {
-      background: #dcfce7;
-      color: #16a34a;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #16a34a;
+      color: white;
     }
 
     .btn-success:hover {
-      background: #bbf7d0;
+      background: #15803d;
     }
 
     /* Edit Form Styles */
@@ -1137,10 +1144,10 @@ export class UserDetailDrawerComponent implements OnInit, OnChanges, OnDestroy {
     this.actionTriggered.emit({ type });
   }
 
-  /** Get character count for a form field */
+  /** Get character count for a form field (excludes whitespace) */
   getCharCount(fieldName: string): number {
     const value = this.editForm.get(fieldName)?.value;
-    return value ? value.length : 0;
+    return value ? value.trim().length : 0;
   }
 
   /** Check if edit form can be saved */

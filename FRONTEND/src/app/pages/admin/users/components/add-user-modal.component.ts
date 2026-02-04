@@ -31,7 +31,7 @@ import { Subject } from 'rxjs';
               [class.error]="isFieldInvalid('firstName')"
             />
             <span class="error-message" *ngIf="isFieldInvalid('firstName')">
-              First name is required
+              {{ form.get('firstName')?.hasError('whitespace') ? 'First name cannot be only whitespace' : 'First name is required (min 2 characters)' }}
             </span>
           </div>
 
@@ -45,7 +45,7 @@ import { Subject } from 'rxjs';
               [class.error]="isFieldInvalid('lastName')"
             />
             <span class="error-message" *ngIf="isFieldInvalid('lastName')">
-              Last name is required
+              {{ form.get('lastName')?.hasError('whitespace') ? 'Last name cannot be only whitespace' : 'Last name is required (min 2 characters)' }}
             </span>
           </div>
 
@@ -60,7 +60,7 @@ import { Subject } from 'rxjs';
             />
             <span class="help-text">Must be unique. Used for internal identification.</span>
             <span class="error-message" *ngIf="isFieldInvalid('employeeId')">
-              Employee ID is required and must be unique
+              {{ form.get('employeeId')?.hasError('whitespace') ? 'Employee ID cannot be only whitespace' : 'Employee ID is required (min 3 characters)' }}
             </span>
           </div>
 
@@ -516,14 +516,25 @@ export class AddUserModalComponent implements OnDestroy {
 
   constructor(private fb: FormBuilder) {
     this.form = this.fb.group({
-      firstName: ['', [Validators.required, Validators.minLength(2)]],
-      lastName: ['', [Validators.required, Validators.minLength(2)]],
-      employeeId: ['', [Validators.required, Validators.minLength(3)]],
+      firstName: ['', [Validators.required, this.noWhitespaceValidator, Validators.minLength(2)]],
+      lastName: ['', [Validators.required, this.noWhitespaceValidator, Validators.minLength(2)]],
+      employeeId: ['', [Validators.required, this.noWhitespaceValidator, Validators.minLength(3)]],
       email: ['', [Validators.required, Validators.email]],
       role: ['Employee'],
       sendPasswordEmail: [false],
       temporaryPassword: ['', [Validators.minLength(8)]]
     }, { validators: this.passwordValidator });
+  }
+
+  // Custom validator: reject whitespace-only input and check trimmed length
+  noWhitespaceValidator(control: AbstractControl): ValidationErrors | null {
+    if (control.value && typeof control.value === 'string') {
+      const trimmed = control.value.trim();
+      if (trimmed.length === 0) {
+        return { whitespace: true };
+      }
+    }
+    return null;
   }
 
   // Custom validator: require password if not sending email

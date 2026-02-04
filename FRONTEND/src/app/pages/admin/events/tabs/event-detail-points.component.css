@@ -167,10 +167,10 @@
   font-weight: 500;
 }
 
-/* Locked State */
+/* Locked State - Blended theme design */
 .locked-card {
-  background: #fef3c7;
-  border-color: #fbbf24;
+  background: linear-gradient(135deg, rgba(44, 95, 63, 0.05), rgba(61, 139, 90, 0.08));
+  border-color: rgba(44, 95, 63, 0.2);
 }
 
 .locked-content {
@@ -180,19 +180,19 @@
 
 .locked-content i {
   font-size: 36px;
-  color: #f59e0b;
+  color: #2c5f3f;
   margin-bottom: 12px;
 }
 
 .locked-content h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #92400e;
+  color: #2c5f3f;
   margin: 0 0 6px 0;
 }
 
 .locked-content p {
-  color: #78350f;
+  color: #4b5563;
   margin: 6px 0;
   font-size: 13px;
 }

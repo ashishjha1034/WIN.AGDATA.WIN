@@ -5,6 +5,10 @@ import { catchError } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { ToastService } from './toast.service';
 
+// Track if we've already shown an access denied toast recently to prevent duplicates
+let lastAccessDeniedTime = 0;
+const ACCESS_DENIED_THROTTLE_MS = 3000;
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const toastService = inject(ToastService);
@@ -73,8 +77,27 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       console.error('[AuthInterceptor] Request error:', error.status, error.statusText);
       console.error('[AuthInterceptor] Error details:', error);
       
+      const now = Date.now();
+      
+      // Handle 403 Forbidden - Access Denied
+      if (error.status === 403) {
+        // Check if this is a password-change required scenario vs actual forbidden
+        const isPasswordChangeRequired = error.error?.code === 'PASSWORD_CHANGE_REQUIRED' ||
+          error.error?.message?.toLowerCase().includes('password') ||
+          error.error?.requiresPasswordChange;
+        
+        // Throttle access denied toasts to prevent duplicates
+        if (!isPasswordChangeRequired && (now - lastAccessDeniedTime) > ACCESS_DENIED_THROTTLE_MS) {
+          lastAccessDeniedTime = now;
+          toastService.error('Access Denied', 'You do not have permission for this action');
+        }
+        
+        // Don't show toast for password change scenarios - let the UI handle it
+        return throwError(() => error);
+      }
+      
       // Show toast for HTTP errors (except 401 on auth endpoints which are handled differently)
-      if (!isAuthEndpoint(req.url) && error.status !== 401) {
+      if (!isAuthEndpoint(req.url) && error.status !== 401 && error.status !== 403) {
         // Don't show toasts for 409/422 deactivation responses - those are handled by specific UI
         const isDeactivationResponse = error.status === 409 || error.status === 422;
         const isDeactivationEndpoint = req.url.includes('/deactivate');

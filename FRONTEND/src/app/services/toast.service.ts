@@ -17,8 +17,14 @@ export class ToastService {
   private toastsSubject = new BehaviorSubject<Toast[]>([]);
   public toasts$: Observable<Toast[]> = this.toastsSubject.asObservable();
 
-  private readonly DEFAULT_DURATION = 6000; // 6 seconds
+  private readonly DEFAULT_DURATION = 15000; // 15 seconds (unified duration)
   private readonly MAX_TOASTS = 5;
+  private readonly DUPLICATE_WINDOW_MS = 2000; // Prevent duplicates within 2 seconds
+  private readonly THROTTLE_MS = 1000; // Throttle rapid triggers
+
+  // Track recent toasts for de-duplication
+  private recentToastKeys = new Map<string, number>();
+  private lastToastTime = 0;
 
   constructor() {}
 
@@ -139,13 +145,27 @@ export class ToastService {
   }
 
   private addToast(type: Toast['type'], title: string, message?: string, duration?: number): void {
+    const now = Date.now();
+    const toastKey = `${type}:${title}:${message || ''}`;
+    
+    // Check for duplicate within the window
+    const lastShown = this.recentToastKeys.get(toastKey);
+    if (lastShown && (now - lastShown) < this.DUPLICATE_WINDOW_MS) {
+      return; // Skip duplicate
+    }
+
+    // Check for rapid triggers (throttle)
+    if ((now - this.lastToastTime) < this.THROTTLE_MS) {
+      // Allow through but mark as throttled context
+    }
+
     const toast: Toast = {
       id: this.generateId(),
       type,
       title,
       message,
       duration: duration ?? this.DEFAULT_DURATION,
-      createdAt: Date.now()
+      createdAt: now
     };
 
     let current = this.toastsSubject.value;
@@ -156,6 +176,13 @@ export class ToastService {
     }
 
     this.toastsSubject.next([...current, toast]);
+    
+    // Track this toast for de-duplication
+    this.recentToastKeys.set(toastKey, now);
+    this.lastToastTime = now;
+
+    // Clean up old keys periodically
+    setTimeout(() => this.recentToastKeys.delete(toastKey), this.DUPLICATE_WINDOW_MS + 1000);
 
     // Auto-dismiss after duration
     if (toast.duration > 0) {

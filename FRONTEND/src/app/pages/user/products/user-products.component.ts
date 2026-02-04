@@ -15,6 +15,7 @@ interface ProductWithState extends UserProduct {
   hasPendingRedemption: boolean;
   stockStatus: 'in-stock' | 'low-stock' | 'out-of-stock';
   stockLabel: string;
+  redemptionCount: number;
 }
 
 @Component({
@@ -33,8 +34,17 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   isLoading = true;
   searchQuery = '';
   selectedCategory = '';
-  sortBy = 'points-low';
+  sortField: 'points' | 'name' = 'points';
+  sortOrder: 'asc' | 'desc' = 'asc';
   userPoints = 0;
+
+  // Filter options
+  showFilters = false;
+  selectedStatus = '';
+  showOnlyRedeemable = false;
+  minPointsFilter = 0;
+  maxPointsFilter = 10000;
+  maxPointsLimit = 10000;
 
   // Pagination
   currentPage = 1;
@@ -54,6 +64,9 @@ export class UserProductsComponent implements OnInit, OnDestroy {
 
   // Track products with pending redemptions
   pendingProductIds: Set<string> = new Set();
+
+  // Product redemption counts
+  productRedemptionCounts: Map<string, number> = new Map();
 
   private destroy$ = new Subject<void>();
 
@@ -78,15 +91,18 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   loadData(): void {
     this.isLoading = true;
     
-    // Load products, categories, user points, and pending product IDs in parallel
+    // Load products, categories, user points, pending product IDs, and redemption counts in parallel
     forkJoin({
       products: this.userDashboardService.getProducts(),
-      pendingProductIds: this.userDashboardService.getPendingRedemptionProductIds()
+      pendingProductIds: this.userDashboardService.getPendingRedemptionProductIds(),
+      redemptionCounts: this.userDashboardService.getProductRedemptionCounts()
     }).pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: ({ products, pendingProductIds }) => {
+        next: ({ products, pendingProductIds, redemptionCounts }) => {
           this.pendingProductIds = new Set(pendingProductIds);
+          this.productRedemptionCounts = new Map(Object.entries(redemptionCounts));
           this.processProducts(products);
+          this.calculateMaxPointsLimit();
           this.isLoading = false;
           this.cdr.detectChanges();
         },
@@ -108,6 +124,15 @@ export class UserProductsComponent implements OnInit, OnDestroy {
       });
 
     this.loadUserPoints();
+  }
+
+  calculateMaxPointsLimit(): void {
+    if (this.products.length > 0) {
+      const maxPoints = Math.max(...this.products.map(p => p.pointsCost));
+      // Round up to nearest 1000
+      this.maxPointsLimit = Math.ceil(maxPoints / 1000) * 1000;
+      this.maxPointsFilter = this.maxPointsLimit;
+    }
   }
 
   loadUserPoints(): void {
@@ -132,13 +157,15 @@ export class UserProductsComponent implements OnInit, OnDestroy {
     const stockStatus = this.getStockStatus(product.currentStock);
     const hasPendingRedemption = this.pendingProductIds.has(product.id);
     const canRedeem = this.userPoints >= product.pointsCost && product.currentStock > 0 && !hasPendingRedemption;
+    const redemptionCount = this.productRedemptionCounts.get(product.id) || 0;
     
     return {
       ...product,
       canRedeem,
       hasPendingRedemption,
       stockStatus,
-      stockLabel: this.getStockLabel(stockStatus)
+      stockLabel: this.getStockLabel(stockStatus),
+      redemptionCount
     };
   }
 
@@ -161,7 +188,8 @@ export class UserProductsComponent implements OnInit, OnDestroy {
     this.products = this.products.map(product => ({
       ...product,
       hasPendingRedemption: this.pendingProductIds.has(product.id),
-      canRedeem: this.userPoints >= product.pointsCost && product.currentStock > 0 && !this.pendingProductIds.has(product.id)
+      canRedeem: this.userPoints >= product.pointsCost && product.currentStock > 0 && !this.pendingProductIds.has(product.id),
+      redemptionCount: this.productRedemptionCounts.get(product.id) || 0
     }));
     this.applyFilters();
   }
@@ -183,19 +211,42 @@ export class UserProductsComponent implements OnInit, OnDestroy {
       );
     }
 
+    // Points range filter
+    filtered = filtered.filter(p => 
+      p.pointsCost >= this.minPointsFilter && p.pointsCost <= this.maxPointsFilter
+    );
+
+    // Status filter
+    if (this.selectedStatus) {
+      switch (this.selectedStatus) {
+        case 'in-stock':
+          filtered = filtered.filter(p => p.currentStock > 0);
+          break;
+        case 'out-of-stock':
+          filtered = filtered.filter(p => p.currentStock === 0);
+          break;
+        case 'redemption-pending':
+          filtered = filtered.filter(p => p.hasPendingRedemption);
+          break;
+        case 'out-of-budget':
+          filtered = filtered.filter(p => this.userPoints < p.pointsCost);
+          break;
+      }
+    }
+
+    // Show only redeemable filter
+    if (this.showOnlyRedeemable) {
+      filtered = filtered.filter(p => p.canRedeem);
+    }
+
     // Sorting
-    switch (this.sortBy) {
-      case 'points-low':
-        filtered.sort((a, b) => a.pointsCost - b.pointsCost);
+    const multiplier = this.sortOrder === 'asc' ? 1 : -1;
+    switch (this.sortField) {
+      case 'points':
+        filtered.sort((a, b) => multiplier * (a.pointsCost - b.pointsCost));
         break;
-      case 'points-high':
-        filtered.sort((a, b) => b.pointsCost - a.pointsCost);
-        break;
-      case 'name-asc':
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'name-desc':
-        filtered.sort((a, b) => b.name.localeCompare(a.name));
+      case 'name':
+        filtered.sort((a, b) => multiplier * a.name.localeCompare(b.name));
         break;
     }
 
@@ -236,6 +287,42 @@ export class UserProductsComponent implements OnInit, OnDestroy {
   }
 
   onSearch(): void {
+    this.applyFilters();
+  }
+
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  setSortOrder(order: 'asc' | 'desc'): void {
+    this.sortOrder = order;
+    this.applyFilters();
+  }
+
+  onRangeChange(): void {
+    // Ensure min doesn't exceed max
+    if (this.minPointsFilter > this.maxPointsFilter) {
+      const temp = this.minPointsFilter;
+      this.minPointsFilter = this.maxPointsFilter;
+      this.maxPointsFilter = temp;
+    }
+    this.applyFilters();
+  }
+
+  toggleShowOnlyRedeemable(): void {
+    this.showOnlyRedeemable = !this.showOnlyRedeemable;
+    this.applyFilters();
+  }
+
+  resetFilters(): void {
+    this.searchQuery = '';
+    this.selectedCategory = '';
+    this.selectedStatus = '';
+    this.sortField = 'points';
+    this.sortOrder = 'asc';
+    this.minPointsFilter = 0;
+    this.maxPointsFilter = this.maxPointsLimit;
+    this.showOnlyRedeemable = false;
     this.applyFilters();
   }
 

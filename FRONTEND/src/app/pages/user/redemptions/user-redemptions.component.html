@@ -3,7 +3,11 @@
 
   <main class="user-redemptions-main">
     <!-- Shared Header Component -->
-    <app-user-page-header pageTitle="My Redemptions"></app-user-page-header>
+    <app-user-page-header 
+      pageTitle="My Redemptions"
+      [showPointsBadge]="true"
+      [pointsValue]="userPoints">
+    </app-user-page-header>
 
     <!-- Main Content Area -->
     <div class="main-content">

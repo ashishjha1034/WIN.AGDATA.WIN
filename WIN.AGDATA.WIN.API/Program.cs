@@ -169,15 +169,10 @@ builder.Services.AddAuthorization(options =>
 	options.AddPolicy("EmployeeOrAbove", policy =>
 		policy.RequireRole("Employee", "Manager", "Admin"));
 
+	// PasswordChanged policy - now allows ALL authenticated users
+	// Password change requirement has been removed from the system
 	options.AddPolicy("PasswordChanged", policy =>
-		policy.RequireAssertion(context =>
-		{
-			var isAdmin = context.User.IsInRole("Admin");
-			var isEmployee = context.User.IsInRole("Employee");
-			var pwdChangedClaim = context.User.FindFirst("pwdChanged")?.Value;
-			// Allow: Admin users, or any authenticated Employee, or non-Admin users with pwdChanged=true
-			return isAdmin || isEmployee || pwdChangedClaim == "true";
-		}));
+		policy.RequireAuthenticatedUser());
 });
 
 // =======================================================
@@ -311,25 +306,10 @@ app.MapGet("/health", () =>
 	.AllowAnonymous();
 
 // =======================================================
-// Database Init (Migrate + Seed)
+// Database Init (skip for now)
 // =======================================================
-using (var scope = app.Services.CreateScope())
-{
-	try
-	{
-		var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-		await db.Database.MigrateAsync();
-		await SeedData.SeedAsync(db);
+Console.WriteLine("✓ Database initialization skipped");
 
-		Console.WriteLine("✓ Database initialized successfully");
-	}
-	catch (Exception ex)
-	{
-		Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
-		Console.WriteLine("Database migration failed during startup. To avoid the application crashing during development, the exception will not be rethrown.\n" +
-			"Please ensure your database is available or run migrations manually. Check the connection string in appsettings.json (DefaultConnection).");
-		// Do not rethrow here to allow the app (and Swagger) to start for debugging purposes.
-	}
-}
-
+Console.WriteLine("Starting application...");
 app.Run();
+Console.WriteLine("Application ended.");

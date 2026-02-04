@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -27,7 +27,7 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
         <!-- Product Name -->
         <div class="form-group">
           <label for="name">Product Name <span class="required">*</span></label>
-          <div class="input-with-action">
+          <div class="input-with-action" *ngIf="!editMode">
             <input
               id="name"
               type="text"
@@ -47,6 +47,9 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
               Check
             </button>
           </div>
+          <div class="read-only-value" *ngIf="editMode">
+            {{ form.get('name')?.value }}
+          </div>
           <app-validation-hint
             id="name-hint"
             [control]="form.get('name')!"
@@ -56,8 +59,12 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
             [maxLength]="50"
             helperText="1-4 words, alphanumeric only, 2-50 characters"
             [checking]="checkingProductName"
-            [uniquenessResult]="productNameResult">
+            [uniquenessResult]="productNameResult"
+            *ngIf="!editMode">
           </app-validation-hint>
+          <p class="help-text" *ngIf="editMode">
+            <i class="fa-solid fa-info-circle"></i> Product name cannot be changed after creation
+          </p>
         </div>
 
         <!-- Description -->
@@ -212,7 +219,7 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
 
         <!-- Image URL -->
         <div class="form-group">
-          <label for="imageUrl">Image URL</label>
+          <label for="imageUrl">Image URL <span class="required">*</span></label>
           <input
             id="imageUrl"
             type="url"
@@ -229,7 +236,7 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
             [control]="form.get('imageUrl')!"
             fieldName="Image URL"
             fieldType="url"
-            helperText="HTTPS URL only, max 1000 characters (optional)">
+            helperText="HTTPS URL required, max 1000 characters">
           </app-validation-hint>
         </div>
 
@@ -431,6 +438,29 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
       cursor: not-allowed;
     }
 
+    .read-only-value {
+      padding: 10px 12px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #374151;
+      font-weight: 500;
+    }
+
+    .help-text {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #6b7280;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .help-text i {
+      color: #3b82f6;
+    }
+
     .btn-create-category {
       margin-top: 12px;
       width: 100%;
@@ -517,7 +547,7 @@ import { FormErrorsSummaryComponent } from '../../../shared/components/form-erro
     }
   `]
 })
-export class ProductFormModalComponent implements OnInit, OnDestroy {
+export class ProductFormModalComponent implements OnInit, OnDestroy, OnChanges {
   @Input() isOpen = false;
   @Input() editMode = false;
   @Input() categories: ProductCategory[] = [];
@@ -565,6 +595,44 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
     this.setupProductNameCheck();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    // When modal opens with edit mode, re-apply initialData
+    if (changes['isOpen']?.currentValue === true && this.editMode && this.initialData && this.form) {
+      this.form.patchValue(this.initialData);
+      this.form.markAsPristine();
+      this.form.markAsUntouched();
+      this.productNameResult = null;
+      this.checkingProductName = false;
+      this.error = null;
+    }
+    // Reset form when modal closes
+    if (changes['isOpen']?.currentValue === false && this.form) {
+      this.resetForm();
+    }
+  }
+
+  private resetForm(): void {
+    if (this.form) {
+      this.form.reset({
+        name: '',
+        description: '',
+        categoryId: '',
+        pointsCost: 1,
+        initialStock: ValidationConstants.STOCK_MIN,
+        imageUrl: '',
+        newCategoryName: ''
+      });
+      this.form.markAsPristine();
+      this.form.markAsUntouched();
+    }
+    this.error = null;
+    this.productNameResult = null;
+    this.checkingProductName = false;
+    this.categoryNameResult = null;
+    this.checkingCategoryName = false;
+    this.showCategoryForm = false;
+  }
+
   private initForm(): void {
     this.form = this.fb.group({
       name: ['', [
@@ -593,6 +661,7 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
         CustomValidators.integer()
       ]],
       imageUrl: ['', [
+        Validators.required,
         Validators.maxLength(ValidationConstants.IMAGE_URL_MAX_LENGTH),
         CustomValidators.httpsUrl()
       ]],
@@ -719,19 +788,22 @@ export class ProductFormModalComponent implements OnInit, OnDestroy {
   }
 
   get canSubmit(): boolean {
-    // Check main form fields (including initialStock which is now required)
-    const mainFields = ['name', 'description', 'categoryId', 'pointsCost', 'initialStock'];
-    for (const field of mainFields) {
+    // Check main form fields
+    // In edit mode: name, description, categoryId, pointsCost, imageUrl
+    // In create mode: all fields including initialStock
+    const requiredFields = this.editMode 
+      ? ['name', 'description', 'categoryId', 'pointsCost', 'imageUrl']
+      : ['name', 'description', 'categoryId', 'pointsCost', 'initialStock', 'imageUrl'];
+      
+    for (const field of requiredFields) {
       if (this.form.get(field)?.invalid) return false;
     }
-    
-    // Check optional fields if they have values
-    const imageControl = this.form.get('imageUrl');
-    if (imageControl?.value && imageControl?.invalid) return false;
 
-    // Check product name uniqueness
-    if (this.checkingProductName) return false;
-    if (this.productNameResult && !this.productNameResult.isValid) return false;
+    // Check product name uniqueness (only in create mode, name is readonly in edit mode)
+    if (!this.editMode) {
+      if (this.checkingProductName) return false;
+      if (this.productNameResult && !this.productNameResult.isValid) return false;
+    }
 
     if (this.isSubmitting) return false;
 

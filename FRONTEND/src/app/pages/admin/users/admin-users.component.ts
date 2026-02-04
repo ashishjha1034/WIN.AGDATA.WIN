@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, debounceTime, finalize, catchError } from 'rxjs/operators';
+import { trigger, transition, style, animate } from '@angular/animations';
 
 // ECharts imports
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
@@ -17,8 +18,10 @@ import type { EChartsOption } from 'echarts';
 echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer]);
 
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { AdminUsersService } from '../../../services/admin-users.service';
 import { AuthService } from '../../../services/auth.service';
+import { ToastService } from '../../../services/toast.service';
 import { UserListItem, UserFilterCriteria, InviteUserRequest, DeactivateUserWarnings, DeactivateUserBlocked, DeactivateUserWarningData } from '../../../models/user.models';
 import { DialogService } from '../../../services/dialog.service';
 
@@ -48,6 +51,7 @@ interface TopUser {
     CommonModule,
     FormsModule,
     AdminSidebarComponent,
+    AdminHeaderComponent,
     NgxEchartsDirective,
     UserTableComponent,
     UserDetailDrawerComponent,
@@ -58,7 +62,19 @@ interface TopUser {
   ],
   templateUrl: './admin-users.component.html',
   styleUrls: ['./admin-users.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('slideDown', [
+      transition(':enter', [
+        style({ height: 0, opacity: 0, overflow: 'hidden' }),
+        animate('300ms ease-out', style({ height: '*', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        style({ height: '*', opacity: 1, overflow: 'hidden' }),
+        animate('300ms ease-in', style({ height: 0, opacity: 0 }))
+      ])
+    ])
+  ]
 })
 export class AdminUsersComponent implements OnInit, OnDestroy {
   @ViewChild(UserDetailDrawerComponent) drawerComponent?: UserDetailDrawerComponent;
@@ -200,6 +216,10 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   // Chart options
   chartOption: EChartsOption = {};
 
+  // Chart visibility toggle (matches Products page pattern)
+  balanceChartVisible = signal(true);
+  private readonly CHART_VISIBILITY_KEY = 'users_balance_chart_visible';
+
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
 
@@ -208,7 +228,8 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private router: Router,
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private toastService: ToastService
   ) {
     // Debounce search
     this.searchSubject.pipe(
@@ -229,6 +250,12 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         this.currentUser = user;
         this.cdr.markForCheck();
       });
+
+    // Restore chart visibility from localStorage
+    const saved = localStorage.getItem(this.CHART_VISIBILITY_KEY);
+    if (saved !== null) {
+      this.balanceChartVisible.set(saved === 'true');
+    }
 
     this.loadUsers();
   }
@@ -318,7 +345,10 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
           type: 'bar',
           data: reversedUsers.map(u => u.balance),
           itemStyle: {
-            color: '#2c5f3f',
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: '#2c5f3f' },
+              { offset: 1, color: '#4ade80' }
+            ]),
             borderRadius: [0, 4, 4, 0]
           },
           barWidth: '60%',
@@ -383,6 +413,15 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Toggle balance chart visibility (matches Products page pattern)
+   */
+  toggleBalanceChart(): void {
+    const newValue = !this.balanceChartVisible();
+    this.balanceChartVisible.set(newValue);
+    localStorage.setItem(this.CHART_VISIBILITY_KEY, String(newValue));
+  }
+
+  /**
    * Handle pagination
    */
   onPageChanged(page: number): void {
@@ -416,9 +455,6 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         break;
       case 'edit':
         this.openDrawerForEdit(action.userId);
-        break;
-      case 'reset-password':
-        this.resetUserPassword(action.userId);
         break;
       case 'delete':
         this.deleteUser(action.userId);
@@ -482,6 +518,11 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
           this.deactivateUser(this.selectedUserId);
         }
         break;
+      case 'activate':
+        if (this.selectedUserId) {
+          this.activateUser(this.selectedUserId);
+        }
+        break;
       case 'toggle-role':
         if (action.data?.userId) {
           this.toggleUserRole(action.data.userId, action.data.newRole);
@@ -489,7 +530,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         break;
       case 'user-updated':
         this.loadUsers();
-        this.showSuccess('User updated successfully!');
+        this.toastService.success('Success', 'User updated successfully!');
         break;
     }
   }
@@ -498,15 +539,13 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
    * Toggle user role between Admin and Employee
    */
   private toggleUserRole(userId: string, newRole: string): void {
-    this.isLoading = true;
     this.cdr.markForCheck();
     
     this.adminUsersService.toggleUserRole(userId, newRole).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
-        this.isLoading = false;
-        this.showSuccess(`User role changed to ${newRole}!`);
+        this.toastService.success('Role Updated', `User role changed to ${newRole}`);
         this.loadUsers();
         // Refresh drawer if still open
         if (this.drawerComponent && this.isDrawerOpen) {
@@ -515,8 +554,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
       error: (err) => {
-        this.isLoading = false;
-        this.showError(err.error?.message || 'Failed to change user role');
+        this.toastService.error('Role Change Failed', err.error?.message || 'Failed to change user role');
         this.cdr.markForCheck();
       }
     });
@@ -569,50 +607,22 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Show success message
+   * Show success message using toast
    */
   private showSuccess(message: string): void {
-    this.successMessage = message;
-    this.cdr.markForCheck();
-    setTimeout(() => {
-      this.successMessage = null;
-      this.cdr.markForCheck();
-    }, 3000);
+    this.toastService.success('Success', message);
   }
 
   /**
-   * Show error message
+   * Show error message using toast
    */
   private showError(message: string): void {
-    this.error = message;
-    this.cdr.markForCheck();
-    setTimeout(() => {
-      this.error = null;
-      this.cdr.markForCheck();
-    }, 5000);
+    this.toastService.error('Error', message);
   }
-
-  /**
-   * Reset user password
-   */
-  private resetUserPassword(userId: string): void {
-    this.dialogService.confirm(
-      'Send password reset email to this user?',
-      'Reset Password',
-      'Send Email',
-      'Cancel'
-    ).subscribe(result => {
-      if (result.confirmed) {
-        console.log('Resetting password for user:', userId);
-        this.showSuccess('Password reset email sent!');
-      }
-    });
-  }
-
   /**
    * Deactivate user with business rule handling
    * Handles hard blocks (422) and soft warnings (409)
-   * Now uses drawer instead of modal dialog
+   * Updates local state - NO page reload
    */
   private deactivateUser(userId: string): void {
     this.deactivationBlockedMessage = null;
@@ -621,30 +631,26 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     if (!user) return;
     
     // First attempt without force - let server check for warnings/blocks
-    this.isLoading = true;
     this.cdr.markForCheck();
     
     this.adminUsersService.deactivateUser(userId, false).pipe(
-      takeUntil(this.destroy$),
-      finalize(() => {
-        this.isLoading = false;
-        this.cdr.markForCheck();
-      })
+      takeUntil(this.destroy$)
     ).subscribe({
       next: (response) => {
         console.log('User deactivated successfully:', response);
-        // Update local state instead of reloading
+        // Update local state instead of reloading - NO page reload
         user.isActive = false;
         this.usersSignal.set([...this.usersSignal()]);
         // Refresh drawer if open
         if (this.drawerComponent && this.isDrawerOpen) {
           this.drawerComponent.retryLoad();
         }
-        this.showSuccess(`User "${user.firstName} ${user.lastName}" deactivated successfully!`);
+        // Show single success toast
+        this.toastService.success('User Deactivated', `${user.firstName} ${user.lastName} has been deactivated.`);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error deactivating user:', error);
-        this.isLoading = false;
         this.cdr.markForCheck();
         
         // Check if it's a soft warning (409 Conflict) - show dialog overlay
@@ -666,18 +672,18 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
           return;
         }
         
-        // Check if it's a hard block (422 Unprocessable Entity) - show toast
+        // Check if it's a hard block (422 Unprocessable Entity) - show single toast
         if (this.adminUsersService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateUserBlocked;
           const message = blocked.reasons?.length > 0 
             ? blocked.reasons.join(' ') 
             : blocked.message || 'Cannot deactivate user due to active dependencies.';
-          this.dialogService.error(message);
+          this.toastService.error('Cannot Deactivate', message);
           return;
         }
         
-        // Generic error
-        this.showError(error?.error?.message || 'Failed to deactivate user. Please try again.');
+        // Generic error - single toast
+        this.toastService.error('Deactivation Failed', error?.error?.message || 'Failed to deactivate user. Please try again.');
       }
     });
   }
@@ -707,7 +713,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         console.log('User deactivated successfully (forced):', response);
         this.deactivateWarningData = null;
         this.pendingDeactivationUserId = null;
-        // Update local state instead of reloading
+        // Update local state instead of reloading - NO page reload
         if (user) {
           user.isActive = false;
           this.usersSignal.set([...this.usersSignal()]);
@@ -716,20 +722,21 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
         if (this.drawerComponent && this.isDrawerOpen) {
           this.drawerComponent.retryLoad();
         }
-        this.showSuccess(`User "${user?.firstName} ${user?.lastName}" deactivated successfully!`);
+        // Show single success toast
+        this.toastService.success('User Deactivated', `${user?.firstName} ${user?.lastName} has been deactivated.`);
       },
       error: (error) => {
         console.error('Error deactivating user (forced):', error);
         
-        // Even with force, hard blocks cannot be bypassed - use toast
+        // Even with force, hard blocks cannot be bypassed - single toast
         if (this.adminUsersService.isDeactivationBlocked(error)) {
           const blocked = error.error as DeactivateUserBlocked;
           const message = blocked.reasons?.length > 0 
             ? blocked.reasons.join(' ') 
             : blocked.message || 'Cannot deactivate user due to active dependencies.';
-          this.dialogService.error(message);
+          this.toastService.error('Cannot Deactivate', message);
         } else {
-          this.showError(error?.error?.message || 'Failed to deactivate user. Please try again.');
+          this.toastService.error('Deactivation Failed', error?.error?.message || 'Failed to deactivate user. Please try again.');
         }
         this.pendingDeactivationUserId = null;
         this.deactivateWarningData = null;
@@ -748,36 +755,34 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Activate user
+   * Activate user - updates local state without page reload
    */
   private activateUser(userId: string): void {
     const user = this.usersSignal().find(u => u.id === userId);
     if (!user) return;
     
-    this.isLoading = true;
     this.cdr.markForCheck();
     
     this.adminUsersService.activateUser(userId).pipe(
-      takeUntil(this.destroy$),
-      finalize(() => {
-        this.isLoading = false;
-        this.cdr.markForCheck();
-      })
+      takeUntil(this.destroy$)
     ).subscribe({
       next: (response) => {
         console.log('User activated successfully:', response);
-        // Update local state instead of reloading
+        // Update local state instead of reloading - NO page reload
         user.isActive = true;
         this.usersSignal.set([...this.usersSignal()]);
-        // Refresh drawer if open
+        // Refresh drawer if open to show updated state
         if (this.drawerComponent && this.isDrawerOpen) {
           this.drawerComponent.retryLoad();
         }
-        this.showSuccess(`User "${user.firstName} ${user.lastName}" activated successfully!`);
+        // Show single success toast
+        this.toastService.success('User Activated', `${user.firstName} ${user.lastName} has been activated successfully.`);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error activating user:', error);
-        this.showError(error?.error?.message || 'Failed to activate user. Please try again.');
+        this.toastService.error('Activation Failed', error?.error?.message || 'Failed to activate user. Please try again.');
+        this.cdr.markForCheck();
       }
     });
   }

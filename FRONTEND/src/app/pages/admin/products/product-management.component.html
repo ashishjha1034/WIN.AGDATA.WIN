@@ -2,42 +2,11 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-products-main">
-    <!-- Header - Matches Admin Users -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Products Management</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Products Management"></app-admin-header>
 
     <!-- Main Content -->
     <main class="main-content">
-      <!-- Success Message -->
-      <div class="success-alert" *ngIf="successMessage" role="alert">
-        <i class="fa-solid fa-circle-check"></i>
-        <span>{{ successMessage }}</span>
-        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <!-- Error Message -->
-      <div class="error-alert" *ngIf="errorMessage" role="alert">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        <span>{{ errorMessage }}</span>
-        <button class="alert-dismiss" (click)="closeErrorAlert()" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
       <!-- Loading State -->
       <div *ngIf="isLoading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -45,7 +14,7 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- Inventory Risk Chart Card -->
+        <!-- Inventory Risk Chart Card with Hide/Show Toggle -->
         <section class="chart-section" aria-label="Inventory Risk & Stock Health">
           <div class="chart-card">
             <div class="chart-header">
@@ -53,21 +22,32 @@
                 <h2 class="chart-title">Inventory Risk & Stock Health</h2>
                 <p class="chart-subtitle">Top 4 products with lowest stock in selected category</p>
               </div>
-              <!-- Category Selector -->
-              <div class="chart-category-selector">
-                <select 
-                  [(ngModel)]="selectedChartCategory" 
-                  (change)="onChartCategoryChange()"
-                  class="category-select"
-                  aria-label="Select category for chart">
-                  <option value="all">All Categories</option>
-                  <option *ngFor="let category of categories" [value]="category.id">
-                    {{ category.name }}
-                  </option>
-                </select>
+              <div class="chart-controls">
+                <!-- Category Selector -->
+                <div class="chart-category-selector" *ngIf="inventoryChartVisible()">
+                  <select 
+                    [(ngModel)]="selectedChartCategory" 
+                    (change)="onChartCategoryChange()"
+                    class="category-select"
+                    aria-label="Select category for chart">
+                    <option value="all">All Categories</option>
+                    <option *ngFor="let category of categories" [value]="category.id">
+                      {{ category.name }}
+                    </option>
+                  </select>
+                </div>
+                <!-- Hide/Show Toggle Button -->
+                <button 
+                  class="btn-chart-toggle"
+                  (click)="toggleInventoryChart()"
+                  [attr.aria-label]="inventoryChartVisible() ? 'Hide chart' : 'Show chart'"
+                  type="button">
+                  <i class="fa-solid" [ngClass]="inventoryChartVisible() ? 'fa-eye-slash' : 'fa-eye'"></i>
+                  {{ inventoryChartVisible() ? 'Hide' : 'Show' }}
+                </button>
               </div>
             </div>
-            <div class="chart-body">
+            <div class="chart-body" *ngIf="inventoryChartVisible()" @slideDown>
               <div 
                 *ngIf="lowStockProducts().length > 0"
                 echarts 
@@ -81,7 +61,7 @@
                 <p>No products found for this category</p>
               </div>
             </div>
-            <div class="chart-legend">
+            <div class="chart-legend" *ngIf="inventoryChartVisible()">
               <div class="legend-item">
                 <span class="legend-color healthy"></span>
                 <span class="legend-label">Healthy Stock (≥{{ lowStockThreshold }})</span>
@@ -160,42 +140,6 @@
                   </select>
                 </div>
 
-                <!-- Points Range Slider -->
-                <div class="filter-group range-filter">
-                  <label>Points Range</label>
-                  <div class="range-slider-container">
-                    <div class="range-values">
-                      <span>{{ activeFilter.minPoints | number }}</span>
-                      <span>{{ activeFilter.maxPoints | number }}</span>
-                    </div>
-                    <div class="range-inputs-dual">
-                      <input 
-                        type="range" 
-                        class="range-slider range-min"
-                        [min]="0" 
-                        [max]="maxPointsLimit"
-                        [step]="100"
-                        [(ngModel)]="activeFilter.minPoints"
-                        (input)="onRangeChange()"
-                      />
-                      <input 
-                        type="range" 
-                        class="range-slider range-max"
-                        [min]="0" 
-                        [max]="maxPointsLimit"
-                        [step]="100"
-                        [(ngModel)]="activeFilter.maxPoints"
-                        (input)="onRangeChange()"
-                      />
-                    </div>
-                    <div class="range-scale">
-                      <span>0</span>
-                      <span>{{ maxPointsLimit / 2 | number }}</span>
-                      <span>{{ maxPointsLimit | number }}</span>
-                    </div>
-                  </div>
-                </div>
-
                 <!-- Reset Button -->
                 <div class="filter-group filter-actions">
                   <button class="btn-reset" (click)="resetFilters()">
@@ -252,7 +196,6 @@
                       </div>
                       <div class="product-details">
                         <div class="product-name">{{ product.name }}</div>
-                        <div class="product-id">ID: {{ product.id | slice:0:8 }}...</div>
                       </div>
                     </div>
                   </td>
@@ -279,7 +222,10 @@
                       <button class="menu-btn" (click)="toggleDropdown(product.id, $event)" aria-label="More actions">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
                       </button>
-                      <div class="menu-dropdown" *ngIf="activeDropdown === product.id">
+                      <div class="menu-dropdown" 
+                           *ngIf="activeDropdown === product.id"
+                           [class.dropdown-up]="i >= paginatedProducts.length - 2"
+                           [class.dropdown-down]="i < paginatedProducts.length - 2">
                         <button (click)="openProductDetail(product.id, $event)">
                           <i class="fa-solid fa-eye"></i> View
                         </button>

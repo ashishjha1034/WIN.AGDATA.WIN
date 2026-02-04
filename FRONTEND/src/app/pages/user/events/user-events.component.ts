@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { EventService } from '../../../services/event.service';
+import { UserDashboardService } from '../../../services/user-dashboard.service';
 import { Event, EventStatus } from '../../../models/event.models';
 import { Subject, forkJoin, interval, Subscription } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
@@ -14,6 +15,7 @@ import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../../config/api.config';
 import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 import { DialogService } from '../../../services/dialog.service';
+import { ToastService } from '../../../services/toast.service';
 
 type SortOption = 'dateNewest' | 'dateOldest' | 'nameAZ' | 'nameZA' | 'pointsHigh' | 'participantsHigh' | 'availabilityLow';
 type RegistrationFilter = 'all' | 'registered' | 'not-registered';
@@ -51,6 +53,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   @ViewChild('rightColumn') rightColumn!: ElementRef;
   
   currentUser: any;
+  userPoints = 0;
   allEvents: Event[] = [];
   filteredEvents: Event[] = [];
   selectedEvent: Event | null = null;
@@ -110,11 +113,13 @@ export class UserEventsComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService,
     private eventService: EventService,
+    private userDashboardService: UserDashboardService,
     private http: HttpClient,
     private router: Router,
     private route: ActivatedRoute,
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private toastService: ToastService
   ) { }
 
   ngOnInit(): void {
@@ -147,7 +152,20 @@ export class UserEventsComponent implements OnInit, OnDestroy {
         this.currentUser = user;
         if (user) {
           this.loadEvents();
+          this.loadUserPoints();
         }
+      });
+  }
+
+  loadUserPoints(): void {
+    this.userDashboardService.getUserPoints()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (points) => {
+          this.userPoints = points;
+          this.cdr.detectChanges();
+        },
+        error: (error) => console.error('Error loading user points:', error)
       });
   }
 
@@ -358,6 +376,12 @@ export class UserEventsComponent implements OnInit, OnDestroy {
 
   changePage(page: number): void {
     this.currentPage = page;
+    this.cdr.markForCheck();
+    
+    // Scroll to top of events list
+    if (this.rightColumn?.nativeElement) {
+      this.rightColumn.nativeElement.scrollTop = 0;
+    }
   }
 
   sortEvents(events: Event[], sortBy: SortOption): Event[] {
@@ -508,8 +532,8 @@ export class UserEventsComponent implements OnInit, OnDestroy {
     
     this.isLoadingAwards = true;
     
-    // Call the participants API to get all participants with their awards
-    this.eventService.getEventParticipants(eventId)
+    // Call the public awards API to get awarded participants
+    this.eventService.getEventAwards(eventId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -519,7 +543,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (participants) => {
-          // Filter only awarded participants and map to AwardedParticipant interface
+          // Map to AwardedParticipant interface
           const awardedParticipants: AwardedParticipant[] = participants
             .filter(p => p.pointsAwarded && p.pointsAwarded > 0)
             .map(p => ({
@@ -663,7 +687,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
           this.loadEvents();
           
           // Show success message
-          this.dialogService.success('Successfully registered for ' + event.name);
+          this.toastService.success('Successfully registered for ' + event.name);
           
           this.cdr.detectChanges();
         },
@@ -682,7 +706,7 @@ export class UserEventsComponent implements OnInit, OnDestroy {
             errorMessage = error.error.message;
           }
           
-          this.dialogService.error(errorMessage);
+          this.toastService.error(errorMessage);
         }
       });
   }

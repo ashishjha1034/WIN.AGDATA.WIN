@@ -3,7 +3,11 @@
 
   <main class="user-dashboard-main">
     <!-- Page Header - Uses shared component with admin-style header -->
-    <app-user-page-header pageTitle="Dashboard"></app-user-page-header>
+    <app-user-page-header 
+      pageTitle="Dashboard"
+      [showPointsBadge]="true"
+      [pointsValue]="userPoints">
+    </app-user-page-header>
 
     <!-- Main Content Area -->
     <div class="main-content">

@@ -50,11 +50,15 @@ public class JwtTokenService : IJwtTokenService
 			new("pwdChanged", user.MustChangePassword ? "false" : "true")
 		};
 
-		if (user.Roles != null)
+		// Add role claims
+		if (user.Roles != null && user.Roles.Count > 0)
 		{
-			foreach (var role in user.Roles)
+			foreach (var roleAssignment in user.Roles)
 			{
-				claims.Add(new Claim(ClaimTypes.Role, role.Role.Name));
+				if (roleAssignment?.Role != null)
+				{
+					claims.Add(new Claim(ClaimTypes.Role, roleAssignment.Role.Name));
+				}
 			}
 		}
 

@@ -2,14 +2,14 @@ import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 
-export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pending' | 'live';
+export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pending' | 'live' | 'registrations';
 
 @Component({
   selector: 'app-kpi-card',
   standalone: true,
   imports: [CommonModule, RouterModule],
   template: `
-    <a [routerLink]="routerLink" [class.no-link]="!routerLink" class="kpi-card" [class]="'kpi-card--' + iconType">
+    <a [routerLink]="routerLink" [queryParams]="queryParams" [class.no-link]="!routerLink" class="kpi-card" [class]="'kpi-card--' + iconType">
       <div class="kpi-icon">
         <i [class]="getIconClass()"></i>
       </div>
@@ -89,6 +89,11 @@ export type KpiIconType = 'users' | 'events' | 'products' | 'low-stock' | 'pendi
       color: #10b981;
     }
 
+    .kpi-card--registrations .kpi-icon {
+      background: rgba(6, 182, 212, 0.12);
+      color: #06b6d4;
+    }
+
     .kpi-content {
       display: flex;
       flex-direction: column;
@@ -119,6 +124,7 @@ export class KpiCardComponent {
   @Input() value: number = 0;
   @Input() iconType: KpiIconType = 'users';
   @Input() routerLink: string | string[] | null = null;
+  @Input() queryParams: { [key: string]: string } | null = null;
 
   getIconClass(): string {
     const iconMap: Record<KpiIconType, string> = {
@@ -127,7 +133,8 @@ export class KpiCardComponent {
       'products': 'fa-solid fa-boxes-stacked',
       'low-stock': 'fa-solid fa-triangle-exclamation',
       'pending': 'fa-solid fa-gift',
-      'live': 'fa-solid fa-bolt'
+      'live': 'fa-solid fa-bolt',
+      'registrations': 'fa-solid fa-user-check'
     };
     return iconMap[this.iconType] || 'fa-solid fa-chart-simple';
   }

@@ -101,7 +101,7 @@
     <!-- Locked State -->
     <div class="card locked-card" *ngIf="!canAwardPoints()">
       <div class="locked-content">
-        <i class="fa-solid fa-lock"></i>
+        <i class="fa-solid fa-circle-check"></i>
         <h4>Points Award Locked</h4>
         <p>Event must be <strong>Live</strong> to award points.</p>
         <p class="current-status">Current status: <span class="status-tag" [class]="'status-' + event.status.toLowerCase()">{{ event.status }}</span></p>

@@ -73,9 +73,9 @@ public class UserPointsTransaction : Entity<Guid>
         decimal balanceAfter,
         Guid processedBy)
     {
-        var transactionType = points > 0 ? PointsTransactionType.Earned : PointsTransactionType.Redeemed;
-        var absPoints = Math.Abs(points);
-        return new(userId, absPoints, transactionType, source, sourceId, description, balanceAfter, processedBy);
+        // Always use Adjusted type for admin adjustments
+        // Points can be positive (add) or negative (deduct)
+        return new(userId, points, PointsTransactionType.Adjusted, source, sourceId, description, balanceAfter, processedBy);
     }
 
     public static UserPointsTransaction CreateRefunded(

@@ -127,12 +127,14 @@ public class AdminController : ControllerBase
             var totalEarned = await _transactionRepository.GetTotalEarnedAsync();
             var totalRedeemed = await _transactionRepository.GetTotalRedeemedAsync();
             var pendingRedemptions = await _redemptionRepository.GetPendingCountAsync();
+            var totalEventRegistrations = await _eventRepository.GetTotalEventRegistrationsAsync();
 
             var stats = new StatsDto(
                 TotalUsers: totalUsers,
                 TotalPointsEarned: totalEarned,
                 TotalPointsRedeemed: totalRedeemed,
-                PendingRedemptions: pendingRedemptions
+                PendingRedemptions: pendingRedemptions,
+                TotalEventRegistrations: totalEventRegistrations
             );
 
             return Ok(stats);

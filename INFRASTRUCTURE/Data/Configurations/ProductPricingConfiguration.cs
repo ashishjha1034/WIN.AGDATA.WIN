@@ -8,6 +8,8 @@ public class ProductPricingConfiguration : IEntityTypeConfiguration<ProductPrici
 {
     public void Configure(EntityTypeBuilder<ProductPricing> builder)
     {
+        builder.ToTable("ProductPricing");
+        
         builder.HasKey(pp => pp.Id);
 
         builder.Property(pp => pp.ProductId).IsRequired();

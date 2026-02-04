@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, catchError, map } from 'rxjs/operators';
 
@@ -11,6 +11,7 @@ import type { EChartsOption } from 'echarts';
 
 // Components
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { KpiCardComponent } from './components/kpi-card/kpi-card.component';
 import { ChartCardComponent } from './components/chart-card/chart-card.component';
 import { TableCardComponent } from './components/table-card/table-card.component';
@@ -34,6 +35,7 @@ interface KpiData {
   lowStockProducts: number;
   pendingRedemptions: number;
   liveEvents: number;
+  totalEventRegistrations: number;
 }
 
 interface RedemptionStatusCounts {
@@ -85,6 +87,7 @@ interface LowStockProductDisplay {
     RouterModule,
     NgxEchartsDirective,
     AdminSidebarComponent,
+    AdminHeaderComponent,
     KpiCardComponent,
     ChartCardComponent,
     TableCardComponent
@@ -106,7 +109,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     totalProducts: 0,
     lowStockProducts: 0,
     pendingRedemptions: 0,
-    liveEvents: 0
+    liveEvents: 0,
+    totalEventRegistrations: 0
   };
 
   // Chart Data
@@ -154,7 +158,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     private redemptionService: RedemptionService,
     private eventService: EventService,
     private productsService: ProductsService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -204,6 +209,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     if (stats) {
       this.kpiData.totalUsers = stats.totalUsers;
       this.kpiData.pendingRedemptions = stats.pendingRedemptions;
+      this.kpiData.totalEventRegistrations = stats.totalEventRegistrations;
     }
   }
 
@@ -329,31 +335,57 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         }
       },
       legend: {
-        orient: 'vertical',
-        right: 10,
-        top: 'center',
+        orient: 'horizontal',
+        bottom: 0,
+        left: 'center',
         formatter: (name: string) => {
           const item = data.find(d => d.name === name);
           const value = item?.value || 0;
-          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-          return `${name} – ${value} (${percent}%)`;
+          return `${name}: ${value}`;
         },
         textStyle: {
           fontSize: 12,
-          color: '#4b5563'
-        }
+          color: '#6b7280'
+        },
+        itemGap: 16
       },
       series: [
         {
           type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['35%', '50%'],
-          avoidLabelOverlap: false,
-          label: { show: false },
-          emphasis: {
-            label: { show: false }
+          radius: ['40%', '65%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: '#fff',
+            borderWidth: 2
           },
-          labelLine: { show: false },
+          label: {
+            show: true,
+            position: 'outside',
+            formatter: (params: any) => {
+              const percent = total > 0 ? ((params.value / total) * 100).toFixed(0) : 0;
+              return `${percent}%`;
+            },
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#374151'
+          },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 15,
+            smooth: true
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: 14,
+              fontWeight: 'bold'
+            },
+            scale: true,
+            scaleSize: 5
+          },
           data: data
         }
       ]
@@ -380,31 +412,57 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         }
       },
       legend: {
-        orient: 'vertical',
-        right: 10,
-        top: 'center',
+        orient: 'horizontal',
+        bottom: 0,
+        left: 'center',
         formatter: (name: string) => {
           const item = data.find(d => d.name === name);
           const value = item?.value || 0;
-          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-          return `${name} – ${value} (${percent}%)`;
+          return `${name}: ${value}`;
         },
         textStyle: {
           fontSize: 12,
-          color: '#4b5563'
-        }
+          color: '#6b7280'
+        },
+        itemGap: 16
       },
       series: [
         {
           type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['35%', '50%'],
-          avoidLabelOverlap: false,
-          label: { show: false },
-          emphasis: {
-            label: { show: false }
+          radius: ['40%', '65%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: '#fff',
+            borderWidth: 2
           },
-          labelLine: { show: false },
+          label: {
+            show: true,
+            position: 'outside',
+            formatter: (params: any) => {
+              const percent = total > 0 ? ((params.value / total) * 100).toFixed(0) : 0;
+              return `${percent}%`;
+            },
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#374151'
+          },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 15,
+            smooth: true
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: 14,
+              fontWeight: 'bold'
+            },
+            scale: true,
+            scaleSize: 5
+          },
           data: data
         }
       ]
@@ -422,6 +480,24 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     if (count === 0) return 'stock-badge stock-badge--out';
     if (count < 5) return 'stock-badge stock-badge--critical';
     return 'stock-badge stock-badge--low';
+  }
+
+  scrollToLowStockProducts(): void {
+    const element = document.getElementById('low-stock-products-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  scrollToPendingRedemptions(): void {
+    const element = document.getElementById('pending-redemptions-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  navigateToLiveEvents(): void {
+    this.router.navigate(['/admin/events'], { queryParams: { status: 'Live' } });
   }
 
   ngOnDestroy(): void {

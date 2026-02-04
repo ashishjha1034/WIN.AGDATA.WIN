@@ -518,6 +518,25 @@ export class UserDashboardService {
   }
 
   /**
+   * Get redemption counts per product
+   * Returns a map of productId -> count of pending/approved redemptions
+   */
+  getProductRedemptionCounts(): Observable<Record<string, number>> {
+    const url = `${this.API_URL}/products/redemption-counts`;
+    console.log('Fetching product redemption counts from:', url);
+    return this.http.get<any>(url).pipe(
+      map(response => {
+        console.log('Product redemption counts response:', response);
+        return response.data || response || {};
+      }),
+      catchError(error => {
+        console.error('Error fetching product redemption counts:', error);
+        return of({});
+      })
+    );
+  }
+
+  /**
    * Fetch top products for carousel
    * Uses the products endpoint and returns active products sorted by popularity
    * Falls back to products with images for the carousel display

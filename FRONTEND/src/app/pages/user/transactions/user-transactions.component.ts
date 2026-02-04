@@ -40,10 +40,12 @@ export interface TransactionFilters {
 })
 export class UserTransactionsComponent implements OnInit, OnDestroy {
   currentUser: any;
+  userPoints = 0;
   transactions: Transaction[] = [];
   filteredTransactions: Transaction[] = [];
   stats: UserDashboardStats | null = null;
   isLoading = true;
+  showFilters = true;
   
   // Filters
   filters: TransactionFilters = {
@@ -97,7 +99,20 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
         this.currentUser = user;
         if (user) {
           this.loadData();
+          this.loadUserPoints();
         }
+      });
+  }
+
+  loadUserPoints(): void {
+    this.userDashboardService.getUserPoints()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (points) => {
+          this.userPoints = points;
+          this.cdr.detectChanges();
+        },
+        error: (error) => console.error('Error loading user points:', error)
       });
   }
 
@@ -310,6 +325,13 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
+  onTypeFilter(type: TransactionFilters['type']): void {
+    this.filters.type = type;
+    this.currentPage = 1;
+    this.applyFilters();
+    this.cdr.detectChanges();
+  }
+
   resetFilters(): void {
     this.filters = {
       type: 'all',
@@ -413,19 +435,6 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     return transaction.balanceAfter - Math.abs(transaction.points);
   }
 
-  getSourceIcon(source: string): string {
-    switch (source.toLowerCase()) {
-      case 'event':
-        return '📅';
-      case 'product':
-        return '🎁';
-      case 'admin':
-        return '⚙️';
-      default:
-        return '📋';
-    }
-  }
-
   getSourceFontAwesomeClass(source: string): string {
     switch (source.toLowerCase()) {
       case 'event':
@@ -459,6 +468,41 @@ export class UserTransactionsComponent implements OnInit, OnDestroy {
     if (typeLower === 'refunded') return 'type-refunded';
     if (typeLower === 'adjusted') return 'type-adjusted';
     return '';
+  }
+
+  getTransactionName(transaction: Transaction): string {
+    const type = transaction.type?.toLowerCase();
+    const desc = transaction.description?.toLowerCase() || '';
+    
+    // For refunded transactions
+    if (type === 'refunded') {
+      return 'Refunded by Admin';
+    }
+    
+    // For event-related transactions
+    if (transaction.source?.toLowerCase() === 'event' || desc.includes('event') || 
+        desc.includes('participation') || desc.includes('contest')) {
+      // Extract event name from description if possible
+      const match = transaction.description?.match(/event:?\s*(.+?)(?:\s*-|$)/i);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+      return transaction.description || 'Event Participation';
+    }
+    
+    // For product-related transactions
+    if (transaction.source?.toLowerCase() === 'product' || desc.includes('redemption') || 
+        desc.includes('gift card') || desc.includes('reward')) {
+      // Extract product name from description if possible
+      const match = transaction.description?.match(/(?:redeemed?|gift card|reward):?\s*(.+?)(?:\s*-|$)/i);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+      return transaction.description || 'Product Redemption';
+    }
+    
+    // Default to description
+    return transaction.description || type || 'Transaction';
   }
 
   formatFullDate(dateString: string): string {

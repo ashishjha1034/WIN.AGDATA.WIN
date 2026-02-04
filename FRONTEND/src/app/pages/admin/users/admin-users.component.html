@@ -2,80 +2,11 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-users-main">
-    <!-- Header - Matches Admin Dashboard -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Users Management</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          
-          <!-- Context Switch Dropdown -->
-          <div class="context-switch-container">
-            <button 
-              class="user-role context-switch-trigger"
-              (click)="toggleContextDropdown($event)"
-              [attr.aria-expanded]="isContextDropdownOpen"
-              aria-haspopup="listbox"
-              aria-label="Switch viewing context">
-              <i class="fa-solid fa-shield-halved"></i>
-              <span>Admin</span>
-              <i class="fa-solid fa-chevron-down dropdown-arrow" [class.rotated]="isContextDropdownOpen"></i>
-            </button>
-            
-            <!-- Dropdown Menu -->
-            <div 
-              class="context-dropdown" 
-              *ngIf="isContextDropdownOpen"
-              role="listbox"
-              aria-label="Viewing context options">
-              <button 
-                class="context-option"
-                [class.active]="viewingContext === 'admin'"
-                (click)="switchContext('admin')"
-                role="option"
-                [attr.aria-selected]="viewingContext === 'admin'">
-                <i class="fa-solid fa-shield-halved"></i>
-                <span>Admin View</span>
-                <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'admin'"></i>
-              </button>
-              <button 
-                class="context-option"
-                [class.active]="viewingContext === 'employee'"
-                (click)="switchContext('employee')"
-                role="option"
-                [attr.aria-selected]="viewingContext === 'employee'">
-                <i class="fa-solid fa-user"></i>
-                <span>Employee View</span>
-                <i class="fa-solid fa-check check-icon" *ngIf="viewingContext === 'employee'"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
+    <!-- Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Users Management"></app-admin-header>
 
     <!-- Main Content -->
     <main class="main-content">
-      <!-- Success Message -->
-      <div class="success-alert" *ngIf="successMessage" role="alert">
-        <i class="fa-solid fa-circle-check"></i>
-        <span>{{ successMessage }}</span>
-        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <!-- Error Message -->
-      <div class="error-alert" *ngIf="error" role="alert">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        <span>{{ error }}</span>
-        <button class="alert-dismiss" (click)="error = null" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
       <!-- Loading State -->
       <div *ngIf="isLoading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -83,7 +14,7 @@
       </div>
 
       <ng-container *ngIf="!isLoading">
-        <!-- Top 5 Balances Chart Card -->
+        <!-- Top 5 Balances Chart Card with Hide/Show Toggle -->
         <section class="chart-section" aria-label="Top Users by Balance">
           <div class="chart-card">
             <div class="chart-header">
@@ -91,8 +22,19 @@
                 <h2 class="chart-title">Top 5 Users by Current Balance</h2>
                 <p class="chart-subtitle">Users with the highest current points balance</p>
               </div>
+              <div class="chart-controls">
+                <!-- Hide/Show Toggle Button -->
+                <button 
+                  class="btn-chart-toggle"
+                  (click)="toggleBalanceChart()"
+                  [attr.aria-label]="balanceChartVisible() ? 'Hide chart' : 'Show chart'"
+                  type="button">
+                  <i class="fa-solid" [ngClass]="balanceChartVisible() ? 'fa-eye-slash' : 'fa-eye'"></i>
+                  {{ balanceChartVisible() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
             </div>
-            <div class="chart-body">
+            <div class="chart-body" *ngIf="balanceChartVisible()" @slideDown>
               <div 
                 *ngIf="topUsers().length > 0"
                 echarts 

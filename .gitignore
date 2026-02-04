@@ -1,6 +1,12 @@
 # Visual Studio build files
 bin/
 obj/
+publish/
+publish_debug/
+publish_release/
+*.dll
+*.exe
+*.pdb
 *.user
 *.rsuser
 *.suo

@@ -190,14 +190,6 @@ import { FormErrorsSummaryComponent } from '../../../../shared/components/form-e
           <h3 class="section-title">SECURITY & ONBOARDING</h3>
 
           <div class="form-group">
-            <div class="checkbox-group">
-              <input type="checkbox" id="send-email" formControlName="sendPasswordEmail" />
-              <label for="send-email">Send password setup email</label>
-            </div>
-            <span class="help-text">The user will receive an email to create their password.</span>
-          </div>
-
-          <div class="form-group" *ngIf="!form.get('sendPasswordEmail')?.value">
             <label for="temporaryPassword">Temporary Password <span class="required">*</span></label>
             <div class="password-input-wrapper">
               <input
@@ -916,7 +908,7 @@ export class AddUserModalComponent implements OnInit, OnDestroy {
 
   getCharCount(fieldName: string): number {
     const value = this.form.get(fieldName)?.value;
-    return value ? value.length : 0;
+    return value ? value.trim().length : 0;
   }
 
   get canSubmit(): boolean {

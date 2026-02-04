@@ -506,17 +506,17 @@ export class ValidationHintComponent implements OnChanges, OnInit, OnDestroy {
       return `Maximum value is ${max.toLocaleString()}`;
     }
     
-    // Valid!
-    if (!errors) {
-      return 'Value is valid!';
-    }
-    
-    return errors?.['min']?.message || errors?.['max']?.message || errors?.['integer']?.message || null;
+    // Valid - no message needed (remove validation noise per UX spec)
+    return null;
   }
   
   private getUrlValidationMessage(value: string, errors: any): string | null {
     if (!value) {
-      return null; // URL is optional
+      // If field has required validator, show error
+      if (errors?.['required']) {
+        return `${this.fieldName || 'Image URL'} is required`;
+      }
+      return null; // URL may be optional in some contexts
     }
     
     // Check for HTTPS
@@ -539,12 +539,8 @@ export class ValidationHintComponent implements OnChanges, OnInit, OnDestroy {
       return 'URL is too long. Maximum 1000 characters.';
     }
     
-    // Valid!
-    if (!errors) {
-      return 'Valid HTTPS URL!';
-    }
-    
-    return errors?.['httpsUrl']?.message || null;
+    // Valid - no message needed (remove validation noise per UX spec)
+    return null;
   }
   
   private getGenericValidationMessage(value: string, errors: any): string | null {

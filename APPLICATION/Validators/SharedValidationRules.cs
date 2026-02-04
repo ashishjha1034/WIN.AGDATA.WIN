@@ -224,7 +224,7 @@ public static class SharedValidationRules
     // =============================================
 
     /// <summary>
-    /// Validates event name: 1-7 alphanumeric words, single spaces only, no consecutive/leading/trailing spaces.
+    /// Validates event name: 1-7 words (letters, numbers, and special characters allowed), single spaces only, no consecutive/leading/trailing spaces.
     /// Characters are counted after trimming; words are counted by spaces.
     /// </summary>
     public static (bool isValid, string? errorMessage) ValidateEventName(string? name)
@@ -256,13 +256,8 @@ public static class SharedValidationRules
         if (words.Length > EventNameMaxWords)
             return (false, $"Event name cannot exceed {EventNameMaxWords} words. Currently: {words.Length} words.");
 
-        // Each word must be alphanumeric only
-        var alphanumericPattern = new Regex(@"^[a-zA-Z0-9]+$");
-        foreach (var word in words)
-        {
-            if (!alphanumericPattern.IsMatch(word))
-                return (false, $"Event name words must be alphanumeric only. Invalid word: '{word}'.");
-        }
+        // Special characters ARE allowed - no alphanumeric-only restriction
+        // Words can contain any printable characters
 
         return (true, null);
     }

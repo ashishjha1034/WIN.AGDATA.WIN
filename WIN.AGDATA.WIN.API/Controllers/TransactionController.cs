@@ -14,17 +14,20 @@ public class TransactionController : ControllerBase
 {
     private readonly ITransactionRepository _transactionRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IEventRepository _eventRepository;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
 
     public TransactionController(
         ITransactionRepository transactionRepository,
         IUserRepository userRepository,
+        IEventRepository eventRepository,
         IMapper mapper,
         ICurrentUserService currentUserService)
     {
         _transactionRepository = transactionRepository;
         _userRepository = userRepository;
+        _eventRepository = eventRepository;
         _mapper = mapper;
         _currentUserService = currentUserService;
     }
@@ -147,6 +150,11 @@ public class TransactionController : ControllerBase
 
             var userTransactionCount = await _transactionRepository
                 .GetUserTransactionCountAsync(currentUserId);
+            
+            // Get user's event participation count (total events registered)
+            var (activeEvents, completedEvents) = await _eventRepository
+                .GetUserEventRegistrationStatsAsync(currentUserId);
+            var totalEventParticipations = activeEvents + completedEvents;
 
             return Ok(new
             {
@@ -159,7 +167,8 @@ public class TransactionController : ControllerBase
                 },
                 userStats = new
                 {
-                    transactionCount = userTransactionCount
+                    transactionCount = userTransactionCount,
+                    eventParticipationCount = totalEventParticipations
                 }
             });
         }

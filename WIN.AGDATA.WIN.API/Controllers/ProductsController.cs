@@ -7,6 +7,7 @@ using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.Domain.Enums;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -19,17 +20,20 @@ namespace WIN.AGDATA.WIN.API.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IProductRepository _productRepository;
+    private readonly IRedemptionRepository _redemptionRepository;
     private readonly IMediator _mediator;
     private readonly IMapper _mapper;
     private readonly IUnitOfWork _unitOfWork;
 
     public ProductsController(
         IProductRepository productRepository,
+        IRedemptionRepository redemptionRepository,
         IMediator mediator,
         IMapper mapper,
         IUnitOfWork unitOfWork)
     {
         _productRepository = productRepository;
+        _redemptionRepository = redemptionRepository;
         _mediator = mediator;
         _mapper = mapper;
         _unitOfWork = unitOfWork;
@@ -78,6 +82,40 @@ public class ProductsController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "Failed to retrieve products", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get redemption counts for all products
+    /// </summary>
+    /// <remarks>
+    /// Returns a map of product IDs to the count of pending/approved redemptions.
+    /// This helps users see how popular each product is.
+    /// </remarks>
+    /// <returns>Map of productId to redemption count</returns>
+    /// <response code="200">Redemption counts retrieved successfully</response>
+    [HttpGet("redemption-counts")]
+    [AllowAnonymous]
+    [SwaggerOperation(Summary = "Get product redemption counts", Description = "Get count of pending/approved redemptions per product")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetProductRedemptionCounts()
+    {
+        try
+        {
+            var redemptions = await _redemptionRepository.GetAllWithDetailsAsync();
+            
+            // Count pending and approved redemptions per product
+            var counts = redemptions
+                .Where(r => r.Status == RedemptionStatus.Pending || r.Status == RedemptionStatus.Approved)
+                .GroupBy(r => r.ProductId)
+                .ToDictionary(g => g.Key.ToString(), g => g.Count());
+
+            return Ok(new { data = counts });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve redemption counts", error = ex.Message });
         }
     }
 

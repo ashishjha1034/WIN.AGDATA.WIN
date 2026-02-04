@@ -3,7 +3,11 @@
 
   <div class="user-events-main">
     <!-- Shared Header Component -->
-    <app-user-page-header pageTitle="Events"></app-user-page-header>
+    <app-user-page-header 
+      pageTitle="Events"
+      [showPointsBadge]="true"
+      [pointsValue]="userPoints">
+    </app-user-page-header>
 
     <!-- Main Content -->
     <main class="main-content">

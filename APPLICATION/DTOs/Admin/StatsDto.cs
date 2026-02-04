@@ -4,5 +4,6 @@ public record StatsDto(
     int TotalUsers,
     decimal TotalPointsEarned,
     decimal TotalPointsRedeemed,
-    int PendingRedemptions
+    int PendingRedemptions,
+    int TotalEventRegistrations
 );

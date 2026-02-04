@@ -221,6 +221,7 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
 
   /**
    * Get distribution preview for bulk equal split
+   * Uses proper float distribution: distributes remainder to earlier participants
    */
   getBulkDistributionPreview(): Array<{ sn: number; name: string; email: string; points: number }> {
     const eligible = this.getEligibleParticipants();
@@ -231,6 +232,7 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
     const basePoints = Math.floor(remaining / count);
     const remainder = remaining % count;
     
+    // Distribute remainder to first 'remainder' participants (1 extra point each)
     return eligible.map((p, idx) => ({
       sn: idx + 1,
       name: p.name,
@@ -419,7 +421,8 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
 
   /**
    * Calculate points for each rank based on selected split.
-   * Last rank gets remainder to ensure total equals prize pool exactly.
+   * Properly distributes integer points: uses floor for all except last rank which gets remainder.
+   * This ensures total equals prize pool exactly without floats.
    */
   private calculateRankPoints(): void {
     const split = this.getCurrentSplit();
@@ -432,8 +435,8 @@ export class EventDetailPointsComponent implements OnInit, OnDestroy, OnChanges 
           // Last rank gets the remainder to ensure exact total
           assignment.points = remaining - totalAssigned;
         } else {
-          // Round to 2 decimal places for intermediate ranks
-          assignment.points = Math.round((split[idx] / 100) * remaining * 100) / 100;
+          // Use floor for all intermediate ranks
+          assignment.points = Math.floor((split[idx] / 100) * remaining);
           totalAssigned += assignment.points;
         }
       }

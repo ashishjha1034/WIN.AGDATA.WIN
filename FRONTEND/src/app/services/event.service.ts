@@ -138,7 +138,7 @@ export class EventService {
   }
 
   /**
-   * Get participants for an event
+   * Get participants for an event (Admin only)
    * BACKEND: GET /api/event/{eventId}/participants
    */
   getEventParticipants(eventId: string): Observable<EventParticipant[]> {
@@ -155,6 +155,44 @@ export class EventService {
       map(response => response.data || []),
       catchError(error => {
         console.error('[EventService] Error fetching participants:', error);
+        throw error;
+      })
+    );
+  }
+
+  /**
+   * Get event awards leaderboard (Public endpoint)
+   * BACKEND: GET /api/event/{eventId}/awards
+   * Available for Live and Completed events only.
+   */
+  getEventAwards(eventId: string): Observable<EventParticipant[]> {
+    const url = `${this.EVENT_API_URL}/${eventId}/awards`;
+    console.log('[EventService] Fetching event awards from:', url);
+
+    return this.http.get<any>(url).pipe(
+      timeout(15000),
+      tap(response => {
+        console.log('[EventService] Awards loaded:', response);
+      }),
+      map(response => {
+        const awards = response.data || [];
+        // Map backend response to EventParticipant interface
+        return awards.map((a: any) => ({
+          id: a.id || '',
+          userId: a.userId,
+          name: a.name,
+          email: '',
+          employeeId: '',
+          attendanceStatus: '',
+          pointsAwarded: a.points,
+          eventRank: a.rank,
+          registeredAt: '',
+          checkedInAt: null,
+          awardedAt: a.awardedAt
+        }));
+      }),
+      catchError(error => {
+        console.error('[EventService] Error fetching event awards:', error);
         throw error;
       })
     );

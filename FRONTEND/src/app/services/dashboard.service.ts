@@ -9,6 +9,7 @@ export interface DashboardStats {
   totalPointsEarned: number;
   pointsRedeemed: number;
   pendingRedemptions: number;
+  totalEventRegistrations: number;
 }
 
 export interface PendingRedemption {
@@ -71,12 +72,14 @@ export class DashboardService {
         const totalPointsEarned = response.totalPointsEarned ?? response.TotalPointsEarned ?? 0;
         const pointsRedeemed = response.pointsRedeemed ?? response.TotalPointsRedeemed ?? 0;
         const pendingRedemptions = response.pendingRedemptions ?? response.PendingRedemptions ?? 0;
+        const totalEventRegistrations = response.totalEventRegistrations ?? response.TotalEventRegistrations ?? 0;
 
         return {
           totalUsers,
           totalPointsEarned,
           pointsRedeemed,
-          pendingRedemptions
+          pendingRedemptions,
+          totalEventRegistrations
         } as DashboardStats;
       })
     );

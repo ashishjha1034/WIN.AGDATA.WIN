@@ -5,20 +5,20 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Subject } from 'rxjs';
 import { takeUntil, switchMap, finalize, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ProductsService } from '../../../services/products.service';
-import { ProductDetail, ProductCategory, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus, DeactivateProductWarnings, DeactivateProductBlocked } from '../../../models/product.models';
+import { ProductDetail, ProductCategory, UpdateProductRequest, UpdateStockRequest, ProductRedemption, RedemptionStatus, DeactivateProductWarnings, DeactivateProductBlocked, CreateProductRequest } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
 import { ValidationService, ValidationResult } from '../../../services/validation.service';
 import { CustomValidators, ValidationConstants } from '../../../shared/validators/custom-validators';
-import { ValidationHintComponent } from '../../../shared/components/validation-hint.component';
-import { FormErrorsSummaryComponent } from '../../../shared/components/form-errors-summary.component';
 import { DialogService } from '../../../services/dialog.service';
+import { ToastService } from '../../../services/toast.service';
+import { ProductFormModalComponent } from './product-form-modal.component';
 
 @Component({
   selector: 'app-product-detail',
   templateUrl: './product-detail.component.html',
   styleUrls: ['./product-detail.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, ValidationHintComponent, FormErrorsSummaryComponent]
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, AdminSidebarComponent, ProductFormModalComponent]
 })
 export class ProductDetailComponent implements OnInit, OnDestroy {
   // Expose Math and RedemptionStatus for template usage
@@ -65,6 +65,11 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   deactivateWarningData: DeactivateProductWarnings | null = null;
   deactivationBlockedMessage: string | null = null;
   pendingDeactivationProductId: string | null = null;
+  
+  // Edit modal state
+  showEditModal = false;
+  editModalInitialData: Partial<CreateProductRequest> | undefined;
+  
   editFormFieldLabels: { [key: string]: string } = {
     name: 'Product Name',
     description: 'Description',
@@ -89,7 +94,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     private validationService: ValidationService,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService
+    private dialogService: DialogService,
+    private toastService: ToastService
   ) {
     this.initForms();
   }
@@ -512,12 +518,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
-            this.dialogService.success('Product updated successfully');
+            this.toastService.success('Product updated successfully');
             this.loadProduct(this.product!.id);
           },
           error: (error) => {
             console.error('Error updating product:', error);
-            this.dialogService.error('Failed to update product: ' + (error?.error?.message || 'Unknown error'));
+            this.toastService.error('Failed to update product', error?.error?.message || 'Unknown error');
           }
         });
     }
@@ -538,13 +544,13 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
-            this.dialogService.success('Stock adjusted successfully');
+            this.toastService.success('Stock adjusted successfully');
             this.loadProduct(this.product!.id);
             this.stockAdjustment = { amount: 0, operation: 'adjust' };
           },
           error: (error) => {
             console.error('Error adjusting stock:', error);
-            this.dialogService.error('Failed to adjust stock');
+            this.toastService.error('Failed to adjust stock', error?.error?.message);
           }
         });
     }
@@ -573,7 +579,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (this.product) {
             this.product.isActive = false;
           }
-          this.dialogService.success('Product deactivated successfully');
+          this.toastService.success('Product deactivated successfully');
           this.pendingDeactivationProductId = null;
         },
         error: (error) => {
@@ -591,12 +597,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
             const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
             this.deactivationBlockedMessage = message;
             this.showDeactivateDialog = false;
-            this.dialogService.error(message);
+            this.toastService.error('Cannot Deactivate Product', message);
             this.pendingDeactivationProductId = null;
           }
           // Other error
           else {
-            this.dialogService.error('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+            this.toastService.error('Failed to deactivate product', error?.error?.message || 'Unknown error');
             this.pendingDeactivationProductId = null;
           }
         }
@@ -625,7 +631,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (this.product) {
             this.product.isActive = false;
           }
-          this.dialogService.success('Product deactivated successfully');
+          this.toastService.success('Product deactivated successfully');
           this.pendingDeactivationProductId = null;
           this.deactivateWarningData = null;
         },
@@ -636,9 +642,9 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           if (error?.status === 400 && error?.error?.code === 'DEACTIVATE_BLOCKED') {
             const blocked: DeactivateProductBlocked = error.error;
             const message = `Cannot deactivate: ${blocked.pending || 0} pending and ${blocked.approved || 0} approved redemptions must be resolved first.`;
-            this.dialogService.error(message);
+            this.toastService.error('Cannot Deactivate Product', message);
           } else {
-            this.dialogService.error('Failed to deactivate product: ' + (error?.error?.message || 'Unknown error'));
+            this.toastService.error('Failed to deactivate product', error?.error?.message || 'Unknown error');
           }
           this.pendingDeactivationProductId = null;
           this.deactivateWarningData = null;
@@ -679,11 +685,11 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
               if (this.product) {
                 this.product.isActive = true;
               }
-              this.dialogService.success('Product activated successfully');
+              this.toastService.success('Product activated successfully');
             },
             error: (error) => {
               console.error('Error activating product:', error);
-              this.dialogService.error('Failed to activate product: ' + (error?.error?.message || 'Unknown error'));
+              this.toastService.error('Failed to activate product', error?.error?.message || 'Unknown error');
             }
           });
       }
@@ -713,15 +719,73 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
           )
           .subscribe({
             next: () => {
-              this.dialogService.success('Product deleted successfully');
+              this.toastService.success('Product deleted successfully');
               this.goBack(); // Return to products list
             },
             error: (error) => {
               console.error('Error deleting product:', error);
-              this.dialogService.error('Failed to delete product: ' + (error?.error?.message || 'Unknown error'));
+              this.toastService.error('Failed to delete product', error?.error?.message || 'Unknown error');
             }
           });
       }
     });
+  }
+
+  // ===== Edit Modal Methods =====
+  openEditModal(): void {
+    if (!this.product) return;
+    
+    // Prepare initial data from current product
+    this.editModalInitialData = {
+      name: this.product.name,
+      description: this.product.description,
+      categoryId: this.product.categoryId,
+      pointsCost: this.product.pointsCost,
+      imageUrl: this.product.imageUrl || ''
+    };
+    
+    this.showEditModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeEditModal(): void {
+    this.showEditModal = false;
+    this.editModalInitialData = undefined;
+    this.cdr.detectChanges();
+  }
+
+  onProductUpdated(data: CreateProductRequest): void {
+    if (!this.product) return;
+    
+    // Build update request from form data
+    const request: UpdateProductRequest = {
+      name: data.name,
+      description: data.description,
+      categoryId: data.categoryId,
+      pointsCost: data.pointsCost,
+      imageUrl: data.imageUrl || undefined
+    };
+    
+    this.isLoading = true;
+    this.showEditModal = false;
+    
+    this.productsService.updateProduct(this.product.id, request)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success('Product updated successfully');
+          this.loadProduct(this.product!.id); // Reload to get fresh data
+        },
+        error: (error) => {
+          console.error('Error updating product:', error);
+          this.toastService.error('Failed to update product', error?.error?.message || 'Unknown error');
+        }
+      });
   }
 }

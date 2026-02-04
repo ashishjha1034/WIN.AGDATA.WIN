@@ -13,7 +13,7 @@ import { RouterModule } from '@angular/router';
           <h3 class="table-card__title">{{ title }}</h3>
           <p class="table-card__subtitle" *ngIf="subtitle">{{ subtitle }}</p>
         </div>
-        <a *ngIf="viewAllLink" [routerLink]="viewAllLink" class="table-card__link">
+        <a *ngIf="viewAllLink" [routerLink]="viewAllLink" [queryParams]="queryParams" class="table-card__link">
           View All <i class="fa-solid fa-arrow-right"></i>
         </a>
       </div>
@@ -109,4 +109,5 @@ export class TableCardComponent {
   @Input() title: string = '';
   @Input() subtitle?: string;
   @Input() viewAllLink?: string;
+  @Input() queryParams?: { [key: string]: string } | null = null;
 }

@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
 import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
@@ -27,6 +28,7 @@ import {
 } from '../../../models/redemption.models';
 import { ProductCategory } from '../../../models/product.models';
 import { AdminSidebarComponent } from '../../../components/admin-sidebar/admin-sidebar.component';
+import { AdminHeaderComponent } from '../../../shared/components/admin-header.component';
 import { PaginationComponent } from '../../../shared/components/pagination.component';
 
 // Interface for product redemption aggregation
@@ -43,7 +45,7 @@ interface ProductRedemptionCount {
   templateUrl: './redemption-management.component.html',
   styleUrls: ['./redemption-management.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, AdminSidebarComponent, NgxEchartsDirective, PaginationComponent],
+  imports: [CommonModule, FormsModule, AdminSidebarComponent, AdminHeaderComponent, NgxEchartsDirective, PaginationComponent],
   providers: [
     provideEchartsCore({ echarts })
   ]
@@ -98,14 +100,20 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
   redemptionStatusChartOption: EChartsOption = {};
   topProductsChartOption: EChartsOption = {};
   
+  // Chart visibility toggle
+  statusChartVisible = signal(true);
+  private readonly CHART_VISIBILITY_KEY = 'redemptions_status_chart_visible';
+  
   // Signals for reactive chart data
   private redemptionsSignal = signal<Redemption[]>([]);
   private selectedCategorySignal = signal<string>('all');
+  private categoriesSignal = signal<ProductCategory[]>([]);
   
   // Computed product redemption counts
   topProductsChartData = computed(() => {
     const redemptions = this.redemptionsSignal();
     const selectedCategory = this.selectedCategorySignal();
+    const categories = this.categoriesSignal();
     
     // Aggregate redemptions by product
     const productCounts = new Map<string, ProductRedemptionCount>();
@@ -113,7 +121,7 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     redemptions.forEach(r => {
       // Skip if filtering by category and doesn't match
       if (selectedCategory !== 'all') {
-        const matchingCategory = this.categories.find(c => c.id === selectedCategory);
+        const matchingCategory = categories.find(c => c.id === selectedCategory);
         if (matchingCategory && r.productCategory !== matchingCategory.name) {
           return;
         }
@@ -163,17 +171,45 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
     private redemptionService: RedemptionService,
     private productsService: ProductsService,
     private authService: AuthService,
+    private activatedRoute: ActivatedRoute,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     console.log('[RedemptionManagement] Component initialized');
     
+    // Load chart visibility preference
+    this.loadChartVisibilityPreference();
+    
     this.loadCurrentUser();
     this.loadCategories();
     this.loadRedemptions();
     // Load chart data once without filters
     this.loadChartData();
+    
+    // Check for status query param and apply filter
+    this.activatedRoute.queryParams.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(params => {
+      if (params['status'] === 'Pending') {
+        this.selectedStatusFilter = 'Pending';
+        this.applyFilters();
+      }
+    });
+  }
+
+  // Chart visibility toggle methods
+  private loadChartVisibilityPreference(): void {
+    const saved = localStorage.getItem(this.CHART_VISIBILITY_KEY);
+    if (saved !== null) {
+      this.statusChartVisible.set(saved === 'true');
+    }
+  }
+
+  toggleStatusChart(): void {
+    const newValue = !this.statusChartVisible();
+    this.statusChartVisible.set(newValue);
+    localStorage.setItem(this.CHART_VISIBILITY_KEY, String(newValue));
   }
 
   ngOnDestroy(): void {
@@ -194,7 +230,10 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (categories) => {
           this.categories = categories;
+          this.categoriesSignal.set(categories);
           console.log('[RedemptionManagement] Categories loaded:', categories.length);
+          // Update chart after categories are loaded to ensure filtering works
+          this.updateTopProductsChart();
         },
         error: (error) => {
           console.error('[RedemptionManagement] Error loading categories:', error);
@@ -314,41 +353,58 @@ export class RedemptionManagementComponent implements OnInit, OnDestroy {
         }
       },
       legend: {
-        orient: 'vertical',
-        right: 10,
-        top: 'center',
+        orient: 'horizontal',
+        bottom: 0,
+        left: 'center',
         formatter: (name: string) => {
           const item = data.find(d => d.name === name);
           const value = item?.value || 0;
-          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-          return `${name}: ${value} (${percent}%)`;
+          return `${name}: ${value}`;
         },
         textStyle: {
           fontSize: 12,
           color: '#6b7280'
-        }
+        },
+        itemGap: 16
       },
       series: [
         {
           name: 'Redemption Status',
           type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['35%', '50%'],
-          avoidLabelOverlap: false,
+          radius: ['40%', '65%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
           itemStyle: {
             borderRadius: 4,
             borderColor: '#fff',
             borderWidth: 2
           },
-          label: { show: false },
+          label: {
+            show: true,
+            position: 'outside',
+            formatter: (params: any) => {
+              const percent = total > 0 ? ((params.value / total) * 100).toFixed(0) : 0;
+              return `${percent}%`;
+            },
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#374151'
+          },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 15,
+            smooth: true
+          },
           emphasis: {
             label: {
               show: true,
               fontSize: 14,
               fontWeight: 'bold'
-            }
+            },
+            scale: true,
+            scaleSize: 5
           },
-          labelLine: { show: false },
           data: data
         }
       ]

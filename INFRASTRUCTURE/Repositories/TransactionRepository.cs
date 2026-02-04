@@ -218,7 +218,7 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
             .Sum(t => t.Points);
 
         var totalAdjusted = transactions
-            .Where(t => t.Source == "Admin")
+            .Where(t => t.TransactionType == PointsTransactionType.Adjusted)
             .Sum(t => t.Points);
 
         return (totalEarned, totalRedeemed, totalAdjusted, transactions.Count);

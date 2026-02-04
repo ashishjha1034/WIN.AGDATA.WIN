@@ -9,12 +9,12 @@
 :root {
   /* Surfaces / backgrounds */
   --ag-color-background: #ffffff;
-  --ag-color-background-active: rgba(141,141,141,0.5);
-  --ag-color-background-hover: rgba(141,141,141,0.12);
-  --ag-color-background-selected: rgba(141,141,141,0.20);
-  --ag-color-background-selected-hover: rgba(141,141,141,0.32);
-  --ag-color-background-brand: #007079;
-  --ag-color-background-inverse: #004E60;
+  --ag-color-background-active: rgba(41, 99, 59, 0.5);
+  --ag-color-background-hover: rgba(41, 99, 59, 0.12);
+  --ag-color-background-selected: rgba(41, 99, 59, 0.20);
+  --ag-color-background-selected-hover: rgba(41, 99, 59, 0.32);
+  --ag-color-background-brand: #29633B;
+  --ag-color-background-inverse: #1e4a2b;
 
   /* Layers */
   --ag-color-layer-01: #ffffff;
@@ -34,7 +34,7 @@
   --ag-color-border-subtle: #e0e0e0;
   --ag-color-border-strong: #8d8d8d;
   --ag-color-border-inverse: #161616;
-  --ag-color-border-interactive: #007079;
+  --ag-color-border-interactive: #29633B;
   --ag-color-border-disabled: #ebe6c6;
 
   /* Text */
@@ -68,9 +68,9 @@
   --ag-color-focus-inverse: #ffffff;
 
   /* Buttons */
-  --ag-button-primary: #007479;
-  --ag-button-primary-hover: #006068;
-  --ag-button-primary-active: #004144;
+  --ag-button-primary: #29633B;
+  --ag-button-primary-hover: #1e4a2b;
+  --ag-button-primary-active: #143520;
   --ag-button-secondary: #393939;
   --ag-button-secondary-hover: #4c4c4c;
   --ag-button-secondary-active: #6f6f6f;

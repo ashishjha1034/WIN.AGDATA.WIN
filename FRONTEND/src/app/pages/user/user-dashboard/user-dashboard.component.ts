@@ -19,6 +19,7 @@ import { utcToIst } from '../../../shared/utils/ist-timezone.utils';
 })
 export class UserDashboardComponent implements OnInit, OnDestroy {
   currentUser: any;
+  userPoints = 0;
   isLoading = true;
   errorMessage: string | null = null;
   public Math = Math;
@@ -67,7 +68,20 @@ export class UserDashboardComponent implements OnInit, OnDestroy {
         this.currentUser = user;
         if (user) {
           this.loadDashboardData();
+          this.loadUserPoints();
         }
+      });
+  }
+
+  loadUserPoints(): void {
+    this.userDashboardService.getUserPoints()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (points) => {
+          this.userPoints = points;
+          this.cdr.detectChanges();
+        },
+        error: (error) => console.error('Error loading user points:', error)
       });
   }
 

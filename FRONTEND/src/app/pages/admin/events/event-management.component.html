@@ -2,42 +2,11 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-events-main">
-    <!-- Header - Matches Products/Users -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Events Management</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Events Management"></app-admin-header>
 
     <!-- Main Content -->
     <main class="main-content">
-      <!-- Success Message -->
-      <div class="success-alert" *ngIf="successMessage" role="alert">
-        <i class="fa-solid fa-circle-check"></i>
-        <span>{{ successMessage }}</span>
-        <button class="alert-dismiss" (click)="successMessage = null" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <!-- Error Message -->
-      <div class="error-alert" *ngIf="showErrorAlert" role="alert">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        <span>{{ errorMessage }}</span>
-        <button class="alert-dismiss" (click)="closeErrorAlert()" aria-label="Dismiss">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
       <!-- Loading State -->
       <div *ngIf="isLoading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -106,20 +75,63 @@
                 Create Event
               </button>
 
-              <!-- Sort By Dropdown -->
-              <div class="sort-group">
-                <label class="sort-label">Sort by:</label>
-                <select 
-                  class="sort-select"
-                  [(ngModel)]="sortBy"
-                  (change)="onSortChange()"
-                  aria-label="Sort events by">
-                  <option value="eventDate">Event Date</option>
-                  <option value="participants">Participants</option>
-                  <option value="pointsPool">Points Pool</option>
-                  <option value="pointsDistributed">Points Distributed (%)</option>
-                </select>
+              <!-- Filters Toggle -->
+              <button class="btn-filter" (click)="toggleFilters()" [class.active]="showFilters">
+                <i class="fa-solid fa-sliders"></i>
+                Filters
+                <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="showFilters"></i>
+              </button>
+            </div>
+
+            <!-- Expandable Filters Panel -->
+            <div class="filters-panel" *ngIf="showFilters">
+              <div class="filters-grid">
+                <!-- Sort By Filter -->
+                <div class="filter-group">
+                  <label>Sort By</label>
+                  <select [(ngModel)]="sortBy" (change)="onSortChange()">
+                    <option value="eventDate">Event Date</option>
+                    <option value="participants">Participants</option>
+                    <option value="pointsPool">Points Pool</option>
+                    <option value="pointsDistributed">Points Distributed (%)</option>
+                  </select>
+                </div>
+
+                <!-- Pool Status Filter -->
+                <div class="filter-group">
+                  <label>Pool Status</label>
+                  <select [(ngModel)]="poolStatusFilter" (change)="applyStatusFilter()">
+                    <option value="all">All Pool Status</option>
+                    <option value="distributed">Fully Distributed</option>
+                    <option value="pending">Distribution Pending</option>
+                  </select>
+                </div>
+
+                <!-- Participant Capacity Filter -->
+                <div class="filter-group">
+                  <label>Capacity</label>
+                  <select [(ngModel)]="capacityFilter" (change)="applyStatusFilter()">
+                    <option value="all">All Capacity</option>
+                    <option value="full">Full (100%)</option>
+                    <option value="high">High (75%+)</option>
+                    <option value="medium">Medium (50-75%)</option>
+                    <option value="low">Low (&lt;50%)</option>
+                  </select>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="filter-group filter-actions">
+                  <button class="btn-reset" (click)="resetFilters()">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                  </button>
+                </div>
               </div>
+            </div>
+
+            <!-- Results Summary -->
+            <div class="results-summary" *ngIf="showFilters">
+              <span>{{ filteredEvents.length }} event{{ filteredEvents.length !== 1 ? 's' : '' }} found</span>
             </div>
           </div>
         </section>
@@ -215,7 +227,7 @@
             <app-pagination
               [currentPage]="currentPage"
               [pageSize]="pageSize"
-              [totalItems]="filteredEvents.length"
+              [totalItems]="events.length"
               [itemLabel]="'events'"
               (pageChange)="onPageChange($event)"
             ></app-pagination>
@@ -272,7 +284,7 @@
             fieldType="productName"
             [checking]="nameUniquenessChecking()"
             [uniquenessResult]="nameUniquenessResult()"
-            helperText="1-7 alphanumeric words, single spaces only"
+            helperText="1-7 words, special characters allowed, single spaces only"
             [showImmediately]="true"
           ></app-validation-hint>
         </div>

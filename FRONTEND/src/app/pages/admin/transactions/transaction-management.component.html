@@ -2,21 +2,8 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-transactions-main">
-    <!-- Header - Matches Events/Redemptions -->
-    <header class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">Transaction Management</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Transaction Management"></app-admin-header>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -48,7 +35,12 @@
         <!-- KPI Cards Section -->
         <section class="kpi-section" aria-label="Transaction Statistics">
           <div class="kpi-grid">
-            <div class="kpi-card kpi-earned">
+            <button 
+              class="kpi-card kpi-earned" 
+              [class.kpi-active]="activeKpiFilter === 'earned'"
+              (click)="filterByKpi('earned')"
+              title="Click to filter by Earned transactions"
+              aria-label="Filter by Earned transactions">
               <div class="kpi-icon">
                 <i class="fa-solid fa-arrow-trend-up"></i>
               </div>
@@ -56,9 +48,14 @@
                 <div class="kpi-value">{{ summary.totalEarned | number }}</div>
                 <div class="kpi-label">Total Earned</div>
               </div>
-            </div>
+            </button>
 
-            <div class="kpi-card kpi-redeemed">
+            <button 
+              class="kpi-card kpi-redeemed"
+              [class.kpi-active]="activeKpiFilter === 'redeemed'"
+              (click)="filterByKpi('redeemed')"
+              title="Click to filter by Redeemed transactions"
+              aria-label="Filter by Redeemed transactions">
               <div class="kpi-icon">
                 <i class="fa-solid fa-arrow-trend-down"></i>
               </div>
@@ -66,9 +63,14 @@
                 <div class="kpi-value">{{ summary.totalRedeemed | number }}</div>
                 <div class="kpi-label">Total Redeemed</div>
               </div>
-            </div>
+            </button>
 
-            <div class="kpi-card kpi-adjusted">
+            <button 
+              class="kpi-card kpi-adjusted"
+              [class.kpi-active]="activeKpiFilter === 'adjusted'"
+              (click)="filterByKpi('adjusted')"
+              title="Click to filter by Adjusted transactions"
+              aria-label="Filter by Adjusted transactions">
               <div class="kpi-icon">
                 <i class="fa-solid fa-sliders"></i>
               </div>
@@ -76,9 +78,14 @@
                 <div class="kpi-value">{{ summary.totalAdjusted | number }}</div>
                 <div class="kpi-label">Total Adjusted</div>
               </div>
-            </div>
+            </button>
 
-            <div class="kpi-card kpi-net">
+            <button 
+              class="kpi-card kpi-net"
+              [class.kpi-active]="activeKpiFilter === 'all'"
+              (click)="filterByKpi('all')"
+              title="Click to show all transactions"
+              aria-label="Show all transactions">
               <div class="kpi-icon">
                 <i class="fa-solid fa-scale-balanced"></i>
               </div>
@@ -86,7 +93,7 @@
                 <div class="kpi-value">{{ summary.netPoints | number }}</div>
                 <div class="kpi-label">Net Points</div>
               </div>
-            </div>
+            </button>
 
             <div class="kpi-card kpi-count">
               <div class="kpi-icon">
@@ -475,41 +482,76 @@
       <div class="modal-body">
         <!-- User Selection -->
         <div class="form-group">
-          <label class="form-label">Select User</label>
+          <label class="form-label">Select User <span class="required">*</span></label>
           <select 
             class="form-select"
             [(ngModel)]="adjustPointsForm.userId"
             (change)="onAdjustUserChange()"
             [disabled]="!!selectedTransaction"
+            [class.error]="!adjustPointsForm.userId && adjustFormTouched"
           >
             <option value="">-- Select User --</option>
             <option *ngFor="let user of userOptions" [value]="user.id">
               {{ user.name }} ({{ user.employeeId }})
             </option>
           </select>
+          <span class="validation-hint error" *ngIf="!adjustPointsForm.userId && adjustFormTouched">
+            Please select a user
+          </span>
         </div>
 
         <!-- Amount -->
         <div class="form-group">
-          <label class="form-label">Points Amount</label>
+          <label class="form-label">Points Amount <span class="required">*</span></label>
           <input 
             type="number" 
             class="form-input"
             [(ngModel)]="adjustPointsForm.amount"
+            (blur)="adjustFormTouched = true"
             placeholder="Enter amount (positive to add, negative to deduct)"
+            [min]="-ValidationConstants.POINTS_COST_MAX"
+            [max]="ValidationConstants.POINTS_COST_MAX"
+            [class.error]="(adjustPointsForm.amount === 0 || adjustPointsForm.amount < -ValidationConstants.POINTS_COST_MAX || adjustPointsForm.amount > ValidationConstants.POINTS_COST_MAX) && adjustFormTouched"
           />
-          <small class="form-hint">Use positive values to add points, negative to deduct</small>
+          <small class="form-hint">
+            Use positive values to add points, negative to deduct. 
+            Range: -{{ ValidationConstants.POINTS_COST_MAX | number }} to +{{ ValidationConstants.POINTS_COST_MAX | number }}
+          </small>
+          <span class="validation-hint error" *ngIf="adjustPointsForm.amount === 0 && adjustFormTouched">
+            Amount cannot be zero
+          </span>
+          <span class="validation-hint error" *ngIf="adjustPointsForm.amount < -ValidationConstants.POINTS_COST_MAX && adjustFormTouched">
+            Amount cannot be less than -{{ ValidationConstants.POINTS_COST_MAX | number }}
+          </span>
+          <span class="validation-hint error" *ngIf="adjustPointsForm.amount > ValidationConstants.POINTS_COST_MAX && adjustFormTouched">
+            Amount cannot exceed {{ ValidationConstants.POINTS_COST_MAX | number }}
+          </span>
         </div>
 
         <!-- Reason -->
         <div class="form-group">
-          <label class="form-label">Reason</label>
+          <label class="form-label">Reason <span class="required">*</span></label>
           <textarea 
             class="form-textarea"
             [(ngModel)]="adjustPointsForm.reason"
+            (blur)="adjustFormTouched = true"
             placeholder="Provide a reason for this adjustment (required)"
             rows="3"
+            [class.error]="!adjustPointsForm.reason.trim() && adjustFormTouched"
+            minlength="10"
           ></textarea>
+          <div class="form-hint-row">
+            <small class="form-hint">Minimum 10 characters</small>
+            <small class="char-count" [class.warning]="adjustPointsForm.reason.length < 10">
+              {{ adjustPointsForm.reason.length }} / 10
+            </small>
+          </div>
+          <span class="validation-hint error" *ngIf="!adjustPointsForm.reason.trim() && adjustFormTouched">
+            Reason is required
+          </span>
+          <span class="validation-hint warning" *ngIf="adjustPointsForm.reason.trim().length > 0 && adjustPointsForm.reason.trim().length < 10 && adjustFormTouched">
+            Reason must be at least 10 characters
+          </span>
         </div>
       </div>
 
@@ -518,7 +560,7 @@
         <button 
           class="btn btn-primary" 
           (click)="submitAdjustPoints()"
-          [disabled]="isSubmitting || !adjustPointsForm.userId || !adjustPointsForm.reason.trim()"
+          [disabled]="isSubmitting || !adjustPointsForm.userId || !adjustPointsForm.reason.trim() || adjustPointsForm.amount === 0 || adjustPointsForm.amount < -ValidationConstants.POINTS_COST_MAX || adjustPointsForm.amount > ValidationConstants.POINTS_COST_MAX || adjustPointsForm.reason.trim().length < 10"
         >
           <i class="fa-solid fa-check" *ngIf="!isSubmitting"></i>
           {{ isSubmitting ? 'Processing...' : 'Adjust Points' }}

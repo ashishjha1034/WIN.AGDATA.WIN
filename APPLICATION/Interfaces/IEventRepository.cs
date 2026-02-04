@@ -24,6 +24,12 @@ public interface IEventRepository
     Task<bool> ExistsByNameAsync(string name, Guid? excludeEventId = null);
     
     /// <summary>
+    /// Gets the total count of all event registrations (participants) across all events.
+    /// </summary>
+    /// <returns>Total number of event registrations</returns>
+    Task<int> GetTotalEventRegistrationsAsync();
+    
+    /// <summary>
     /// Saves changes to the database. Used for compute-on-read automated transitions.
     /// </summary>
     Task SaveChangesAsync(CancellationToken ct = default);

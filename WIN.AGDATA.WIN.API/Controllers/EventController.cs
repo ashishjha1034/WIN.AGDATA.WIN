@@ -212,6 +212,73 @@ public class EventController : ControllerBase
     }
 
     /// <summary>
+    /// Get event awards leaderboard
+    /// </summary>
+    /// <remarks>
+    /// Public endpoint returning awarded participants for an event.
+    /// Only shows participants who have received points, sorted by rank/points.
+    /// Available for Live and Completed events only.
+    /// </remarks>
+    /// <param name="id">Event ID</param>
+    /// <returns>List of awarded participants</returns>
+    /// <response code="200">Awards leaderboard retrieved successfully</response>
+    /// <response code="400">Event is not in Live or Completed status</response>
+    /// <response code="404">Event not found</response>
+    [HttpGet("{id:guid}/awards")]
+    [AllowAnonymous]
+    [SwaggerOperation(Summary = "Get event awards leaderboard", Description = "Public endpoint. Returns awarded participants for Live or Completed events.")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetEventAwards(Guid id)
+    {
+        try
+        {
+            var @event = await _eventRepository.GetByIdWithParticipantsAsync(id);
+
+            if (@event == null)
+                return NotFound(new { message = "Event not found", eventId = id });
+
+            // Only allow viewing awards for Live or Completed events
+            if (@event.Status != Domain.Enums.EventStatus.Active && @event.Status != Domain.Enums.EventStatus.Completed)
+            {
+                return BadRequest(new { message = "Awards are only available for Live or Completed events", eventId = id });
+            }
+
+            // Filter only awarded participants and return public data
+            var awardedParticipants = @event.Participants
+                .Where(p => p.PointsAwarded > 0)
+                .OrderBy(p => p.EventRank ?? int.MaxValue)
+                .ThenByDescending(p => p.PointsAwarded)
+                .Select(p => new
+                {
+                    userId = p.UserId,
+                    name = p.User != null ? $"{p.User.FirstName} {p.User.LastName}" : "Unknown",
+                    points = p.PointsAwarded,
+                    rank = p.EventRank,
+                    awardedAt = p.AwardedAt
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                eventId = id,
+                eventName = @event.Name,
+                eventStatus = @event.Status.ToString(),
+                totalAwarded = awardedParticipants.Count,
+                totalPool = @event.TotalPointsPool,
+                distributedPool = @event.DistributedPoints,
+                data = awardedParticipants
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Failed to retrieve event awards", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Create new event
     /// </summary>
     /// <remarks>

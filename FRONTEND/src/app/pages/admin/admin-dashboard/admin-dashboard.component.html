@@ -2,21 +2,8 @@
   <app-admin-sidebar></app-admin-sidebar>
 
   <div class="admin-dashboard-main">
-    <!-- Top Header -->
-    <header class="dashboard-header">
-      <div class="header-left">
-        <h1 class="page-title">Admin Dashboard</h1>
-      </div>
-      <div class="header-right">
-        <div class="user-info" *ngIf="currentUser">
-          <span class="user-name">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</span>
-          <span class="user-role">
-            <i class="fa-solid fa-shield-halved"></i>
-            {{ currentUser?.roles?.[0] || 'Admin' }}
-          </span>
-        </div>
-      </div>
-    </header>
+    <!-- Top Header - Using shared AdminHeaderComponent with context switcher -->
+    <app-admin-header title="Admin Dashboard"></app-admin-header>
 
     <!-- Main Content -->
     <main class="dashboard-content">
@@ -63,26 +50,35 @@
             </app-kpi-card>
             
             <!-- Row 2 -->
-            <app-kpi-card
-              label="Low Stock Products"
-              [value]="kpiData.lowStockProducts"
-              iconType="low-stock"
-              [routerLink]="['/admin/products']">
-            </app-kpi-card>
+            <a class="kpi-card kpi-card--low-stock" (click)="scrollToLowStockProducts(); $event.preventDefault()" href="javascript:void(0)">
+              <div class="kpi-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div class="kpi-content">
+                <span class="kpi-label">Low Stock Products</span>
+                <span class="kpi-value">{{ kpiData.lowStockProducts | number }}</span>
+              </div>
+            </a>
             
-            <app-kpi-card
-              label="Pending Redemptions"
-              [value]="kpiData.pendingRedemptions"
-              iconType="pending"
-              [routerLink]="['/admin/redemptions']">
-            </app-kpi-card>
+            <a class="kpi-card kpi-card--pending" (click)="scrollToPendingRedemptions(); $event.preventDefault()" href="javascript:void(0)">
+              <div class="kpi-icon">
+                <i class="fa-solid fa-gift"></i>
+              </div>
+              <div class="kpi-content">
+                <span class="kpi-label">Pending Redemptions</span>
+                <span class="kpi-value">{{ kpiData.pendingRedemptions | number }}</span>
+              </div>
+            </a>
             
-            <app-kpi-card
-              label="Live Events"
-              [value]="kpiData.liveEvents"
-              iconType="live"
-              [routerLink]="['/admin/events']">
-            </app-kpi-card>
+            <a class="kpi-card kpi-card--live" (click)="navigateToLiveEvents(); $event.preventDefault()" href="javascript:void(0)">
+              <div class="kpi-icon">
+                <i class="fa-solid fa-bolt"></i>
+              </div>
+              <div class="kpi-content">
+                <span class="kpi-label">Live Events</span>
+                <span class="kpi-value">{{ kpiData.liveEvents | number }}</span>
+              </div>
+            </a>
           </div>
         </section>
 
@@ -127,9 +123,11 @@
         <section class="tables-section" aria-label="Data Tables">
           <!-- Pending Redemptions Table -->
           <app-table-card 
+            id="pending-redemptions-section"
             title="Pending Redemptions" 
             subtitle="Sorted by points (highest first)"
-            viewAllLink="/admin/redemptions">
+            viewAllLink="/admin/redemptions"
+            [queryParams]="{ status: 'Pending' }">
             <table class="data-table" *ngIf="pendingRedemptionsList.length > 0">
               <thead>
                 <tr>
@@ -154,9 +152,11 @@
 
           <!-- Low Stock Products Table -->
           <app-table-card 
+            id="low-stock-products-section"
             title="Low Stock Products" 
             subtitle="Products below threshold (10 units)"
-            viewAllLink="/admin/products">
+            viewAllLink="/admin/products"
+            [queryParams]="{ filter: 'lowstock' }">
             <table class="data-table" *ngIf="lowStockProductsList.length > 0">
               <thead>
                 <tr>
@@ -180,38 +180,6 @@
             <div class="table-empty" *ngIf="lowStockProductsList.length === 0">
               <i class="fa-regular fa-box-open"></i>
               <p>All products are well stocked</p>
-            </div>
-          </app-table-card>
-
-          <!-- Live Events Table -->
-          <app-table-card 
-            title="Live Events" 
-            subtitle="Sorted by distribution percentage (lowest first)"
-            viewAllLink="/admin/events">
-            <table class="data-table" *ngIf="liveEventsList.length > 0">
-              <thead>
-                <tr>
-                  <th>Event Name</th>
-                  <th>Points Distributed %</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let event of liveEventsList">
-                  <td class="cell-event">{{ event.name }}</td>
-                  <td class="cell-distribution">
-                    <div class="distribution-info">
-                      <div class="progress-bar">
-                        <div class="progress-fill" [style.width.%]="event.awardedPercent"></div>
-                      </div>
-                      <span class="distribution-text">{{ formatDistributionLabel(event) }}</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="table-empty" *ngIf="liveEventsList.length === 0">
-              <i class="fa-regular fa-calendar-xmark"></i>
-              <p>No live events at the moment</p>
             </div>
           </app-table-card>
         </section>
