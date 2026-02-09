@@ -82,25 +82,24 @@ public class EventLifecycleBackgroundService : BackgroundService
         {
             try
             {
-                // Rule 1: Auto-Go-Live when event start time arrives (takes precedence)
-                if (@event.ShouldAutoActivate(nowUtc))
+                // Apply automated transitions (handles both auto-activate and auto-cancel)
+                if (@event.ApplyAutomatedTransitions(nowUtc))
                 {
-                    @event.AutoActivate();
-                    activatedCount++;
-                    _logger.LogInformation(
-                        "Auto-GoLive: Event {EventId} ({EventName}) → Active. EventDate: {EventDate}",
-                        @event.Id, @event.Name, @event.EventDate.ToString("o"));
-                    continue; // Skip cancel check
-                }
-
-                // Rule 2: Auto-Cancel when registration deadline passes with 0 registrations
-                if (@event.ShouldAutoCancel(nowUtc))
-                {
-                    @event.AutoCancel();
-                    cancelledCount++;
-                    _logger.LogInformation(
-                        "Auto-Cancel: Event {EventId} ({EventName}) → Cancelled. RegistrationEndDate: {RegEnd}, Participants: 0",
-                        @event.Id, @event.Name, @event.RegistrationEndDate?.ToString("o"));
+                    // Determine which transition occurred
+                    if (@event.Status == EventStatus.Active)
+                    {
+                        activatedCount++;
+                        _logger.LogInformation(
+                            "Auto-GoLive: Event {EventId} ({EventName}) → Active. EventDate: {EventDate}",
+                            @event.Id, @event.Name, @event.EventDate.ToString("o"));
+                    }
+                    else if (@event.Status == EventStatus.Cancelled)
+                    {
+                        cancelledCount++;
+                        _logger.LogInformation(
+                            "Auto-Cancel: Event {EventId} ({EventName}) → Cancelled. RegistrationEndDate: {RegEnd}, Participants: 0",
+                            @event.Id, @event.Name, @event.RegistrationEndDate?.ToString("o"));
+                    }
                 }
             }
             catch (Exception ex)

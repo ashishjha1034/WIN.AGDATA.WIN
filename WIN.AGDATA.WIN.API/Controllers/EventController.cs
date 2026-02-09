@@ -189,7 +189,7 @@ public class EventController : ControllerBase
                 EmployeeId = p.User?.EmployeeId ?? "",
                 AttendanceStatus = p.AttendanceStatus.ToString(),
                 PointsAwarded = p.PointsAwarded,
-                EventRank = p.EventRank,
+                EventRank = p.Rank,
                 RegisteredAt = p.RegisteredAt,
                 CheckedInAt = p.CheckedInAt,
                 AwardedAt = p.AwardedAt,
@@ -248,14 +248,14 @@ public class EventController : ControllerBase
             // Filter only awarded participants and return public data
             var awardedParticipants = @event.Participants
                 .Where(p => p.PointsAwarded > 0)
-                .OrderBy(p => p.EventRank ?? int.MaxValue)
+                .OrderBy(p => p.Rank ?? int.MaxValue)
                 .ThenByDescending(p => p.PointsAwarded)
                 .Select(p => new
                 {
                     userId = p.UserId,
                     name = p.User != null ? $"{p.User.FirstName} {p.User.LastName}" : "Unknown",
                     points = p.PointsAwarded,
-                    rank = p.EventRank,
+                    rank = p.Rank,
                     awardedAt = p.AwardedAt
                 })
                 .ToList();
@@ -829,7 +829,9 @@ public class EventController : ControllerBase
             if (participant.PointsAwarded > 0)
                 return BadRequest(new { message = "Cannot remove participant who has been awarded points", eventId = id, participantId });
 
-            @event.RemoveParticipant(participantId);
+            // Remove participant from event
+            var participants = @event.Participants.ToList();
+            participants.Remove(participant);
             await _eventRepository.UpdateAsync(@event);
 
             return Ok(new { message = "Participant removed successfully", eventId = id, participantId = participantId });
@@ -1047,7 +1049,7 @@ public class EventController : ControllerBase
                     totalPool = @event.TotalPointsPool,
                     distributedPoints = @event.DistributedPoints,
                     remainingPoints = @event.RemainingPoints,
-                    isUnlimited = !@event.TotalPointsPool.HasValue
+                    isUnlimited = @event.TotalPointsPool == null
                 },
                 participants = new
                 {

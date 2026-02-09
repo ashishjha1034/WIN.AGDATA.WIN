@@ -1,15 +1,16 @@
 ﻿using WIN.AGDATA.WIN.Domain.Common;
 using WIN.AGDATA.WIN.Domain.ValueObjects;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 using BCrypt.Net;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Users;
 
 public class User : AuditableEntity<Guid>, IActivatable
 {
-    public string EmployeeId { get; private set; } = null!;
+    public EmployeeId EmployeeId { get; private set; } = null!;
     public EmailAddress Email { get; private set; } = null!;
-    public string FirstName { get; private set; } = null!;
-    public string LastName { get; private set; } = null!;
+    public PersonName FirstName { get; private set; } = null!;
+    public PersonName LastName { get; private set; } = null!;
     public bool IsActive { get; private set; } = true;
     public bool MustChangePassword { get; private set; } = false;
     public DateTime? LastPasswordChangedAt { get; private set; }
@@ -25,18 +26,25 @@ public class User : AuditableEntity<Guid>, IActivatable
 
     private User() { } // EF
 
-    public User(string employeeId, EmailAddress email, string firstName, string lastName, string password)
+    public User(EmployeeId employeeId, EmailAddress email, PersonName firstName, PersonName lastName, string password)
+        : base(Guid.NewGuid())
     {
-        ValidationGuards.NotNullOrWhiteSpace(employeeId, nameof(employeeId));
-        ValidationGuards.NotNull(email, nameof(email));
-        ValidationGuards.NotNullOrWhiteSpace(firstName, nameof(firstName));
-        ValidationGuards.NotNullOrWhiteSpace(lastName, nameof(lastName));
-
-        EmployeeId = employeeId;
-        Email = email;
-        FirstName = firstName;
-        LastName = lastName;
+        EmployeeId = employeeId ?? throw new ArgumentNullException(nameof(employeeId));
+        Email = email ?? throw new ArgumentNullException(nameof(email));
+        FirstName = firstName ?? throw new ArgumentNullException(nameof(firstName));
+        LastName = lastName ?? throw new ArgumentNullException(nameof(lastName));
         SetPassword(password);
+    }
+
+    // Overloaded constructor for backward compatibility (string parameters)
+    public User(string employeeId, string email, string firstName, string lastName, string password)
+        : this(
+            EmployeeId.Create(employeeId),
+            EmailAddress.Create(email),
+            PersonName.Create(firstName),
+            PersonName.Create(lastName),
+            password)
+    {
     }
 
     public void SetPassword(string password)
@@ -75,17 +83,45 @@ public class User : AuditableEntity<Guid>, IActivatable
     }
 
     public void Activate() => IsActive = true;
-    public void Deactivate(string reason) => IsActive = false;
 
-    public void UpdateInfo(string firstName, string lastName, EmailAddress email)
+    public void Deactivate(string reason)
     {
-        ValidationGuards.NotNullOrWhiteSpace(firstName, nameof(firstName));
-        ValidationGuards.NotNullOrWhiteSpace(lastName, nameof(lastName));
-        ValidationGuards.NotNull(email, nameof(email));
+        Deactivate(reason, Guid.Empty);
+    }
 
-        FirstName = firstName;
-        LastName = lastName;
-        Email = email;
+    public void Deactivate(string reason, Guid deactivatedBy)
+    {
+        if (!IsActive)
+            return; // Already deactivated - idempotent
+
+        IsActive = false;
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.UserDeactivatedEvent(
+            Id, EmployeeId.Value, reason, deactivatedBy));
+    }
+
+    public void UpdateInfo(PersonName firstName, PersonName lastName, EmailAddress email)
+    {
+        FirstName = firstName ?? throw new ArgumentNullException(nameof(firstName));
+        LastName = lastName ?? throw new ArgumentNullException(nameof(lastName));
+        Email = email ?? throw new ArgumentNullException(nameof(email));
+    }
+
+    public void UpdateProfile(string firstName, string lastName)
+    {
+        FirstName = PersonName.Create(firstName);
+        LastName = PersonName.Create(lastName);
+    }
+
+    public void UpdateEmail(string email)
+    {
+        Email = EmailAddress.Create(email);
+    }
+
+    public void UpdateEmployeeId(string employeeId)
+    {
+        EmployeeId = EmployeeId.Create(employeeId);
     }
 
     public void AssignRole(Role role, Guid assignedBy)
@@ -98,82 +134,41 @@ public class User : AuditableEntity<Guid>, IActivatable
         var assignment = new UserRoleAssignment(this, role, assignedBy);
         Roles.Add(assignment);
     }
-    public void UpdateProfile(string firstName, string lastName)
-    {
-        if (string.IsNullOrWhiteSpace(firstName))
-            throw new InvalidOperationException("First name cannot be empty");
-
-        if (string.IsNullOrWhiteSpace(lastName))
-            throw new InvalidOperationException("Last name cannot be empty");
-
-        FirstName = firstName;
-        LastName = lastName;
-    }
-
-    public void UpdateEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            throw new InvalidOperationException("Email cannot be empty");
-
-        Email = EmailAddress.Create(email);
-    }
-
-    public void UpdateEmployeeId(string employeeId)
-    {
-        if (string.IsNullOrWhiteSpace(employeeId))
-            throw new InvalidOperationException("Employee ID cannot be empty");
-
-        EmployeeId = employeeId;
-    }
 
     // Lockout methods
     private const int MaxFailedAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(3);
 
-    /// <summary>
-    /// Checks if the account is currently locked out
-    /// </summary>
     public bool IsLockedOut()
     {
         if (LockoutEndUtc == null) return false;
         if (DateTime.UtcNow >= LockoutEndUtc)
         {
-            // Lockout expired, will be reset on next successful login
             return false;
         }
         return true;
     }
 
-    /// <summary>
-    /// Records a failed login attempt and locks account if threshold exceeded
-    /// </summary>
     public void RecordFailedLogin()
     {
         FailedLoginCount++;
-        
+
         if (FailedLoginCount >= MaxFailedAttempts)
         {
             LockoutEndUtc = DateTime.UtcNow.Add(LockoutDuration);
         }
     }
 
-    /// <summary>
-    /// Resets failed login counter on successful login
-    /// </summary>
     public void ResetFailedLoginCount()
     {
         FailedLoginCount = 0;
         LockoutEndUtc = null;
     }
 
-    /// <summary>
-    /// Gets the remaining lockout time, if any
-    /// </summary>
     public TimeSpan? GetRemainingLockoutTime()
     {
         if (LockoutEndUtc == null) return null;
         var remaining = LockoutEndUtc.Value - DateTime.UtcNow;
         return remaining > TimeSpan.Zero ? remaining : null;
     }
-
 }

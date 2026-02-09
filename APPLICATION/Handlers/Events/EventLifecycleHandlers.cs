@@ -72,7 +72,7 @@ public class CompleteEventHandler : IRequestHandler<CompleteEventCommand>
         try
         {
             // Validate that 100% of points have been awarded before completing
-            if (@event.TotalPointsPool.HasValue && @event.TotalPointsPool.Value > 0)
+            if (@event.TotalPointsPool != null && @event.TotalPointsPool.Value > 0)
             {
                 if (@event.DistributedPoints < @event.TotalPointsPool.Value)
                 {
@@ -84,7 +84,7 @@ public class CompleteEventHandler : IRequestHandler<CompleteEventCommand>
                 }
             }
 
-            @event.CompleteEvent(currentUserId);
+            @event.Complete(currentUserId);
             await _unitOfWork.SaveChangesAsync(ct);
         }
         catch (DomainException ex)
@@ -122,7 +122,7 @@ public class CancelEventHandler : IRequestHandler<CancelEventCommand>
 
         try
         {
-            @event.CancelEvent(currentUserId);
+            @event.Cancel(currentUserId);
             await _unitOfWork.SaveChangesAsync(ct);
         }
         catch (DomainException ex)

@@ -79,8 +79,23 @@ public class RedemptionsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(StatusCodes.Status500InternalServerError,
-                new { message = "Failed to create redemption", error = ex.Message });
+            var errorDetails = new
+            {
+                message = "Failed to create redemption",
+                error = ex.Message,
+                innerException = ex.InnerException?.Message,
+                stackTrace = ex.StackTrace,
+                type = ex.GetType().Name
+            };
+            
+            // Log the full error for debugging
+            System.Diagnostics.Debug.WriteLine($"Redemption creation error: {ex}");
+            if (ex.InnerException != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"Inner exception: {ex.InnerException}");
+            }
+
+            return StatusCode(StatusCodes.Status500InternalServerError, errorDetails);
         }
     }
 

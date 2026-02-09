@@ -2,6 +2,7 @@
 using WIN.AGDATA.WIN.APPLICATION.Commands.Admin;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Admin;
 
@@ -44,7 +45,7 @@ public class AdjustPointsHandler : IRequestHandler<AdjustPointsCommand>
         // Create transaction record
         var transaction = UserPointsTransaction.CreateAdjusted(
             userId: request.UserId,
-            points: request.Amount,
+            points: Points.Create(request.Amount),
             source: "Admin Adjustment",
             sourceId: null,
             description: request.Reason,

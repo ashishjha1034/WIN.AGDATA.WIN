@@ -11,6 +11,8 @@ public class EventProfile : Profile
         CreateMap<Event, EventDto>()
             .ForMember(d => d.Status, o => o.MapFrom(s => MapStatusToLabel(s.Status)))
                 .ForMember(d => d.ParticipantCount, o => o.MapFrom(s => s.Participants.Count))
+                .ForMember(d => d.TotalPointsPool, o => o.MapFrom(s => s.TotalPointsPool != null ? (decimal?)s.TotalPointsPool.Value : null))
+                .ForMember(d => d.DistributedPoints, o => o.MapFrom(s => s.DistributedPoints.Value))
                 .ForMember(d => d.AwardedPercent, o => o.MapFrom(s => CalculateAwardedPercent(s)))
                 .ForMember(d => d.RegistrationEndDateUtc, o => o.MapFrom(s => s.RegistrationEndDate));
         }
@@ -39,7 +41,7 @@ public class EventProfile : Profile
         /// </summary>
         private static decimal CalculateAwardedPercent(Event @event)
         {
-            if (!@event.TotalPointsPool.HasValue || @event.TotalPointsPool.Value == 0)
+            if (@event.TotalPointsPool == null || @event.TotalPointsPool.Value == 0)
                 return 0m;
 
             var percent = ((decimal)@event.DistributedPoints / @event.TotalPointsPool.Value) * 100m;

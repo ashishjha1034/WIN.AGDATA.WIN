@@ -133,7 +133,9 @@ public class DeactivateUserHandler : IRequestHandler<DeactivateUserCommand, Deac
         // 4. Check SOFT WARNINGS (can be bypassed with force=true)
         // Load points balance
         var userWithPoints = await _userRepository.GetByIdWithPointsAsync(request.TargetUserId);
-        var pointsBalance = userWithPoints?.PointsAccount?.CurrentBalance ?? 0;
+        var pointsBalance = userWithPoints?.PointsAccount?.CurrentBalance != null 
+            ? (decimal)userWithPoints.PointsAccount.CurrentBalance 
+            : 0m;
 
         // Get completed redemptions count
         var completedRedemptionsCount = await _redemptionRepository.GetCompletedRedemptionsCountForUserAsync(request.TargetUserId);

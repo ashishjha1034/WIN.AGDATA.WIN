@@ -7,7 +7,7 @@ public class ProductDto
     public string? Description { get; set; }
     public Guid CategoryId { get; set; }
     public string CategoryName { get; set; } = null!;
-    public int PointsCost { get; set; }
+    public decimal PointsCost { get; set; }
     public string? ImageUrl { get; set; }
     public int StockLevel { get; set; }
     public bool IsActive { get; set; }

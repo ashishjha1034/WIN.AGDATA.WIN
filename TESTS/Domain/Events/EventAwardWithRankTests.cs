@@ -20,11 +20,11 @@ public class EventAwardWithRankTests
         var adminId = Guid.NewGuid();
 
         // Act
-        participant.AwardPoints(points: 500, rank: 1, awardedBy: adminId);
+        participant.AwardPoints(points: Points.Create(500), rank: 1, awardedBy: adminId);
 
         // Assert
         participant.PointsAwarded.Should().Be(500);
-        participant.EventRank.Should().Be(1);
+        participant.Rank.Should().Be(1);
         participant.AwardedBy.Should().Be(adminId);
         participant.AwardedAt.Should().NotBeNull();
     }
@@ -37,11 +37,11 @@ public class EventAwardWithRankTests
         participant.MarkCheckedIn();
 
         // Act
-        participant.AwardPoints(points: 100, rank: null, awardedBy: Guid.NewGuid());
+        participant.AwardPoints(points: Points.Create(100), rank: null, awardedBy: Guid.NewGuid());
 
         // Assert
         participant.PointsAwarded.Should().Be(100);
-        participant.EventRank.Should().BeNull();
+        participant.Rank.Should().BeNull();
     }
 
     [Theory]
@@ -57,10 +57,10 @@ public class EventAwardWithRankTests
         participant.MarkCheckedIn();
 
         // Act
-        participant.AwardPoints(points: 100, rank: rank, awardedBy: Guid.NewGuid());
+        participant.AwardPoints(points: Points.Create(100), rank: rank, awardedBy: Guid.NewGuid());
 
         // Assert
-        participant.EventRank.Should().Be(rank);
+        participant.Rank.Should().Be(rank);
     }
 
     [Fact]
@@ -69,10 +69,10 @@ public class EventAwardWithRankTests
         // Arrange
         var participant = new EventParticipant(Guid.NewGuid(), Guid.NewGuid());
         participant.MarkCheckedIn();
-        participant.AwardPoints(100, rank: 1, Guid.NewGuid());
+        participant.AwardPoints(Points.Create(100), rank: 1, Guid.NewGuid());
 
         // Act & Assert
-        var action = () => participant.AwardPoints(50, rank: 2, Guid.NewGuid());
+        var action = () => participant.AwardPoints(Points.Create(50), rank: 2, Guid.NewGuid());
         action.Should().Throw<DomainException>()
             .WithMessage("*already been awarded*");
     }
@@ -85,7 +85,7 @@ public class EventAwardWithRankTests
         // Not checked in
 
         // Act & Assert
-        var action = () => participant.AwardPoints(100, rank: 1, Guid.NewGuid());
+        var action = () => participant.AwardPoints(Points.Create(100), rank: 1, Guid.NewGuid());
         action.Should().Throw<DomainException>()
             .WithMessage("*must be checked-in*");
     }
@@ -100,7 +100,7 @@ public class EventAwardWithRankTests
         var beforeAward = DateTime.UtcNow;
 
         // Act
-        participant.AwardPoints(100, rank: 5, adminId);
+        participant.AwardPoints(Points.Create(100), rank: 5, adminId);
 
         // Assert
         participant.AwardedAt.Should().NotBeNull();

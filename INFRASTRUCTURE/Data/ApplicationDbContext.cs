@@ -37,5 +37,8 @@ public class ApplicationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(UserConfiguration).Assembly);
+        
+        // Ignore abstract base types & domain events - they should not be persisted
+        modelBuilder.Ignore<Domain.Common.DomainEvent>();
     }
 }

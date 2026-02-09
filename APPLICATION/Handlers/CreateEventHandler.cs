@@ -7,6 +7,7 @@ using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Events;
 
@@ -117,7 +118,7 @@ public class CreateEventHandler : IRequestHandler<CreateEventCommand, EventDto>
             normalizedName,
             normalizedDescription,
             request.EventDate,
-            request.TotalPointsPool,
+            request.TotalPointsPool.HasValue ? Points.Create(request.TotalPointsPool.Value) : (Points?)null,
             string.IsNullOrWhiteSpace(normalizedLocation) ? null : normalizedLocation,
             request.MaxParticipants,
             request.RegistrationEndDateUtc,

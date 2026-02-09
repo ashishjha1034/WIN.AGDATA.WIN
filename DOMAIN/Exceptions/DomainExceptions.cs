@@ -46,6 +46,132 @@ namespace WIN.AGDATA.WIN.Domain.Exceptions
     }
 
     /// <summary>
+    /// Exception thrown when an invalid status transition is attempted.
+    /// </summary>
+    public class InvalidStatusTransitionException : DomainException
+    {
+        public string CurrentStatus { get; }
+        public string AttemptedTransition { get; }
+
+        public InvalidStatusTransitionException(string currentStatus, string attemptedTransition)
+            : base($"Cannot {attemptedTransition} when status is {currentStatus}.")
+        {
+            CurrentStatus = currentStatus;
+            AttemptedTransition = attemptedTransition;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when a user has insufficient points.
+    /// </summary>
+    public class InsufficientPointsException : DomainException
+    {
+        public decimal Required { get; }
+        public decimal Available { get; }
+
+        public InsufficientPointsException(decimal required, decimal available)
+            : base($"Insufficient points. Required: {required}, Available: {available}")
+        {
+            Required = required;
+            Available = available;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when attempting to register a user who is already registered.
+    /// </summary>
+    public class DuplicateRegistrationException : DomainException
+    {
+        public Guid EventId { get; }
+        public Guid UserId { get; }
+
+        public DuplicateRegistrationException(Guid eventId, Guid userId)
+            : base($"User {userId} is already registered for event {eventId}.")
+        {
+            EventId = eventId;
+            UserId = userId;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when event capacity is exceeded.
+    /// </summary>
+    public class CapacityExceededException : DomainException
+    {
+        public int MaxCapacity { get; }
+        public int CurrentCount { get; }
+
+        public CapacityExceededException(int maxCapacity, int currentCount)
+            : base($"Event has reached maximum capacity of {maxCapacity} participants. Current: {currentCount}")
+        {
+            MaxCapacity = maxCapacity;
+            CurrentCount = currentCount;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when attempting to award points to a participant who already has points.
+    /// </summary>
+    public class AlreadyAwardedException : DomainException
+    {
+        public Guid UserId { get; }
+        public decimal CurrentPoints { get; }
+
+        public AlreadyAwardedException(Guid userId, decimal currentPoints)
+            : base($"Points have already been awarded to participant {userId}. Current points: {currentPoints}. Cannot award again.")
+        {
+            UserId = userId;
+            CurrentPoints = currentPoints;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when attempting to award points to a participant who is not checked-in.
+    /// </summary>
+    public class NotCheckedInException : DomainException
+    {
+        public Guid UserId { get; }
+        public string AttendanceStatus { get; }
+
+        public NotCheckedInException(Guid userId, string attendanceStatus)
+            : base($"Participant {userId} must be checked-in to receive points. Current status: {attendanceStatus}.")
+        {
+            UserId = userId;
+            AttendanceStatus = attendanceStatus;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when the event pool has insufficient points.
+    /// </summary>
+    public class InsufficientPoolException : DomainException
+    {
+        public decimal Required { get; }
+        public decimal Remaining { get; }
+
+        public InsufficientPoolException(decimal required, decimal remaining)
+            : base($"Insufficient points in event pool. Requested: {required}, Remaining: {remaining}")
+        {
+            Required = required;
+            Remaining = remaining;
+        }
+    }
+
+    /// <summary>
+    /// Exception thrown when registration deadline has passed.
+    /// </summary>
+    public class RegistrationClosedException : DomainException
+    {
+        public DateTime Deadline { get; }
+
+        public RegistrationClosedException(DateTime deadline)
+            : base($"Registration deadline has passed. Deadline was {deadline:u}.")
+        {
+            Deadline = deadline;
+        }
+    }
+
+    /// <summary>
     /// Exception thrown when product deactivation is blocked due to active redemptions.
     /// This is a hard block that cannot be bypassed.
     /// </summary>

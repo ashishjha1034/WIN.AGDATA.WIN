@@ -6,6 +6,7 @@ using WIN.AGDATA.WIN.APPLICATION.DTOs.Events;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Events;
 
@@ -129,7 +130,7 @@ public class UpdateEventHandler : IRequestHandler<UpdateEventCommand, EventDto>
                 name: normalizedName,
                 description: normalizedDescription,
                 eventDate: request.EventDate,
-                totalPointsPool: request.TotalPointsPool,
+                totalPointsPool: request.TotalPointsPool.HasValue ? Points.Create(request.TotalPointsPool.Value) : (Points?)null,
                 location: string.IsNullOrWhiteSpace(normalizedLocation) ? null : normalizedLocation,
                 maxParticipants: request.MaxParticipants,
                 registrationEndDate: request.RegistrationEndDateUtc,

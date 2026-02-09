@@ -36,7 +36,7 @@ public class CheckInParticipantHandler : IRequestHandler<CheckInParticipantComma
             // Use domain method which enforces:
             // - Event status must be Active
             // - Participant must exist
-            @event.CheckInParticipantByUserId(request.ParticipantUserId, currentUserId);
+            @event.CheckInParticipant(request.ParticipantUserId, currentUserId);
 
             await _unitOfWork.SaveChangesAsync(ct);
         }

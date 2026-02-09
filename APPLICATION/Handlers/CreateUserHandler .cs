@@ -28,7 +28,12 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, UserDto>
             throw new DomainException("Email already in use");
 
         var email = EmailAddress.Create(request.Email);
-        var user = new User(request.EmployeeId, email, request.FirstName, request.LastName, request.Password);
+        var user = new User(
+            EmployeeId.Create(request.EmployeeId),
+            email,
+            PersonName.Create(request.FirstName),
+            PersonName.Create(request.LastName),
+            request.Password);
 
         var employeeRole = await _userRepository.GetRoleByNameAsync("Employee")
             ?? throw new DomainException("Default role 'Employee' not found");

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -18,9 +19,17 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.Status).HasConversion<int>();
 
         // Pool tracking - use decimal(18,2) for 2 decimal places
-        builder.Property(e => e.TotalPointsPool).HasPrecision(18, 2);
-        builder.Property(e => e.DistributedPoints).HasPrecision(18, 2).HasDefaultValue(0m);
-        builder.Property(e => e.PointsPerParticipant).HasPrecision(18, 2);
+        builder.Property(e => e.TotalPointsPool)
+            .HasPrecision(18, 2)
+            .HasConversion(
+                v => v != null ? v.Value : (decimal?)null,
+                v => v.HasValue ? Points.Create(v.Value) : null);
+        
+        builder.Property(e => e.DistributedPoints)
+            .HasPrecision(18, 2)
+            .HasConversion(
+                v => v.Value,
+                v => Points.Create(v));
         
         // Optimistic concurrency for pool operations
         builder.Property(e => e.RowVersion)

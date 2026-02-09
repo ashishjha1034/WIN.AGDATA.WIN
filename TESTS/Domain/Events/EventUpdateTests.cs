@@ -19,7 +19,7 @@ public class EventUpdateTests
             name: "Original Name",
             description: "Original Description",
             eventDate: DateTime.UtcNow.AddDays(7),
-            totalPointsPool: 1000,
+            totalPointsPool: Points.Create(1000),
             location: "Original Location",
             maxParticipants: 50,
             registrationEndDate: DateTime.UtcNow.AddDays(5),
@@ -30,7 +30,7 @@ public class EventUpdateTests
             name: "Updated Name",
             description: "Updated Description",
             eventDate: DateTime.UtcNow.AddDays(10),
-            totalPointsPool: 2000,
+            totalPointsPool: Points.Create(2000),
             location: "Updated Location",
             maxParticipants: 100,
             registrationEndDate: DateTime.UtcNow.AddDays(8),
@@ -74,7 +74,7 @@ public class EventUpdateTests
             registrationEndDate: DateTime.UtcNow.AddDays(5));
 
         @event.Activate(Guid.NewGuid());
-        @event.CompleteEvent(Guid.NewGuid());
+        @event.Complete(Guid.NewGuid());
 
         // Act & Assert
         var action = () => @event.UpdateDetails(name: "New Name");
@@ -92,7 +92,7 @@ public class EventUpdateTests
             eventDate: DateTime.UtcNow.AddDays(7),
             registrationEndDate: DateTime.UtcNow.AddDays(5));
 
-        @event.CancelEvent(Guid.NewGuid());
+        @event.Cancel(Guid.NewGuid());
 
         // Act & Assert
         var action = () => @event.UpdateDetails(name: "New Name");

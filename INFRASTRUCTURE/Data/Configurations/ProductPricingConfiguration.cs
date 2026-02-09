@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -13,7 +14,14 @@ public class ProductPricingConfiguration : IEntityTypeConfiguration<ProductPrici
         builder.HasKey(pp => pp.Id);
 
         builder.Property(pp => pp.ProductId).IsRequired();
-        builder.Property(pp => pp.PointsCost).IsRequired();
+        
+        builder.Property(pp => pp.PointsCost)
+            .IsRequired()
+            .HasPrecision(18, 2)
+            .HasConversion(
+                v => v.Value,
+                v => Points.Create(v));
+        
         builder.Property(pp => pp.EffectiveFrom).IsRequired();
 
         // ONE-TO-ONE: Product has exactly one active ProductPricing

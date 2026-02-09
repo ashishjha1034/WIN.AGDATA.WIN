@@ -24,7 +24,7 @@ export class EmployeeDashboardComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
         if (user) {
-          this.userName = user.firstName;
+          this.userName = user.firstName || '';
           this.userEmail = user.email;
         }
       });

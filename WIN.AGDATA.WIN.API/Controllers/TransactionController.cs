@@ -161,9 +161,9 @@ public class TransactionController : ControllerBase
                 user = new
                 {
                     userId = currentUserId,
-                    currentBalance = user.PointsAccount.CurrentBalance,
-                    totalEarned = user.PointsAccount.TotalEarned,
-                    totalRedeemed = user.PointsAccount.TotalRedeemed
+                    currentBalance = user.PointsAccount.CurrentBalance.Value,
+                    totalEarned = user.PointsAccount.TotalEarned.Value,
+                    totalRedeemed = user.PointsAccount.TotalRedeemed.Value
                 },
                 userStats = new
                 {

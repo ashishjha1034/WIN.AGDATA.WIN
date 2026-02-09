@@ -10,8 +10,8 @@ public record class UserDto
 	public string LastName { get; init; } = string.Empty;
 	public bool IsActive { get; init; }
 	public bool MustChangePassword { get; init; }
-	public int CurrentBalance { get; init; }
-	public int TotalEarned { get; init; }
-	public int TotalRedeemed { get; init; }
+	public decimal CurrentBalance { get; init; }
+	public decimal TotalEarned { get; init; }
+	public decimal TotalRedeemed { get; init; }
 	public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
 }

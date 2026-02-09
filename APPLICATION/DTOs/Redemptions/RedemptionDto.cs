@@ -9,7 +9,7 @@ public class RedemptionDto
     public string UserName { get; set; } = string.Empty;
     public Guid ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
-    public int PointsSpent { get; set; }
+    public decimal PointsSpent { get; set; }
     public int Quantity { get; set; }
     public RedemptionStatus Status { get; set; }
     public string? AdminNotes { get; set; }

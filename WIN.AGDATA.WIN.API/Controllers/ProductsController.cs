@@ -8,6 +8,7 @@ using WIN.AGDATA.WIN.APPLICATION.Commands.Products;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Products;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Enums;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -327,7 +328,7 @@ public class ProductsController : ControllerBase
             var name = !string.IsNullOrWhiteSpace(request.Name) ? request.Name.Trim() : product.Name;
             var description = !string.IsNullOrWhiteSpace(request.Description) ? request.Description.Trim() : product.Description;
             var categoryId = request.CategoryId ?? product.CategoryId;
-            var pointsCost = request.PointsCost ?? product.CurrentPricing;
+            var pointsCost = request.PointsCost.HasValue ? Points.Create(request.PointsCost.Value) : product.CurrentPricing;
             var imageUrl = !string.IsNullOrWhiteSpace(request.ImageUrl) ? request.ImageUrl.Trim() : 
                            (request.ImageUrl == null ? product.ImageUrl : null); // Allow clearing URL with empty string
 

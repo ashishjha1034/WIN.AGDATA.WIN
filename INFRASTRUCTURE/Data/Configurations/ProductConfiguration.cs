@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Products;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -12,7 +13,12 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Property(p => p.Name).HasMaxLength(200).IsRequired();
         builder.Property(p => p.Description).HasMaxLength(1000).IsRequired();
-        builder.Property(p => p.ImageUrl).HasMaxLength(1000);
+        
+        builder.Property(p => p.ImageUrl)
+            .HasMaxLength(1000)
+            .HasConversion(
+                v => v != null ? v.Value : null,
+                v => v != null ? ImageUrl.Create(v) : null);
 
         builder.HasOne(p => p.Category)
             .WithMany()

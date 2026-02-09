@@ -6,6 +6,7 @@ using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.APPLICATION.Validators;
 using WIN.AGDATA.WIN.Domain.Entities.Products;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers;
 
@@ -41,7 +42,7 @@ public class CreateProductHandler : IRequestHandler<CreateProductCommand, Produc
             request.Name,
             request.Description,
             request.CategoryId,
-            request.PointsCost,
+            Points.Create(request.PointsCost),
             request.ImageUrl);
 
         if (request.InitialStock > 0)

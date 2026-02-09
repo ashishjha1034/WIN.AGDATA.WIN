@@ -316,7 +316,7 @@ public class DeactivateProductHandlerTests
     private Product CreateTestProduct(Guid productId, int stock)
     {
         var categoryId = Guid.NewGuid();
-        var product = new Product("Test Product", "Description", categoryId, 100, null);
+        var product = new Product("Test Product", "Description", categoryId, Points.Create(100), null);
         
         // Use reflection to set the Id since it's private - use DeclaredOnly to avoid ambiguity with base class
         var idProperty = typeof(Product).GetProperty("Id", 

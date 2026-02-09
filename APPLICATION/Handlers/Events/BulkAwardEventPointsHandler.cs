@@ -6,6 +6,7 @@ using WIN.AGDATA.WIN.Domain.Entities.Events;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 using WIN.AGDATA.WIN.Domain.Enums;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Events;
 
@@ -104,13 +105,13 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             throw new InvalidOperationException($"Bulk award failed. Ineligible participants: {string.Join("; ", errors)}");
         }
 
-        var totalPointsRequested = computedAwards.Sum(a => a.Points);
+        var totalPointsRequested = Points.Create(computedAwards.Sum(a => a.Points));
 
         // Pool enforcement: validate total requested points against remaining pool
         if (!@event.CanDistributePoints(totalPointsRequested))
         {
-            var remaining = @event.RemainingPoints ?? 0;
-            throw new InvalidOperationException($"Insufficient points in event pool. Total requested: {totalPointsRequested}, Remaining: {remaining}");
+            var remaining = @event.RemainingPoints != null ? (decimal)@event.RemainingPoints : 0;
+            throw new InvalidOperationException($"Insufficient points in event pool. Total requested: {totalPointsRequested.Value}, Remaining: {remaining}");
         }
 
         // Load all users in batch for efficiency
@@ -118,7 +119,7 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
         var userMap = users.ToDictionary(u => u.Id);
 
         // Apply all awards - all validation passed, proceed with single transaction
-        @event.ReservePoints(totalPointsRequested);
+        // Note: ReservePoints is now private and called internally by AwardPoints
 
         foreach (var award in computedAwards)
         {
@@ -129,12 +130,12 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
             user.PointsAccount.AddPoints(award.Points, currentUserId);
 
             // Award points to participant
-            participant.AwardPoints(award.Points, award.Rank, currentUserId);
+            participant.AwardPoints(Points.Create(award.Points), award.Rank, currentUserId);
 
             // Create transaction record
             var transaction = UserPointsTransaction.CreateEarned(
                 userId: participant.UserId,
-                points: award.Points,
+                points: Points.Create(award.Points),
                 source: "Event Participation (Bulk)",
                 sourceId: request.EventId,
                 description: $"Points awarded for event: {@event.Name}" +
@@ -147,9 +148,9 @@ public class BulkAwardEventPointsHandler : IRequestHandler<BulkAwardEventPointsC
         }
 
         // Auto-complete event when pool is fully exhausted
-        if (@event.RemainingPoints == 0)
+        if (@event.RemainingPoints != null && @event.RemainingPoints.Value == 0)
         {
-            @event.CompleteEvent(currentUserId);
+            @event.Complete(currentUserId);
         }
 
         // Single save with optimistic concurrency on Event.RowVersion

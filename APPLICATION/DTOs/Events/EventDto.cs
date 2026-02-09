@@ -8,8 +8,8 @@ public class EventDto
     public string Description { get; set; } = null!;
     public string Status { get; set; } = null!;
     public int ParticipantCount { get; set; }
-    public int? TotalPointsPool { get; set; }
-    public int DistributedPoints { get; set; }
+    public decimal? TotalPointsPool { get; set; }
+    public decimal DistributedPoints { get; set; }
     public string? Location { get; set; }
     public int? MaxParticipants { get; set; }
     public DateTime? RegistrationEndDate { get; set; }

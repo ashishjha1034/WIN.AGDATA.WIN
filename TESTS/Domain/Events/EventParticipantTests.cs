@@ -20,11 +20,11 @@ public class EventParticipantTests
         var adminId = Guid.NewGuid();
 
         // Act
-        participant.AwardPoints(100, rank: 1, adminId);
+        participant.AwardPoints(Points.Create(100), rank: 1, adminId);
 
         // Assert
         participant.PointsAwarded.Should().Be(100);
-        participant.EventRank.Should().Be(1);
+        participant.Rank.Should().Be(1);
         participant.AwardedBy.Should().Be(adminId);
         participant.AwardedAt.Should().NotBeNull();
     }
@@ -37,7 +37,7 @@ public class EventParticipantTests
         // Not checked in - status is still Registered
 
         // Act & Assert
-        var action = () => participant.AwardPoints(100, rank: null, Guid.NewGuid());
+        var action = () => participant.AwardPoints(Points.Create(100), rank: null, Guid.NewGuid());
         action.Should().Throw<DomainException>()
             .WithMessage("*must be checked-in*");
     }
@@ -48,10 +48,10 @@ public class EventParticipantTests
         // Arrange
         var participant = new EventParticipant(Guid.NewGuid(), Guid.NewGuid());
         participant.MarkCheckedIn();
-        participant.AwardPoints(100, rank: null, Guid.NewGuid());
+        participant.AwardPoints(Points.Create(100), rank: null, Guid.NewGuid());
 
         // Act & Assert - try to award again
-        var action = () => participant.AwardPoints(50, rank: null, Guid.NewGuid());
+        var action = () => participant.AwardPoints(Points.Create(50), rank: null, Guid.NewGuid());
         action.Should().Throw<DomainException>()
             .WithMessage("*already been awarded*");
     }

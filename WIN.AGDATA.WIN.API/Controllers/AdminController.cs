@@ -176,15 +176,15 @@ public class AdminController : ControllerBase
                 {
                     u.Id,
                     email = u.Email.Value,
-                    u.FirstName,
-                    u.LastName,
-                    u.EmployeeId,
+                    firstName = u.FirstName.Value,
+                    lastName = u.LastName.Value,
+                    employeeId = u.EmployeeId.Value,
                     u.IsActive,
                     points = new
                     {
-                        current = u.PointsAccount.CurrentBalance,
-                        earned = u.PointsAccount.TotalEarned,
-                        redeemed = u.PointsAccount.TotalRedeemed
+                        current = u.PointsAccount.CurrentBalance.Value,
+                        earned = u.PointsAccount.TotalEarned.Value,
+                        redeemed = u.PointsAccount.TotalRedeemed.Value
                     },
                     roles = u.Roles?.Select(r => r.Role.Name).ToList()
                 }).ToList()
@@ -230,17 +230,17 @@ public class AdminController : ControllerBase
                 {
                     user.Id,
                     email = user.Email.Value,
-                    user.FirstName,
-                    user.LastName,
-                    user.EmployeeId,
+                    firstName = user.FirstName.Value,
+                    lastName = user.LastName.Value,
+                    employeeId = user.EmployeeId.Value,
                     user.IsActive,
                     roles = user.Roles?.Select(r => r.Role.Name).ToList()
                 },
                 points = new
                 {
-                    current = user.PointsAccount.CurrentBalance,
-                    earned = user.PointsAccount.TotalEarned,
-                    redeemed = user.PointsAccount.TotalRedeemed
+                    current = user.PointsAccount.CurrentBalance.Value,
+                    earned = user.PointsAccount.TotalEarned.Value,
+                    redeemed = user.PointsAccount.TotalRedeemed.Value
                 },
                 transactionCount = transactions.Count
             });

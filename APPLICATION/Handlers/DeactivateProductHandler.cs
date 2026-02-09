@@ -81,10 +81,11 @@ public class DeactivateProductHandler : IRequestHandler<DeactivateProductCommand
 
         // 7. Perform deactivation within transaction
         product.Deactivate(
-            "Deactivated by admin",
-            pendingApproved.PendingCount,
-            pendingApproved.ApprovedCount,
-            request.Force);
+            reason: "Deactivated by admin",
+            deactivatedBy: Guid.Empty, // TODO: Get current user ID
+            pendingRedemptions: pendingApproved.PendingCount,
+            approvedRedemptions: pendingApproved.ApprovedCount,
+            force: request.Force);
 
         await _productRepository.UpdateAsync(product);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

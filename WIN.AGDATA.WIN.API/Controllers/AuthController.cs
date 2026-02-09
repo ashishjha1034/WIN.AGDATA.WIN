@@ -148,9 +148,9 @@ public class AuthController : ControllerBase
                 {
                     user.Id,
                     email = user.Email.Value,
-                    user.FirstName,
-                    user.LastName,
-                    user.EmployeeId,
+                    firstName = user.FirstName.Value,
+                    lastName = user.LastName.Value,
+                    employeeId = user.EmployeeId.Value,
                     roles = user.Roles?.Select(r => r.Role.Name).ToList()
                 }
             });
@@ -186,9 +186,9 @@ public class AuthController : ControllerBase
             {
                 user.Id,
                 email = user.Email.Value,
-                user.FirstName,
-                user.LastName,
-                user.EmployeeId,
+                firstName = user.FirstName.Value,
+                lastName = user.LastName.Value,
+                employeeId = user.EmployeeId.Value,
                 user.IsActive,
                 roles = user.Roles?.Select(r => r.Role.Name).ToList()
             });

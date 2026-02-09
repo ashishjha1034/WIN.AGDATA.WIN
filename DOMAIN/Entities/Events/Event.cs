@@ -1,5 +1,6 @@
 ﻿using WIN.AGDATA.WIN.Domain.Common;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Domain.Entities.Events;
 
@@ -9,18 +10,17 @@ public class Event : AuditableEntity<Guid>
     public string Description { get; private set; } = null!;
     public DateTime EventDate { get; private set; }
     public EventStatus Status { get; private set; }
-    public decimal? TotalPointsPool { get; private set; }
+    public Points? TotalPointsPool { get; private set; }
     public string? Location { get; private set; }
     public int? MaxParticipants { get; private set; }
     public DateTime? RegistrationEndDate { get; private set; }
     public string? BannerImageUrl { get; private set; }
-    public decimal PointsPerParticipant { get; private set; } = 0;
 
     /// <summary>
     /// Tracks total points distributed from this event's pool.
     /// Used for O(1) remaining pool calculation: Remaining = TotalPointsPool - DistributedPoints.
     /// </summary>
-    public decimal DistributedPoints { get; private set; } = 0;
+    public Points DistributedPoints { get; private set; } = Points.Zero;
 
     /// <summary>
     /// Concurrency token for optimistic locking on pool operations.
@@ -37,7 +37,7 @@ public class Event : AuditableEntity<Guid>
         string name,
         string description,
         DateTime eventDate,
-        int? totalPointsPool = null,
+        Points? totalPointsPool = null,
         string? location = null,
         int? maxParticipants = null,
         DateTime? registrationEndDate = null,
@@ -101,130 +101,14 @@ public class Event : AuditableEntity<Guid>
 
     #endregion
 
-    #region Lifecycle Transitions
-
-    /// <summary>
-    /// Activates the event, transitioning from Draft to Active.
-    /// </summary>
-    /// <param name="adminId">ID of the admin performing the activation</param>
-    public void Activate(Guid adminId)
-    {
-        if (!CanActivate())
-            throw new DomainException($"Cannot activate event. Current status is {Status}. Only Draft events can be activated.");
-
-        Status = EventStatus.Active;
-    }
-
-    /// <summary>
-    /// Completes the event, transitioning from Active to Completed.
-    /// </summary>
-    /// <param name="adminId">ID of the admin completing the event</param>
-    public void CompleteEvent(Guid adminId)
-    {
-        if (!CanComplete())
-            throw new DomainException($"Cannot complete event. Current status is {Status}. Only Active events can be completed.");
-
-        Status = EventStatus.Completed;
-    }
-
-    /// <summary>
-    /// Cancels the event. Can only be cancelled from Draft state.
-    /// </summary>
-    /// <param name="adminId">ID of the admin cancelling the event</param>
-    public void CancelEvent(Guid adminId)
-    {
-        if (!CanCancel())
-            throw new DomainException($"Cannot cancel event. Current status is {Status}. Only Draft (Upcoming) events can be cancelled.");
-
-        Status = EventStatus.Cancelled;
-    }
-
-    /// <summary>
-    /// Auto-Cancels the event when registration deadline passes with 0 participants.
-    /// This is called by the background service or compute-on-read.
-    /// </summary>
-    public void AutoCancel()
-    {
-        if (Status != EventStatus.Draft)
-            return; // Silently ignore if not in Draft state
-
-        Status = EventStatus.Cancelled;
-    }
-
-    /// <summary>
-    /// Auto-Activates the event when the event start time arrives.
-    /// This is called by the background service or compute-on-read.
-    /// </summary>
-    public void AutoActivate()
-    {
-        if (Status != EventStatus.Draft)
-            return; // Silently ignore if not in Draft state
-
-        Status = EventStatus.Active;
-    }
-
-    /// <summary>
-    /// Applies automated state transitions based on the current time.
-    /// Call this on read paths to ensure status is up-to-date ("compute-on-read").
-    /// 
-    /// Rules:
-    /// 1. If nowUtc >= EventDate AND Status == Draft → Auto-Go-Live (Active)
-    /// 2. If nowUtc >= RegistrationEndDate AND Status == Draft AND ParticipantCount == 0 → Auto-Cancel
-    /// 
-    /// Note: Rule 1 takes precedence - if event start time has passed, go live regardless of registrations.
-    /// </summary>
-    /// <param name="nowUtc">Current UTC time</param>
-    /// <returns>True if a state transition occurred</returns>
-    public bool ApplyAutomatedTransitions(DateTime nowUtc)
-    {
-        if (Status != EventStatus.Draft)
-            return false;
-
-        // Rule 1: Auto-Go-Live when event start time arrives
-        if (nowUtc >= EventDate)
-        {
-            AutoActivate();
-            return true;
-        }
-
-        // Rule 2: Auto-Cancel when registration deadline passes with 0 registrations
-        if (RegistrationEndDate.HasValue && nowUtc >= RegistrationEndDate.Value && _participants.Count == 0)
-        {
-            AutoCancel();
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Determines if the event should auto-cancel (registration passed with 0 participants).
-    /// Used by background services for batch processing.
-    /// </summary>
-    public bool ShouldAutoCancel(DateTime nowUtc) =>
-        Status == EventStatus.Draft &&
-        RegistrationEndDate.HasValue &&
-        nowUtc >= RegistrationEndDate.Value &&
-        _participants.Count == 0;
-
-    /// <summary>
-    /// Determines if the event should auto-go-live (event start time arrived).
-    /// Used by background services for batch processing.
-    /// </summary>
-    public bool ShouldAutoActivate(DateTime nowUtc) =>
-        Status == EventStatus.Draft &&
-        nowUtc >= EventDate;
-
-    #endregion
-
     #region Pool Management
 
     /// <summary>
     /// Gets the remaining points available in the pool.
     /// Returns null if pool is unlimited (TotalPointsPool is null).
     /// </summary>
-    public decimal? RemainingPoints => TotalPointsPool.HasValue 
-        ? TotalPointsPool.Value - DistributedPoints 
+    public Points? RemainingPoints => TotalPointsPool != null
+        ? TotalPointsPool - DistributedPoints
         : null;
 
     /// <summary>
@@ -232,16 +116,16 @@ public class Event : AuditableEntity<Guid>
     /// </summary>
     /// <param name="requestedPoints">Points to distribute</param>
     /// <returns>True if pool is unlimited or has sufficient remaining points</returns>
-    public bool CanDistributePoints(decimal requestedPoints)
+    public bool CanDistributePoints(Points requestedPoints)
     {
-        if (requestedPoints <= 0)
+        if (requestedPoints == null || requestedPoints.IsZero())
             return false;
-        
+
         // Unlimited pool
-        if (!TotalPointsPool.HasValue)
+        if (TotalPointsPool == null)
             return true;
-        
-        return (DistributedPoints + requestedPoints) <= TotalPointsPool.Value;
+
+        return (DistributedPoints + requestedPoints) <= TotalPointsPool;
     }
 
     /// <summary>
@@ -249,47 +133,218 @@ public class Event : AuditableEntity<Guid>
     /// Must be called within a transaction with optimistic concurrency check.
     /// </summary>
     /// <param name="points">Points to reserve</param>
-    /// <exception cref="DomainException">Thrown if insufficient points in pool</exception>
-    public void ReservePoints(decimal points)
+    /// <exception cref="InsufficientPoolException">Thrown if insufficient points in pool</exception>
+    private void ReservePoints(Points points)
     {
-        if (points <= 0)
+        if (points == null || points.IsZero() || !points.IsPositive())
             throw new DomainException("Points to reserve must be positive.");
 
-        if (TotalPointsPool.HasValue && (DistributedPoints + points) > TotalPointsPool.Value)
+        if (TotalPointsPool != null && (DistributedPoints + points) > TotalPointsPool)
         {
-            var remaining = TotalPointsPool.Value - DistributedPoints;
-            throw new DomainException($"Insufficient points in pool. Requested: {points}, Remaining: {remaining}");
+            var remaining = TotalPointsPool - DistributedPoints;
+            throw new InsufficientPoolException(points.Value, remaining.Value);
         }
 
         DistributedPoints += points;
     }
 
+    #endregion
+
+    #region Domain Methods - Registration
+
     /// <summary>
-    /// Sets the distributed points counter. Used for backfill migration.
+    /// Registers a participant for the event with full domain validation.
     /// </summary>
-    /// <param name="totalDistributed">Total distributed points</param>
-    internal void SetDistributedPoints(decimal totalDistributed)
+    /// <param name="userId">User ID to register</param>
+    /// <param name="nowUtc">Current UTC time for deadline validation</param>
+    public void RegisterParticipant(Guid userId, DateTime nowUtc)
     {
-        if (totalDistributed < 0)
-            throw new DomainException("Distributed points cannot be negative.");
-        
-        DistributedPoints = totalDistributed;
+        // Validate registration is allowed
+        if (!CanRegister(nowUtc))
+        {
+            if (Status != EventStatus.Draft)
+                throw new InvalidStatusTransitionException(Status.ToString(), "register participants");
+
+            if (!RegistrationEndDate.HasValue)
+                throw new DomainException("Registration deadline is not set for this event.");
+
+            throw new RegistrationClosedException(RegistrationEndDate.Value);
+        }
+
+        // Check for duplicate
+        if (_participants.Any(p => p.UserId == userId))
+            throw new DuplicateRegistrationException(Id, userId);
+
+        // Check capacity
+        if (MaxParticipants.HasValue && _participants.Count >= MaxParticipants.Value)
+            throw new CapacityExceededException(MaxParticipants.Value, _participants.Count);
+
+        // Create and add participant
+        var participant = new EventParticipant(Id, userId);
+        _participants.Add(participant);
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.ParticipantRegisteredEvent(Id, userId, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    /// Removes a participant from the event by their user ID.
+    /// </summary>
+    /// <param name="userId">The user ID to remove</param>
+    public void UnregisterParticipant(Guid userId)
+    {
+        if (Status == EventStatus.Completed)
+            throw new InvalidStatusTransitionException(Status.ToString(), "unregister participants");
+
+        var participant = _participants.FirstOrDefault(p => p.UserId == userId)
+            ?? throw new DomainException($"User {userId} is not registered for this event.");
+
+        if (participant.PointsAwarded != null && !participant.PointsAwarded.IsZero())
+            throw new DomainException("Cannot remove participant who has been awarded points.");
+
+        _participants.Remove(participant);
     }
 
     #endregion
 
-    #region Legacy methods (kept for backwards compatibility)
+    #region Domain Methods - Check-In
 
-    [Obsolete("Use Activate(Guid adminId) instead")]
-    public void Start() => Status = EventStatus.Active;
+    /// <summary>
+    /// Checks in a participant by user ID. Only allowed when event is Active.
+    /// </summary>
+    /// <param name="userId">The user ID to check in</param>
+    /// <param name="byAdmin">ID of the admin performing the check-in</param>
+    public void CheckInParticipant(Guid userId, Guid byAdmin)
+    {
+        if (!CanCheckIn())
+            throw new InvalidStatusTransitionException(Status.ToString(), "check-in participants");
 
-    [Obsolete("Use CompleteEvent(Guid adminId) instead")]
-    public void Complete() => Status = EventStatus.Completed;
+        var participant = _participants.FirstOrDefault(p => p.UserId == userId)
+            ?? throw new DomainException($"User {userId} is not registered for this event.");
 
-    [Obsolete("Use CancelEvent(Guid adminId) instead")]
-    public void Cancel() => Status = EventStatus.Cancelled;
+        participant.MarkCheckedIn();
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.ParticipantCheckedInEvent(Id, userId, byAdmin, DateTime.UtcNow));
+    }
 
     #endregion
+
+    #region Domain Methods - Award Points
+
+    /// <summary>
+    /// Awards points to a specific participant with full validation.
+    /// This method encapsulates all the business rules for awarding points.
+    /// </summary>
+    /// <param name="participantUserId">User ID of the participant</param>
+    /// <param name="points">Points to award</param>
+    /// <param name="rank">Optional rank position</param>
+    /// <param name="byAdmin">Admin awarding the points</param>
+    public void AwardPoints(Guid participantUserId, Points points, int? rank, Guid byAdmin)
+    {
+        // Lifecycle validation
+        if (!CanAward())
+            throw new InvalidStatusTransitionException(Status.ToString(), "award points");
+
+        // Find participant
+        var participant = _participants.FirstOrDefault(p => p.UserId == participantUserId)
+            ?? throw new DomainException($"User {participantUserId} is not registered for this event.");
+
+        // Validate participant state (checked-in, not already awarded) - delegated to participant
+        participant.AwardPoints(points, rank, byAdmin);
+
+        // Pool enforcement
+        ReservePoints(points);
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.PointsAwardedEvent(
+            Id, participantUserId, points, rank, byAdmin, DateTime.UtcNow));
+
+        // Auto-complete if pool exhausted
+        if (TotalPointsPool != null && RemainingPoints != null && RemainingPoints.IsZero())
+        {
+            Complete(byAdmin, autoCompleted: true);
+        }
+    }
+
+    #endregion
+
+    #region Lifecycle Transitions
+
+    /// <summary>
+    /// Activates the event, transitioning from Draft to Active.
+    /// </summary>
+    /// <param name="byAdmin">ID of the admin performing the activation</param>
+    public void Activate(Guid byAdmin)
+    {
+        if (!CanActivate())
+            throw new InvalidStatusTransitionException(Status.ToString(), "activate");
+
+        Status = EventStatus.Active;
+    }
+
+    /// <summary>
+    /// Completes the event, transitioning from Active to Completed.
+    /// </summary>
+    /// <param name="byAdmin">ID of the admin completing the event</param>
+    /// <param name="autoCompleted">Whether this was auto-completed by the system</param>
+    public void Complete(Guid byAdmin, bool autoCompleted = false)
+    {
+        if (!CanComplete())
+            throw new InvalidStatusTransitionException(Status.ToString(), "complete");
+
+        Status = EventStatus.Completed;
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.EventCompletedEvent(
+            Id, Name, byAdmin, DateTime.UtcNow, autoCompleted));
+    }
+
+    /// <summary>
+    /// Cancels the event. Can only be cancelled from Draft state.
+    /// </summary>
+    /// <param name="byAdmin">ID of the admin cancelling the event</param>
+    /// <param name="reason">Reason for cancellation</param>
+    public void Cancel(Guid byAdmin, string? reason = null)
+    {
+        if (!CanCancel())
+            throw new InvalidStatusTransitionException(Status.ToString(), "cancel");
+
+        Status = EventStatus.Cancelled;
+
+        // Raise domain event
+        RaiseDomainEvent(new Domain.Events.EventCancelledEvent(
+            Id, Name, byAdmin, reason, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    /// Applies automated state transitions based on the current time (compute-on-read).
+    /// </summary>
+    public bool ApplyAutomatedTransitions(DateTime nowUtc)
+    {
+        if (Status != EventStatus.Draft)
+            return false;
+
+        // Auto-go-live when event start time arrives
+        if (nowUtc >= EventDate)
+        {
+            Status = EventStatus.Active;
+            return true;
+        }
+
+        // Auto-cancel when registration deadline passes with 0 registrations
+        if (RegistrationEndDate.HasValue && nowUtc >= RegistrationEndDate.Value && _participants.Count == 0)
+        {
+            Status = EventStatus.Cancelled;
+            return true;
+        }
+
+        return false;
+    }
+
+    #endregion
+
+    #region Update Methods
 
     /// <summary>
     /// Updates event details. Only allowed in Draft status.
@@ -298,121 +353,50 @@ public class Event : AuditableEntity<Guid>
         string? name = null,
         string? description = null,
         DateTime? eventDate = null,
-        int? totalPointsPool = null,
+        Points? totalPointsPool = null,
         string? location = null,
         int? maxParticipants = null,
         DateTime? registrationEndDate = null,
         string? bannerImageUrl = null)
     {
         if (!CanEdit())
-            throw new DomainException($"Cannot edit event. Current status is {Status}. Only Draft events can be edited.");
+            throw new InvalidStatusTransitionException(Status.ToString(), "edit details");
 
         if (name != null) Name = name;
         if (description != null) Description = description;
         if (eventDate.HasValue) EventDate = eventDate.Value;
-        if (totalPointsPool.HasValue) TotalPointsPool = totalPointsPool.Value;
+        if (totalPointsPool != null) TotalPointsPool = totalPointsPool;
         if (location != null) Location = location;
         if (maxParticipants.HasValue) MaxParticipants = maxParticipants.Value;
         if (registrationEndDate.HasValue) RegistrationEndDate = registrationEndDate.Value;
         if (bannerImageUrl != null) BannerImageUrl = bannerImageUrl;
     }
 
-    public void SetPointsReward(int points)
+    #endregion
+
+    #region Legacy/Migration Support
+
+    /// <summary>
+    /// Sets the distributed points counter. Used for backfill migration.
+    /// </summary>
+    [Obsolete("For migration only")]
+    internal void SetDistributedPoints(Points totalDistributed)
     {
-        if (!CanEdit())
-            throw new DomainException("Cannot change points reward after event started");
-        PointsPerParticipant = points;
+        DistributedPoints = totalDistributed ?? Points.Zero;
     }
 
     /// <summary>
-    /// Registers a user for the event.
+    /// Legacy method - use RegisterParticipant instead
     /// </summary>
-    /// <param name="userId">User ID to register</param>
-    /// <param name="nowUtc">Current UTC time for deadline validation</param>
-    public void Register(Guid userId, DateTime nowUtc)
-    {
-        if (!CanRegister(nowUtc))
-        {
-            if (Status != EventStatus.Draft)
-                throw new DomainException($"Registration is closed. Event status is {Status}. Registration is only allowed for Draft events.");
-
-            if (!RegistrationEndDate.HasValue)
-                throw new DomainException("Registration deadline is not set for this event.");
-
-            throw new DomainException($"Registration deadline has passed. Deadline was {RegistrationEndDate.Value:u}.");
-        }
-
-        if (_participants.Any(p => p.UserId == userId))
-            throw new DomainException($"User {userId} is already registered for this event");
-
-        if (MaxParticipants.HasValue && _participants.Count >= MaxParticipants.Value)
-            throw new DomainException($"Event has reached maximum capacity of {MaxParticipants.Value} participants.");
-
-        var participant = new EventParticipant(Id, userId);
-        _participants.Add(participant);
-    }
-
-    /// <summary>
-    /// Legacy method for adding participants without deadline check.
-    /// </summary>
-    [Obsolete("Use Register(Guid userId, DateTime nowUtc) instead")]
+    [Obsolete("Use RegisterParticipant(Guid userId, DateTime nowUtc) instead")]
     public void AddParticipant(Guid userId)
     {
         if (_participants.Any(p => p.UserId == userId))
-            throw new DomainException($"User {userId} is already registered for this event");
+            throw new DuplicateRegistrationException(Id, userId);
 
         var participant = new EventParticipant(Id, userId);
         _participants.Add(participant);
     }
 
-    /// <summary>
-    /// Checks in a participant (marks attendance). Only allowed when event is Active.
-    /// </summary>
-    /// <param name="participantId">The participant's event registration ID</param>
-    /// <param name="adminId">ID of the admin performing the check-in</param>
-    public void CheckInParticipant(Guid participantId, Guid adminId)
-    {
-        if (!CanCheckIn())
-            throw new DomainException($"Cannot check in participants. Event status is {Status}. Check-in is only allowed for Active events.");
-
-        var participant = _participants.FirstOrDefault(p => p.Id == participantId)
-            ?? throw new DomainException($"Participant {participantId} not found in this event.");
-
-        participant.MarkCheckedIn();
-    }
-
-    /// <summary>
-    /// Checks in a participant by user ID. Only allowed when event is Active.
-    /// </summary>
-    /// <param name="userId">The user ID to check in</param>
-    /// <param name="adminId">ID of the admin performing the check-in</param>
-    public void CheckInParticipantByUserId(Guid userId, Guid adminId)
-    {
-        if (!CanCheckIn())
-            throw new DomainException($"Cannot check in participants. Event status is {Status}. Check-in is only allowed for Active events.");
-
-        var participant = _participants.FirstOrDefault(p => p.UserId == userId)
-            ?? throw new DomainException($"User {userId} is not registered for this event.");
-
-        participant.MarkCheckedIn();
-    }
-
-    /// <summary>
-    /// Removes a participant from the event by their user ID.
-    /// </summary>
-    /// <param name="userId">The user ID to remove</param>
-    /// <exception cref="DomainException">Thrown if participant not found or has been awarded points</exception>
-    public void RemoveParticipant(Guid userId)
-    {
-        if (Status == EventStatus.Completed)
-            throw new DomainException("Cannot remove participants from completed events.");
-
-        var participant = _participants.FirstOrDefault(p => p.UserId == userId)
-            ?? throw new DomainException($"User {userId} is not registered for this event.");
-
-        if (participant.PointsAwarded > 0)
-            throw new DomainException("Cannot remove participant who has been awarded points.");
-
-        _participants.Remove(participant);
-    }
+    #endregion
 }

@@ -16,6 +16,10 @@ CREATE TABLE [Roles] (
     [Name] NVARCHAR(100) NOT NULL,
     [Description] NVARCHAR(500) NULL,
     [IsActive] BIT NOT NULL DEFAULT 1,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [UQ_Roles_Name] UNIQUE ([Name])
 );
 
@@ -40,11 +44,16 @@ CREATE TABLE [Users] (
 );
 
 CREATE TABLE [UserRoleAssignments] (
+    [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
     [UserId] UNIQUEIDENTIFIER NOT NULL,
     [RoleId] UNIQUEIDENTIFIER NOT NULL,
     [AssignedBy] UNIQUEIDENTIFIER NOT NULL,
     [AssignedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-    CONSTRAINT [PK_UserRoleAssignments] PRIMARY KEY ([UserId], [RoleId]),
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL,
+    CONSTRAINT [UQ_UserRoleAssignments_UserRole] UNIQUE ([UserId], [RoleId]),
     CONSTRAINT [FK_UserRoleAssignments_Users] FOREIGN KEY ([UserId]) REFERENCES [Users]([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_UserRoleAssignments_Roles] FOREIGN KEY ([RoleId]) REFERENCES [Roles]([Id]) ON DELETE CASCADE
 );
@@ -56,6 +65,9 @@ CREATE TABLE [UserPointsAccounts] (
     [TotalEarned] DECIMAL(18,2) NOT NULL DEFAULT 0,
     [TotalRedeemed] DECIMAL(18,2) NOT NULL DEFAULT 0,
     [LastUpdatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [FK_UserPointsAccounts_Users] FOREIGN KEY ([UserId]) REFERENCES [Users]([Id]) ON DELETE CASCADE,
     CONSTRAINT [UQ_UserPointsAccounts_UserId] UNIQUE ([UserId]),
@@ -73,6 +85,10 @@ CREATE TABLE [UserPointsTransactions] (
     [BalanceAfter] DECIMAL(18,2) NOT NULL,
     [Timestamp] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     [ProcessedBy] UNIQUEIDENTIFIER NULL,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedAt] DATETIME2 NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [FK_UserPointsTransactions_Users] FOREIGN KEY ([UserId]) REFERENCES [Users]([Id]) ON DELETE NO ACTION,
     CONSTRAINT [CK_UserPointsTransactions_Type] CHECK ([TransactionType] IN (0, 1, 2, 3)),
     CONSTRAINT [CK_UserPointsTransactions_NonNegativeBalanceAfter] CHECK ([BalanceAfter] >= 0)
@@ -85,7 +101,11 @@ CREATE TABLE [ProductCategories] (
     [Name] NVARCHAR(100) NOT NULL,
     [Description] NVARCHAR(500) NULL,
     [DisplayOrder] INT NOT NULL DEFAULT 0,
-    [IsActive] BIT NOT NULL DEFAULT 1
+    [IsActive] BIT NOT NULL DEFAULT 1,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NULL,
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL
 );
 CREATE INDEX [IX_ProductCategories_DisplayOrder] ON [ProductCategories]([DisplayOrder]);
 
@@ -111,6 +131,10 @@ CREATE TABLE [InventoryItems] (
     [QuantityAvailable] INT NOT NULL DEFAULT 0,
     [QuantityReserved] INT NOT NULL DEFAULT 0,
     [CurrentStock] INT NOT NULL DEFAULT 0,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NULL,
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [FK_InventoryItem_Product] FOREIGN KEY ([ProductId]) REFERENCES [Products]([Id]) ON DELETE CASCADE,
     CONSTRAINT [UQ_InventoryItems_ProductId] UNIQUE ([ProductId]),
     CONSTRAINT [CK_InventoryItems_NonNegativeStock] CHECK ([QuantityAvailable] >= 0 AND [CurrentStock] >= 0)
@@ -119,9 +143,13 @@ CREATE TABLE [InventoryItems] (
 CREATE TABLE [ProductPricing] (
     [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
     [ProductId] UNIQUEIDENTIFIER NOT NULL,
-    [PointsCost] INT NOT NULL,
+    [PointsCost] DECIMAL(18,2) NOT NULL,
     [EffectiveFrom] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     [EffectiveTo] DATETIME2 NULL,
+    [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    [UpdatedAt] DATETIME2 NULL,
+    [CreatedBy] UNIQUEIDENTIFIER NULL,
+    [UpdatedBy] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [FK_ProductPricing_Product] FOREIGN KEY ([ProductId]) REFERENCES [Products]([Id]) ON DELETE CASCADE,
     CONSTRAINT [CK_ProductPricing_PointsCost] CHECK ([PointsCost] >= 1 AND [PointsCost] <= 10000000)
 );
@@ -164,7 +192,7 @@ CREATE TABLE [EventParticipants] (
     [EventId] UNIQUEIDENTIFIER NOT NULL,
     [UserId] UNIQUEIDENTIFIER NOT NULL,
     [PointsAwarded] DECIMAL(18,2) NOT NULL DEFAULT 0,
-    [EventRank] INT NULL,
+    [Rank] INT NULL,
     [RegisteredAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     [AwardedAt] DATETIME2 NULL,
     [AwardedBy] UNIQUEIDENTIFIER NULL,
@@ -174,14 +202,14 @@ CREATE TABLE [EventParticipants] (
     CONSTRAINT [FK_EventParticipants_Users] FOREIGN KEY ([UserId]) REFERENCES [Users]([Id]) ON DELETE NO ACTION,
     CONSTRAINT [UQ_EventParticipants_EventUser] UNIQUE ([EventId], [UserId]),
     CONSTRAINT [CK_EventParticipants_AttendanceStatus] CHECK ([AttendanceStatus] IN (0, 1, 2)),
-    CONSTRAINT [CK_EventParticipants_RankTop3OrNull] CHECK ([EventRank] IS NULL OR ([EventRank] >= 1 AND [EventRank] <= 3))
+    CONSTRAINT [CK_EventParticipants_RankTop3OrNull] CHECK ([Rank] IS NULL OR ([Rank] >= 1 AND [Rank] <= 3))
 );
 
 CREATE TABLE [Redemptions] (
     [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
     [UserId] UNIQUEIDENTIFIER NOT NULL,
     [ProductId] UNIQUEIDENTIFIER NOT NULL,
-    [PointsSpent] INT NOT NULL,
+    [PointsSpent] DECIMAL(18,2) NOT NULL,
     [Quantity] INT NOT NULL DEFAULT 1,
     [Status] NVARCHAR(20) NOT NULL DEFAULT 'Pending',
     [AdminNotes] NVARCHAR(500) NULL,
@@ -205,10 +233,10 @@ CREATE INDEX [IX_Redemptions_CreatedAt] ON [Redemptions]([CreatedAt]);
 DECLARE @AdminRoleId UNIQUEIDENTIFIER = 'A0000001-0001-0001-0001-000000000001';
 DECLARE @EmployeeRoleId UNIQUEIDENTIFIER = 'A0000001-0001-0001-0001-000000000002';
 
-INSERT INTO [Roles] ([Id], [Name], [Description], [IsActive])
+INSERT INTO [Roles] ([Id], [Name], [Description], [IsActive], [CreatedAt], [UpdatedAt], [CreatedBy], [UpdatedBy])
 VALUES
-(@AdminRoleId, 'Admin', 'System administrator with full access to all features', 1),
-(@EmployeeRoleId, 'Employee', 'Standard employee with access to rewards and redemption', 1);
+(@AdminRoleId, 'Admin', 'System administrator with full access to all features', 1, '2025-11-01 00:00:00', '2025-11-01 00:00:00', NULL, NULL),
+(@EmployeeRoleId, 'Employee', 'Standard employee with access to rewards and redemption', 1, '2025-11-01 00:00:00', '2025-11-01 00:00:00', NULL, NULL);
 
 DECLARE @Admin1Id UNIQUEIDENTIFIER = 'B0000001-0001-0001-0001-000000000001';
 DECLARE @Admin2Id UNIQUEIDENTIFIER = 'B0000001-0001-0001-0001-000000000002';
@@ -229,47 +257,49 @@ DECLARE @User14Id UNIQUEIDENTIFIER = 'C0000001-0001-0001-0001-000000000014';
 DECLARE @User15Id UNIQUEIDENTIFIER = 'C0000001-0001-0001-0001-000000000015';
 DECLARE @User16Id UNIQUEIDENTIFIER = 'C0000001-0001-0001-0001-000000000016';
 
+-- NOTE: All user passwords are set to: Password@123
+-- BCrypt hash: $2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42
 INSERT INTO [Users] ([Id], [EmployeeId], [Email], [FirstName], [LastName], [PasswordHash], [IsActive], [MustChangePassword], [LastPasswordChangedAt], [CreatedAt], [UpdatedAt])
 VALUES
-(@Admin1Id, 'ADM100001', 'admin.master@agdata.com', 'Michael', 'Anderson', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-15 08:30:00', '2025-11-10 09:00:00', '2025-11-15 08:30:00'),
-(@Admin2Id, 'ADM200002', 'sarah.admin@agdata.com', 'Sarah', 'Williams', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-18 10:15:00', '2025-11-12 11:00:00', '2025-11-18 10:15:00'),
-(@User01Id, 'EMP100001', 'james.miller@agdata.com', 'James', 'Miller', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-20 14:00:00', '2025-11-15 08:00:00', '2025-11-20 14:00:00'),
-(@User02Id, 'EMP200002', 'emily.johnson@agdata.com', 'Emily', 'Johnson', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-22 09:30:00', '2025-11-16 09:00:00', '2025-11-22 09:30:00'),
-(@User03Id, 'EMP300003', 'david.brown@agdata.com', 'David', 'Brown', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-25 11:00:00', '2025-11-18 10:00:00', '2025-11-25 11:00:00'),
-(@User04Id, 'EMP400004', 'olivia.davis@agdata.com', 'Olivia', 'Davis', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-11-28 15:45:00', '2025-11-20 08:30:00', '2025-11-28 15:45:00'),
-(@User05Id, 'EMP500005', 'william.wilson@agdata.com', 'William', 'Wilson', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-01 10:00:00', '2025-11-22 09:00:00', '2025-12-01 10:00:00'),
-(@User06Id, 'EMP600006', 'sophia.taylor@agdata.com', 'Sophia', 'Taylor', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-05 14:30:00', '2025-11-25 10:00:00', '2025-12-05 14:30:00'),
-(@User07Id, 'EMP700007', 'benjamin.moore@agdata.com', 'Benjamin', 'Moore', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-08 09:00:00', '2025-11-28 11:00:00', '2025-12-08 09:00:00'),
-(@User08Id, 'EMP800008', 'isabella.white@agdata.com', 'Isabella', 'White', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-12 16:00:00', '2025-12-01 08:00:00', '2025-12-12 16:00:00'),
-(@User09Id, 'EMP900009', 'alexander.harris@agdata.com', 'Alexander', 'Harris', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-15 11:30:00', '2025-12-05 09:00:00', '2025-12-15 11:30:00'),
-(@User10Id, 'EMP100010', 'charlotte.martin@agdata.com', 'Charlotte', 'Martin', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-18 08:45:00', '2025-12-08 10:00:00', '2025-12-18 08:45:00'),
-(@User11Id, 'EMP110011', 'daniel.thompson@agdata.com', 'Daniel', 'Thompson', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-22 10:00:00', '2025-12-12 09:00:00', '2025-12-22 10:00:00'),
-(@User12Id, 'EMP120012', 'amelia.garcia@agdata.com', 'Amelia', 'Garcia', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-25 14:00:00', '2025-12-15 08:30:00', '2025-12-25 14:00:00'),
-(@User13Id, 'EMP130013', 'matthew.martinez@agdata.com', 'Matthew', 'Martinez', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2025-12-28 09:30:00', '2025-12-18 10:00:00', '2025-12-28 09:30:00'),
-(@User14Id, 'EMP140014', 'harper.robinson@agdata.com', 'Harper', 'Robinson', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2026-01-02 11:00:00', '2025-12-22 09:00:00', '2026-01-02 11:00:00'),
-(@User15Id, 'EMP150015', 'ethan.clark@agdata.com', 'Ethan', 'Clark', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2026-01-05 15:00:00', '2025-12-25 10:30:00', '2026-01-05 15:00:00'),
-(@User16Id, 'EMP160016', 'evelyn.lewis@agdata.com', 'Evelyn', 'Lewis', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.Lr/7FnN8HY1FZm', 1, 0, '2026-01-08 10:00:00', '2025-12-28 11:00:00', '2026-01-08 10:00:00');
+(@Admin1Id, 'ADM100001', 'admin.master@agdata.com', 'Michael', 'Anderson', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-15 08:30:00', '2025-11-10 09:00:00', '2025-11-15 08:30:00'),
+(@Admin2Id, 'ADM200002', 'sarah.admin@agdata.com', 'Sarah', 'Williams', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-18 10:15:00', '2025-11-12 11:00:00', '2025-11-18 10:15:00'),
+(@User01Id, 'EMP100001', 'james.miller@agdata.com', 'James', 'Miller', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-20 14:00:00', '2025-11-15 08:00:00', '2025-11-20 14:00:00'),
+(@User02Id, 'EMP200002', 'emily.johnson@agdata.com', 'Emily', 'Johnson', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-22 09:30:00', '2025-11-16 09:00:00', '2025-11-22 09:30:00'),
+(@User03Id, 'EMP300003', 'david.brown@agdata.com', 'David', 'Brown', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-25 11:00:00', '2025-11-18 10:00:00', '2025-11-25 11:00:00'),
+(@User04Id, 'EMP400004', 'olivia.davis@agdata.com', 'Olivia', 'Davis', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-11-28 15:45:00', '2025-11-20 08:30:00', '2025-11-28 15:45:00'),
+(@User05Id, 'EMP500005', 'william.wilson@agdata.com', 'William', 'Wilson', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-01 10:00:00', '2025-11-22 09:00:00', '2025-12-01 10:00:00'),
+(@User06Id, 'EMP600006', 'sophia.taylor@agdata.com', 'Sophia', 'Taylor', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-05 14:30:00', '2025-11-25 10:00:00', '2025-12-05 14:30:00'),
+(@User07Id, 'EMP700007', 'benjamin.moore@agdata.com', 'Benjamin', 'Moore', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-08 09:00:00', '2025-11-28 11:00:00', '2025-12-08 09:00:00'),
+(@User08Id, 'EMP800008', 'isabella.white@agdata.com', 'Isabella', 'White', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-12 16:00:00', '2025-12-01 08:00:00', '2025-12-12 16:00:00'),
+(@User09Id, 'EMP900009', 'alexander.harris@agdata.com', 'Alexander', 'Harris', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-15 11:30:00', '2025-12-05 09:00:00', '2025-12-15 11:30:00'),
+(@User10Id, 'EMP100010', 'charlotte.martin@agdata.com', 'Charlotte', 'Martin', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-18 08:45:00', '2025-12-08 10:00:00', '2025-12-18 08:45:00'),
+(@User11Id, 'EMP110011', 'daniel.thompson@agdata.com', 'Daniel', 'Thompson', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-22 10:00:00', '2025-12-12 09:00:00', '2025-12-22 10:00:00'),
+(@User12Id, 'EMP120012', 'amelia.garcia@agdata.com', 'Amelia', 'Garcia', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-25 14:00:00', '2025-12-15 08:30:00', '2025-12-25 14:00:00'),
+(@User13Id, 'EMP130013', 'matthew.martinez@agdata.com', 'Matthew', 'Martinez', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2025-12-28 09:30:00', '2025-12-18 10:00:00', '2025-12-28 09:30:00'),
+(@User14Id, 'EMP140014', 'harper.robinson@agdata.com', 'Harper', 'Robinson', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2026-01-02 11:00:00', '2025-12-22 09:00:00', '2026-01-02 11:00:00'),
+(@User15Id, 'EMP150015', 'ethan.clark@agdata.com', 'Ethan', 'Clark', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2026-01-05 15:00:00', '2025-12-25 10:30:00', '2026-01-05 15:00:00'),
+(@User16Id, 'EMP160016', 'evelyn.lewis@agdata.com', 'Evelyn', 'Lewis', '$2a$12$as.QVLiKh5tWYswrAJvh0e/txIb/UyVZuptoBq7Q0JOAUNL2zMi42', 1, 0, '2026-01-08 10:00:00', '2025-12-28 11:00:00', '2026-01-08 10:00:00');
 
-INSERT INTO [UserRoleAssignments] ([UserId], [RoleId], [AssignedBy], [AssignedAt])
+INSERT INTO [UserRoleAssignments] ([Id], [UserId], [RoleId], [AssignedBy], [AssignedAt], [CreatedAt], [UpdatedAt], [CreatedBy], [UpdatedBy])
 VALUES
-(@Admin1Id, @AdminRoleId, @Admin1Id, '2025-11-10 09:00:00'),
-(@Admin2Id, @AdminRoleId, @Admin1Id, '2025-11-12 11:00:00'),
-(@User01Id, @EmployeeRoleId, @Admin1Id, '2025-11-15 08:00:00'),
-(@User02Id, @EmployeeRoleId, @Admin1Id, '2025-11-16 09:00:00'),
-(@User03Id, @EmployeeRoleId, @Admin1Id, '2025-11-18 10:00:00'),
-(@User04Id, @EmployeeRoleId, @Admin1Id, '2025-11-20 08:30:00'),
-(@User05Id, @EmployeeRoleId, @Admin1Id, '2025-11-22 09:00:00'),
-(@User06Id, @EmployeeRoleId, @Admin2Id, '2025-11-25 10:00:00'),
-(@User07Id, @EmployeeRoleId, @Admin2Id, '2025-11-28 11:00:00'),
-(@User08Id, @EmployeeRoleId, @Admin2Id, '2025-12-01 08:00:00'),
-(@User09Id, @EmployeeRoleId, @Admin2Id, '2025-12-05 09:00:00'),
-(@User10Id, @EmployeeRoleId, @Admin2Id, '2025-12-08 10:00:00'),
-(@User11Id, @EmployeeRoleId, @Admin1Id, '2025-12-12 09:00:00'),
-(@User12Id, @EmployeeRoleId, @Admin1Id, '2025-12-15 08:30:00'),
-(@User13Id, @EmployeeRoleId, @Admin1Id, '2025-12-18 10:00:00'),
-(@User14Id, @EmployeeRoleId, @Admin2Id, '2025-12-22 09:00:00'),
-(@User15Id, @EmployeeRoleId, @Admin2Id, '2025-12-25 10:30:00'),
-(@User16Id, @EmployeeRoleId, @Admin2Id, '2025-12-28 11:00:00');
+(NEWID(), @Admin1Id, @AdminRoleId, @Admin1Id, '2025-11-10 09:00:00', '2025-11-10 09:00:00', '2025-11-10 09:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @Admin2Id, @AdminRoleId, @Admin1Id, '2025-11-12 11:00:00', '2025-11-12 11:00:00', '2025-11-12 11:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User01Id, @EmployeeRoleId, @Admin1Id, '2025-11-15 08:00:00', '2025-11-15 08:00:00', '2025-11-15 08:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User02Id, @EmployeeRoleId, @Admin1Id, '2025-11-16 09:00:00', '2025-11-16 09:00:00', '2025-11-16 09:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User03Id, @EmployeeRoleId, @Admin1Id, '2025-11-18 10:00:00', '2025-11-18 10:00:00', '2025-11-18 10:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User04Id, @EmployeeRoleId, @Admin1Id, '2025-11-20 08:30:00', '2025-11-20 08:30:00', '2025-11-20 08:30:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User05Id, @EmployeeRoleId, @Admin1Id, '2025-11-22 09:00:00', '2025-11-22 09:00:00', '2025-11-22 09:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User06Id, @EmployeeRoleId, @Admin2Id, '2025-11-25 10:00:00', '2025-11-25 10:00:00', '2025-11-25 10:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User07Id, @EmployeeRoleId, @Admin2Id, '2025-11-28 11:00:00', '2025-11-28 11:00:00', '2025-11-28 11:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User08Id, @EmployeeRoleId, @Admin2Id, '2025-12-01 08:00:00', '2025-12-01 08:00:00', '2025-12-01 08:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User09Id, @EmployeeRoleId, @Admin2Id, '2025-12-05 09:00:00', '2025-12-05 09:00:00', '2025-12-05 09:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User10Id, @EmployeeRoleId, @Admin2Id, '2025-12-08 10:00:00', '2025-12-08 10:00:00', '2025-12-08 10:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User11Id, @EmployeeRoleId, @Admin1Id, '2025-12-12 09:00:00', '2025-12-12 09:00:00', '2025-12-12 09:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User12Id, @EmployeeRoleId, @Admin1Id, '2025-12-15 08:30:00', '2025-12-15 08:30:00', '2025-12-15 08:30:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User13Id, @EmployeeRoleId, @Admin1Id, '2025-12-18 10:00:00', '2025-12-18 10:00:00', '2025-12-18 10:00:00', @Admin1Id, @Admin1Id),
+(NEWID(), @User14Id, @EmployeeRoleId, @Admin2Id, '2025-12-22 09:00:00', '2025-12-22 09:00:00', '2025-12-22 09:00:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User15Id, @EmployeeRoleId, @Admin2Id, '2025-12-25 10:30:00', '2025-12-25 10:30:00', '2025-12-25 10:30:00', @Admin2Id, @Admin2Id),
+(NEWID(), @User16Id, @EmployeeRoleId, @Admin2Id, '2025-12-28 11:00:00', '2025-12-28 11:00:00', '2025-12-28 11:00:00', @Admin2Id, @Admin2Id);
 
 DECLARE @Cat01Id UNIQUEIDENTIFIER = 'E0000001-0001-0001-0001-000000000001';
 DECLARE @Cat02Id UNIQUEIDENTIFIER = 'E0000001-0001-0001-0001-000000000002';
@@ -310,24 +340,24 @@ DECLARE @Prod18Id UNIQUEIDENTIFIER = 'F0000001-0001-0001-0001-000000000018';
 
 INSERT INTO [Products] ([Id], [Name], [Description], [CategoryId], [ImageUrl], [IsActive], [DeactivationReason], [CreatedAt], [UpdatedAt], [CreatedBy])
 VALUES
-(@Prod01Id, 'Wireless Headphones', 'Premium noise cancelling wireless headphones with exceptional sound quality and comfortable over ear design perfect for long listening sessions and conference calls', @Cat01Id, 'https://images.example.com/headphones.jpg', 1, NULL, '2025-11-20 10:00:00', '2025-11-20 10:00:00', @Admin1Id),
-(@Prod02Id, 'Amazon Gift Card', 'Digital Amazon gift card delivered via email perfect for purchasing millions of items across all categories with no expiration date and easy redemption process', @Cat02Id, 'https://images.example.com/amazon-gc.jpg', 1, NULL, '2025-11-20 10:15:00', '2025-11-20 10:15:00', @Admin1Id),
-(@Prod03Id, 'Premium Notebook Set', 'High quality leather bound notebook set with lined pages and pen holder includes three notebooks in different sizes ideal for meetings and personal notes', @Cat03Id, 'https://images.example.com/notebook.jpg', 1, NULL, '2025-11-22 09:00:00', '2025-11-22 09:00:00', @Admin1Id),
-(@Prod04Id, 'Fitness Tracker', 'Advanced fitness tracker with heart rate monitoring sleep tracking and water resistance perfect for tracking daily activity goals and workouts', @Cat04Id, 'https://images.example.com/fitness.jpg', 1, NULL, '2025-11-25 11:30:00', '2025-11-25 11:30:00', @Admin1Id),
-(@Prod05Id, 'Company Jacket', 'Premium quality branded company jacket with embroidered logo water resistant material and multiple pockets perfect for outdoor events and daily wear', @Cat05Id, 'https://images.example.com/jacket.jpg', 1, NULL, '2025-11-28 14:00:00', '2025-11-28 14:00:00', @Admin2Id),
-(@Prod06Id, 'Restaurant Voucher', 'Fine dining experience voucher redeemable at partner restaurants across the city includes appetizer main course and dessert for two people', @Cat06Id, 'https://images.example.com/dining.jpg', 1, NULL, '2025-12-01 09:30:00', '2025-12-01 09:30:00', @Admin2Id),
-(@Prod07Id, 'Ergonomic Chair', 'Professional ergonomic office chair with lumbar support adjustable armrests and breathable mesh back designed for all day comfort and posture support', @Cat07Id, 'https://images.example.com/chair.jpg', 1, NULL, '2025-12-05 10:00:00', '2025-12-05 10:00:00', @Admin1Id),
-(@Prod08Id, 'Bluetooth Speaker', 'Portable waterproof bluetooth speaker with powerful bass and twelve hour battery life perfect for outdoor activities and home entertainment', @Cat01Id, 'https://images.example.com/speaker.jpg', 1, NULL, '2025-12-08 11:00:00', '2025-12-08 11:00:00', @Admin1Id),
-(@Prod09Id, 'Starbucks Gift Card', 'Digital Starbucks gift card for coffee lovers can be used at any Starbucks location for drinks food and merchandise with mobile app integration', @Cat02Id, 'https://images.example.com/starbucks.jpg', 1, NULL, '2025-12-10 09:00:00', '2025-12-10 09:00:00', @Admin2Id),
-(@Prod10Id, 'Desk Organizer', 'Multi compartment desk organizer made from sustainable bamboo with slots for phone tablet pens and other office essentials keeps workspace tidy', @Cat03Id, 'https://images.example.com/organizer.jpg', 1, NULL, '2025-12-12 14:30:00', '2025-12-12 14:30:00', @Admin2Id),
-(@Prod11Id, 'Yoga Mat Bundle', 'Professional grade yoga mat with carrying bag and resistance bands includes instructional guide for beginners and advanced practitioners alike', @Cat04Id, 'https://images.example.com/yoga.jpg', 1, NULL, '2025-12-15 10:00:00', '2025-12-15 10:00:00', @Admin1Id),
-(@Prod12Id, 'Branded Polo Shirt', 'High quality cotton polo shirt with embroidered company logo available in multiple colors comfortable breathable fabric perfect for casual fridays', @Cat05Id, 'https://images.example.com/polo.jpg', 1, NULL, '2025-12-18 11:30:00', '2025-12-18 11:30:00', @Admin1Id),
-(@Prod13Id, 'Movie Experience', 'Premium movie theater experience for two including tickets large popcorn and drinks at partner cinema locations valid for any showing', @Cat06Id, 'https://images.example.com/movie.jpg', 1, NULL, '2025-12-20 09:45:00', '2025-12-20 09:45:00', @Admin2Id),
-(@Prod14Id, 'Monitor Light Bar', 'LED monitor light bar with adjustable brightness and color temperature reduces eye strain during long work sessions with touch controls', @Cat07Id, 'https://images.example.com/lightbar.jpg', 1, NULL, '2025-12-22 15:00:00', '2025-12-22 15:00:00', @Admin2Id),
-(@Prod15Id, 'Smart Watch', 'Advanced smart watch with notifications fitness tracking and customizable watch faces water resistant with week long battery life', @Cat01Id, 'https://images.example.com/smartwatch.jpg', 1, NULL, '2025-12-25 10:30:00', '2025-12-25 10:30:00', @Admin1Id),
-(@Prod16Id, 'Standing Desk', 'Electric height adjustable standing desk with memory presets and cable management system promotes healthy work habits with smooth quiet operation', @Cat07Id, 'https://images.example.com/desk.jpg', 0, 'Product discontinued by manufacturer no longer available for restocking', '2025-12-28 09:00:00', '2026-01-15 14:00:00', @Admin1Id),
-(@Prod17Id, 'Wireless Mouse', 'Ergonomic wireless mouse with precision tracking rechargeable battery and comfortable grip designed for all day productivity and reduced hand strain', @Cat03Id, 'https://images.example.com/mouse.jpg', 1, NULL, '2026-01-08 10:00:00', '2026-01-08 10:00:00', @Admin2Id),
-(@Prod18Id, 'Coffee Maker', 'Premium programmable coffee maker with thermal carafe and brew strength control makes twelve cups and keeps coffee hot for hours', @Cat07Id, 'https://images.example.com/coffee.jpg', 0, 'Low demand product being replaced with newer model in next quarter', '2026-01-12 09:00:00', '2026-01-30 11:00:00', @Admin1Id);
+(@Prod01Id, 'Wireless Headphones', 'Premium noise cancelling wireless headphones with exceptional sound quality and comfortable over ear design perfect for long listening sessions and conference calls', @Cat01Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-11-20 10:00:00', '2025-11-20 10:00:00', @Admin1Id),
+(@Prod02Id, 'Amazon Gift Card', 'Digital Amazon gift card delivered via email perfect for purchasing millions of items across all categories with no expiration date and easy redemption process', @Cat02Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-11-20 10:15:00', '2025-11-20 10:15:00', @Admin1Id),
+(@Prod03Id, 'Premium Notebook Set', 'High quality leather bound notebook set with lined pages and pen holder includes three notebooks in different sizes ideal for meetings and personal notes', @Cat03Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-11-22 09:00:00', '2025-11-22 09:00:00', @Admin1Id),
+(@Prod04Id, 'Fitness Tracker', 'Advanced fitness tracker with heart rate monitoring sleep tracking and water resistance perfect for tracking daily activity goals and workouts', @Cat04Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-11-25 11:30:00', '2025-11-25 11:30:00', @Admin1Id),
+(@Prod05Id, 'Company Jacket', 'Premium quality branded company jacket with embroidered logo water resistant material and multiple pockets perfect for outdoor events and daily wear', @Cat05Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-11-28 14:00:00', '2025-11-28 14:00:00', @Admin2Id),
+(@Prod06Id, 'Restaurant Voucher', 'Fine dining experience voucher redeemable at partner restaurants across the city includes appetizer main course and dessert for two people', @Cat06Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-01 09:30:00', '2025-12-01 09:30:00', @Admin2Id),
+(@Prod07Id, 'Ergonomic Chair', 'Professional ergonomic office chair with lumbar support adjustable armrests and breathable mesh back designed for all day comfort and posture support', @Cat07Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-05 10:00:00', '2025-12-05 10:00:00', @Admin1Id),
+(@Prod08Id, 'Bluetooth Speaker', 'Portable waterproof bluetooth speaker with powerful bass and twelve hour battery life perfect for outdoor activities and home entertainment', @Cat01Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-08 11:00:00', '2025-12-08 11:00:00', @Admin1Id),
+(@Prod09Id, 'Starbucks Gift Card', 'Digital Starbucks gift card for coffee lovers can be used at any Starbucks location for drinks food and merchandise with mobile app integration', @Cat02Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-10 09:00:00', '2025-12-10 09:00:00', @Admin2Id),
+(@Prod10Id, 'Desk Organizer', 'Multi compartment desk organizer made from sustainable bamboo with slots for phone tablet pens and other office essentials keeps workspace tidy', @Cat03Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-12 14:30:00', '2025-12-12 14:30:00', @Admin2Id),
+(@Prod11Id, 'Yoga Mat Bundle', 'Professional grade yoga mat with carrying bag and resistance bands includes instructional guide for beginners and advanced practitioners alike', @Cat04Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-15 10:00:00', '2025-12-15 10:00:00', @Admin1Id),
+(@Prod12Id, 'Branded Polo Shirt', 'High quality cotton polo shirt with embroidered company logo available in multiple colors comfortable breathable fabric perfect for casual fridays', @Cat05Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-18 11:30:00', '2025-12-18 11:30:00', @Admin1Id),
+(@Prod13Id, 'Movie Experience', 'Premium movie theater experience for two including tickets large popcorn and drinks at partner cinema locations valid for any showing', @Cat06Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-20 09:45:00', '2025-12-20 09:45:00', @Admin2Id),
+(@Prod14Id, 'Monitor Light Bar', 'LED monitor light bar with adjustable brightness and color temperature reduces eye strain during long work sessions with touch controls', @Cat07Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-22 15:00:00', '2025-12-22 15:00:00', @Admin2Id),
+(@Prod15Id, 'Smart Watch', 'Advanced smart watch with notifications fitness tracking and customizable watch faces water resistant with week long battery life', @Cat01Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2025-12-25 10:30:00', '2025-12-25 10:30:00', @Admin1Id),
+(@Prod16Id, 'Standing Desk', 'Electric height adjustable standing desk with memory presets and cable management system promotes healthy work habits with smooth quiet operation', @Cat07Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 0, 'Product discontinued by manufacturer no longer available for restocking', '2025-12-28 09:00:00', '2026-01-15 14:00:00', @Admin1Id),
+(@Prod17Id, 'Wireless Mouse', 'Ergonomic wireless mouse with precision tracking rechargeable battery and comfortable grip designed for all day productivity and reduced hand strain', @Cat03Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 1, NULL, '2026-01-08 10:00:00', '2026-01-08 10:00:00', @Admin2Id),
+(@Prod18Id, 'Coffee Maker', 'Premium programmable coffee maker with thermal carafe and brew strength control makes twelve cups and keeps coffee hot for hours', @Cat07Id, 'https://tse2.mm.bing.net/th/id/OIP.pWKT1p5a3g1JjXMgRAUZDwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3', 0, 'Low demand product being replaced with newer model in next quarter', '2026-01-12 09:00:00', '2026-01-30 11:00:00', @Admin1Id);
 
 INSERT INTO [InventoryItems] ([Id], [ProductId], [QuantityAvailable], [QuantityReserved], [CurrentStock])
 VALUES
@@ -439,7 +469,7 @@ DECLARE @Part29Id UNIQUEIDENTIFIER = 'BB000001-0001-0001-0001-000000000029';
 DECLARE @Part30Id UNIQUEIDENTIFIER = 'BB000001-0001-0001-0001-000000000030';
 DECLARE @Part31Id UNIQUEIDENTIFIER = 'BB000001-0001-0001-0001-000000000031';
 
-INSERT INTO [EventParticipants] ([Id], [EventId], [UserId], [PointsAwarded], [EventRank], [RegisteredAt], [AwardedAt], [AwardedBy], [AttendanceStatus], [CheckedInAt])
+INSERT INTO [EventParticipants] ([Id], [EventId], [UserId], [PointsAwarded], [Rank], [RegisteredAt], [AwardedAt], [AwardedBy], [AttendanceStatus], [CheckedInAt])
 VALUES
 (@Part01Id, @Event01Id, @User01Id, 3000.00, 1, '2025-12-05 10:00:00', '2025-12-15 16:00:00', @Admin1Id, 1, '2025-12-15 13:45:00'),
 (@Part02Id, @Event01Id, @User02Id, 2000.00, 2, '2025-12-06 11:30:00', '2025-12-15 16:00:00', @Admin1Id, 1, '2025-12-15 13:50:00'),
@@ -544,70 +574,70 @@ INSERT INTO [UserPointsTransactions] ([Id], [UserId], [Points], [TransactionType
 VALUES
 (NEWID(), @User01Id, 500.00, 2, 'Admin', NULL, 'Welcome bonus for top sales performer recognition', 500.00, '2025-12-01 09:00:00', @Admin1Id),
 (NEWID(), @User01Id, 3000.00, 0, 'Event', @Event01Id, 'Sales Excellence Q4 - Rank 1 Award', 3500.00, '2025-12-15 16:00:00', @Admin1Id),
-(NEWID(), @User01Id, -500.00, 1, 'Redemption', @Red01Id, 'Amazon Gift Card redemption', 3000.00, '2026-01-01 14:00:00', @Admin1Id),
+(NEWID(), @User01Id, 500.00, 1, 'Redemption', @Red01Id, 'Amazon Gift Card redemption', 3000.00, '2026-01-01 14:00:00', @Admin1Id),
 (NEWID(), @User01Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 3100.00, '2026-01-10 14:00:00', @Admin2Id),
-(NEWID(), @User01Id, -250.00, 1, 'Redemption', @Red16Id, 'Starbucks Gift Card redemption', 2850.00, '2026-01-07 09:30:00', @Admin1Id),
+(NEWID(), @User01Id, 250.00, 1, 'Redemption', @Red16Id, 'Starbucks Gift Card redemption', 2850.00, '2026-01-07 09:30:00', @Admin1Id),
 (NEWID(), @User01Id, 350.00, 2, 'Admin', NULL, 'Quarterly performance bonus recognition', 3200.00, '2026-01-20 10:00:00', @Admin1Id),
 (NEWID(), @User01Id, 4000.00, 0, 'Event', @Event04Id, 'Technical Workshop Series - Rank 1 Award', 7200.00, '2026-01-25 15:00:00', @Admin1Id),
-(NEWID(), @User01Id, -500.00, 1, 'Redemption', @Red17Id, 'Desk Organizer redemption pending', 6700.00, '2026-02-01 10:00:00', NULL),
+(NEWID(), @User01Id, 500.00, 1, 'Redemption', @Red17Id, 'Desk Organizer redemption pending', 6700.00, '2026-02-01 10:00:00', NULL),
 (NEWID(), @User02Id, 2000.00, 0, 'Event', @Event01Id, 'Sales Excellence Q4 - Rank 2 Award', 2000.00, '2025-12-15 16:00:00', @Admin1Id),
-(NEWID(), @User02Id, -350.00, 1, 'Redemption', @Red02Id, 'Premium Notebook Set redemption', 1650.00, '2026-01-04 10:30:00', @Admin1Id),
+(NEWID(), @User02Id, 350.00, 1, 'Redemption', @Red02Id, 'Premium Notebook Set redemption', 1650.00, '2026-01-04 10:30:00', @Admin1Id),
 (NEWID(), @User02Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1750.00, '2026-01-10 14:00:00', @Admin2Id),
-(NEWID(), @User02Id, -250.00, 1, 'Redemption', @Red18Id, 'Starbucks Gift Card redemption pending', 1500.00, '2026-02-02 09:30:00', NULL),
+(NEWID(), @User02Id, 250.00, 1, 'Redemption', @Red18Id, 'Starbucks Gift Card redemption pending', 1500.00, '2026-02-02 09:30:00', NULL),
 (NEWID(), @User02Id, 100.00, 2, 'Admin', NULL, 'Team collaboration excellence bonus', 1600.00, '2026-01-25 10:00:00', @Admin1Id),
 (NEWID(), @User03Id, 1500.00, 0, 'Event', @Event01Id, 'Sales Excellence Q4 - Rank 3 Award', 1500.00, '2025-12-15 16:00:00', @Admin1Id),
 (NEWID(), @User03Id, 5000.00, 0, 'Event', @Event02Id, 'Innovation Challenge 2025 - 1st Place', 6500.00, '2025-12-20 15:30:00', @Admin1Id),
-(NEWID(), @User03Id, -500.00, 1, 'Redemption', @Red03Id, 'Amazon Gift Card redemption', 6000.00, '2025-12-27 14:00:00', @Admin1Id),
+(NEWID(), @User03Id, 500.00, 1, 'Redemption', @Red03Id, 'Amazon Gift Card redemption', 6000.00, '2025-12-27 14:00:00', @Admin1Id),
 (NEWID(), @User03Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 6100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User03Id, 300.00, 2, 'Admin', NULL, 'Innovation excellence recognition bonus', 6400.00, '2025-12-28 10:00:00', @Admin1Id),
-(NEWID(), @User03Id, -600.00, 1, 'Redemption', @Red14Id, 'Company Jacket redemption', 5800.00, '2026-01-13 11:00:00', @Admin2Id),
+(NEWID(), @User03Id, 600.00, 1, 'Redemption', @Red14Id, 'Company Jacket redemption', 5800.00, '2026-01-13 11:00:00', @Admin2Id),
 (NEWID(), @User04Id, 1200.00, 2, 'Admin', NULL, 'New employee onboarding bonus for exceptional first quarter', 1200.00, '2025-11-15 09:00:00', @Admin1Id),
 (NEWID(), @User04Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1300.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User04Id, 3000.00, 0, 'Event', @Event04Id, 'Technical Workshop Series - Rank 2 Award', 4300.00, '2026-01-25 15:00:00', @Admin1Id),
-(NEWID(), @User04Id, -800.00, 1, 'Redemption', @Red04Id, 'Company Jacket redemption approved', 3500.00, '2026-01-28 09:00:00', @Admin1Id),
-(NEWID(), @User04Id, -600.00, 2, 'Admin', NULL, 'Points adjustment for system correction', 2900.00, '2026-01-30 09:00:00', @Admin1Id),
+(NEWID(), @User04Id, 800.00, 1, 'Redemption', @Red04Id, 'Company Jacket redemption approved', 3500.00, '2026-01-28 09:00:00', @Admin1Id),
+(NEWID(), @User04Id, 600.00, 2, 'Admin', NULL, 'Points adjustment for system correction', 2900.00, '2026-01-30 09:00:00', @Admin1Id),
 (NEWID(), @User05Id, 1100.00, 2, 'Admin', NULL, 'Project delivery bonus for on time completion of Q4 goals', 1100.00, '2025-11-20 14:00:00', @Admin1Id),
 (NEWID(), @User05Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1200.00, '2026-01-10 14:00:00', @Admin2Id),
-(NEWID(), @User05Id, -250.00, 1, 'Redemption', @Red05Id, 'Starbucks Gift Card redemption', 950.00, '2026-01-09 10:00:00', @Admin1Id),
-(NEWID(), @User05Id, -300.00, 1, 'Redemption', @Red15Id, 'Desk Organizer redemption', 650.00, '2026-01-16 09:00:00', @Admin2Id),
+(NEWID(), @User05Id, 250.00, 1, 'Redemption', @Red05Id, 'Starbucks Gift Card redemption', 950.00, '2026-01-09 10:00:00', @Admin1Id),
+(NEWID(), @User05Id, 300.00, 1, 'Redemption', @Red15Id, 'Desk Organizer redemption', 650.00, '2026-01-16 09:00:00', @Admin2Id),
 (NEWID(), @User05Id, 100.00, 2, 'Admin', NULL, 'Process improvement contribution bonus', 750.00, '2026-01-22 11:00:00', @Admin1Id),
 (NEWID(), @User06Id, 1100.00, 2, 'Admin', NULL, 'Customer retention achievement recognition bonus award', 1100.00, '2025-12-01 10:00:00', @Admin2Id),
 (NEWID(), @User06Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1200.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User06Id, 100.00, 2, 'Admin', NULL, 'Peer recognition excellence award', 1300.00, '2026-01-16 14:00:00', @Admin2Id),
-(NEWID(), @User06Id, -500.00, 1, 'Redemption', @Red06Id, 'Amazon Gift Card redemption', 800.00, '2026-01-11 16:00:00', @Admin1Id),
+(NEWID(), @User06Id, 500.00, 1, 'Redemption', @Red06Id, 'Amazon Gift Card redemption', 800.00, '2026-01-11 16:00:00', @Admin1Id),
 (NEWID(), @User07Id, 4000.00, 0, 'Event', @Event02Id, 'Innovation Challenge 2025 - 2nd Place', 4000.00, '2025-12-20 15:30:00', @Admin1Id),
-(NEWID(), @User07Id, -250.00, 1, 'Redemption', @Red07Id, 'Starbucks Gift Card redemption', 3750.00, '2026-01-06 11:00:00', @Admin2Id),
+(NEWID(), @User07Id, 250.00, 1, 'Redemption', @Red07Id, 'Starbucks Gift Card redemption', 3750.00, '2026-01-06 11:00:00', @Admin2Id),
 (NEWID(), @User07Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 3850.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User07Id, 300.00, 2, 'Admin', NULL, 'Cross-department collaboration excellence', 4150.00, '2026-01-20 15:00:00', @Admin1Id),
 (NEWID(), @User08Id, 1200.00, 2, 'Admin', NULL, 'Training completion bonus for advanced certification program', 1200.00, '2025-12-10 09:00:00', @Admin1Id),
 (NEWID(), @User08Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1300.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User08Id, 100.00, 2, 'Admin', NULL, 'Problem solving excellence recognition', 1400.00, '2026-01-14 10:30:00', @Admin2Id),
-(NEWID(), @User08Id, -500.00, 1, 'Redemption', @Red08Id, 'Amazon Gift Card redemption', 900.00, '2026-01-14 14:30:00', @Admin1Id),
+(NEWID(), @User08Id, 500.00, 1, 'Redemption', @Red08Id, 'Amazon Gift Card redemption', 900.00, '2026-01-14 14:30:00', @Admin1Id),
 (NEWID(), @User09Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User09Id, 2500.00, 0, 'Event', @Event04Id, 'Technical Workshop Series - Rank 3 Award', 2600.00, '2026-01-25 15:00:00', @Admin1Id),
 (NEWID(), @User10Id, 800.00, 2, 'Admin', NULL, 'Quality excellence award for exceptional work during audit', 800.00, '2025-12-15 11:00:00', @Admin1Id),
 (NEWID(), @User10Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 900.00, '2026-01-10 14:00:00', @Admin2Id),
-(NEWID(), @User10Id, -350.00, 1, 'Redemption', @Red09Id, 'Branded Polo Shirt redemption', 550.00, '2026-01-18 14:00:00', @Admin1Id),
+(NEWID(), @User10Id, 350.00, 1, 'Redemption', @Red09Id, 'Branded Polo Shirt redemption', 550.00, '2026-01-18 14:00:00', @Admin1Id),
 (NEWID(), @User11Id, 3000.00, 0, 'Event', @Event02Id, 'Innovation Challenge 2025 - 3rd Place', 3000.00, '2025-12-20 15:30:00', @Admin1Id),
 (NEWID(), @User11Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 3100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User11Id, 100.00, 2, 'Admin', NULL, 'Teamwork excellence recognition award', 3200.00, '2026-01-16 09:00:00', @Admin1Id),
-(NEWID(), @User11Id, -500.00, 1, 'Redemption', @Red10Id, 'Amazon Gift Card redemption', 2700.00, '2026-01-16 11:00:00', @Admin2Id),
+(NEWID(), @User11Id, 500.00, 1, 'Redemption', @Red10Id, 'Amazon Gift Card redemption', 2700.00, '2026-01-16 11:00:00', @Admin2Id),
 (NEWID(), @User12Id, 600.00, 2, 'Admin', NULL, 'Documentation excellence bonus for process improvements', 600.00, '2025-12-20 10:00:00', @Admin1Id),
 (NEWID(), @User12Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 700.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User12Id, 100.00, 2, 'Admin', NULL, 'Team support recognition bonus', 800.00, '2026-01-20 11:00:00', @Admin1Id),
-(NEWID(), @User12Id, -250.00, 1, 'Redemption', @Red11Id, 'Starbucks Gift Card redemption', 550.00, '2026-01-20 11:00:00', @Admin2Id),
+(NEWID(), @User12Id, 250.00, 1, 'Redemption', @Red11Id, 'Starbucks Gift Card redemption', 550.00, '2026-01-20 11:00:00', @Admin2Id),
 (NEWID(), @User13Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User13Id, 100.00, 2, 'Admin', NULL, 'Process improvement contribution recognition', 200.00, '2026-01-18 14:00:00', @Admin2Id),
 (NEWID(), @User14Id, 1000.00, 2, 'Admin', NULL, 'New client acquisition bonus for expanding customer base', 1000.00, '2025-12-22 15:00:00', @Admin1Id),
 (NEWID(), @User14Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 1100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User14Id, 100.00, 2, 'Admin', NULL, 'Team collaboration award recognition', 1200.00, '2026-01-19 10:00:00', @Admin1Id),
-(NEWID(), @User14Id, -500.00, 1, 'Redemption', @Red12Id, 'Amazon Gift Card redemption', 700.00, '2026-01-26 14:00:00', @Admin1Id),
+(NEWID(), @User14Id, 500.00, 1, 'Redemption', @Red12Id, 'Amazon Gift Card redemption', 700.00, '2026-01-26 14:00:00', @Admin1Id),
 (NEWID(), @User15Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 100.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User15Id, 100.00, 2, 'Admin', NULL, 'Knowledge sharing session bonus recognition', 200.00, '2026-01-22 10:00:00', @Admin1Id),
 (NEWID(), @User16Id, 600.00, 2, 'Admin', NULL, 'Support excellence award for outstanding ticket resolution', 600.00, '2025-12-28 14:00:00', @Admin2Id),
 (NEWID(), @User16Id, 100.00, 0, 'Event', @Event03Id, 'Holiday Charity Drive - Participation', 700.00, '2026-01-10 14:00:00', @Admin2Id),
 (NEWID(), @User16Id, 100.00, 2, 'Admin', NULL, 'Technical support excellence recognition', 800.00, '2026-01-15 08:30:00', @Admin1Id),
-(NEWID(), @User16Id, -250.00, 1, 'Redemption', @Red13Id, 'Starbucks Gift Card redemption', 550.00, '2026-01-23 14:00:00', @Admin1Id);
+(NEWID(), @User16Id, 250.00, 1, 'Redemption', @Red13Id, 'Starbucks Gift Card redemption', 550.00, '2026-01-23 14:00:00', @Admin1Id);
 
 PRINT '=== VERIFICATION: Balance Reconciliation ===';
 SELECT 
@@ -644,7 +674,7 @@ ORDER BY e.Status, e.Name;
 
 PRINT '=== VERIFICATION: Rank Constraints ===';
 SELECT 'PrizeTiers > Rank 3' AS [Check], COUNT(*) AS Count FROM PrizeTiers WHERE [Rank] > 3
-UNION ALL SELECT 'EventParticipants > Rank 3', COUNT(*) FROM EventParticipants WHERE EventRank > 3
+UNION ALL SELECT 'EventParticipants > Rank 3', COUNT(*) FROM EventParticipants WHERE [Rank] > 3
 UNION ALL SELECT 'Negative Balances', COUNT(*) FROM UserPointsAccounts WHERE CurrentBalance < 0
 UNION ALL SELECT 'Negative BalanceAfter', COUNT(*) FROM UserPointsTransactions WHERE BalanceAfter < 0;
 

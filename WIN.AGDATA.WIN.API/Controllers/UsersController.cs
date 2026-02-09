@@ -70,9 +70,9 @@ public class UsersController : ControllerBase
             {
                 user.Id,
                 email = user.Email.Value,
-                user.FirstName,
-                user.LastName,
-                user.EmployeeId,
+                firstName = user.FirstName.Value,
+                lastName = user.LastName.Value,
+                employeeId = user.EmployeeId.Value,
                 user.IsActive,
                 roles = user.Roles?.Select(r => r.Role.Name).ToList()
             });
@@ -80,12 +80,12 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
-                new { message = "Failed to retrieve user profile", error = ex.Message });
+                new { message = "Failed to retrieve profile", error = ex.Message });
         }
     }
 
     /// <summary>
-    /// Get user profile by ID
+    /// Get another user's profile information
     /// </summary>
     /// <remarks>
     /// Get another user's profile information.
@@ -121,9 +121,9 @@ public class UsersController : ControllerBase
             {
                 user.Id,
                 email = user.Email.Value,
-                user.FirstName,
-                user.LastName,
-                user.EmployeeId,
+                firstName = user.FirstName.Value,
+                lastName = user.LastName.Value,
+                employeeId = user.EmployeeId.Value,
                 user.IsActive,
                 roles = user.Roles?.Select(r => r.Role.Name).ToList()
             });
@@ -245,9 +245,9 @@ public class UsersController : ControllerBase
                 userId = id,
                 points = new
                 {
-                    current = user.PointsAccount.CurrentBalance,
-                    earned = user.PointsAccount.TotalEarned,
-                    redeemed = user.PointsAccount.TotalRedeemed
+                    current = user.PointsAccount.CurrentBalance.Value,
+                    earned = user.PointsAccount.TotalEarned.Value,
+                    redeemed = user.PointsAccount.TotalRedeemed.Value
                 }
             });
         }

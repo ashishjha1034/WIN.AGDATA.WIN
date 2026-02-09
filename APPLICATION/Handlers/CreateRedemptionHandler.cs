@@ -6,6 +6,8 @@ using WIN.AGDATA.WIN.APPLICATION.Interfaces;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 using WIN.AGDATA.WIN.Domain.Entities.Transactions;
 using WIN.AGDATA.WIN.Domain.Exceptions;
+using System.Diagnostics;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.APPLICATION.Handlers.Redemptions;
 
@@ -39,54 +41,107 @@ public class CreateRedemptionHandler : IRequestHandler<CreateRedemptionCommand, 
 
     public async Task<RedemptionDto> Handle(CreateRedemptionCommand request, CancellationToken ct)
     {
-        // Enforce quantity = 1 per redemption request
-        if (request.Quantity != 1)
-            throw new DomainException("You can only redeem 1 quantity per request. For additional quantities, please submit separate requests after your current redemption is delivered.");
+        try
+        {
+            Debug.WriteLine($"[CreateRedemption] Starting for UserId={request.UserId}, ProductId={request.ProductId}, Qty={request.Quantity}");
 
-        // Check if user already has a pending/approved redemption for this product
-        var hasPendingRedemption = await _redemptionRepo.HasPendingRedemptionForProductAsync(request.UserId, request.ProductId);
-        if (hasPendingRedemption)
-            throw new DomainException("You already have a pending redemption for this product. Please wait until your previous redemption is delivered before requesting again.");
+            // Enforce quantity = 1 per redemption request
+            if (request.Quantity != 1)
+                throw new DomainException("You can only redeem 1 quantity per request. For additional quantities, please submit separate requests after your current redemption is delivered.");
 
-        var product = await _productRepo.GetActiveWithDetailsAsync(request.ProductId)
-                     ?? throw new DomainException("Product not found or inactive");
+            Debug.WriteLine($"[CreateRedemption] Quantity validation passed");
 
-        var pointsCost = product.CurrentPricing * request.Quantity;
-        if (pointsCost <= 0)
-            throw new DomainException("Invalid points cost");
+            // Check if user already has a pending/approved redemption for this product
+            var hasPendingRedemption = await _redemptionRepo.HasPendingRedemptionForProductAsync(request.UserId, request.ProductId);
+            if (hasPendingRedemption)
+                throw new DomainException("You already have a pending redemption for this product. Please wait until your previous redemption is delivered before requesting again.");
 
-        var user = await _userRepo.GetByIdWithPointsAsync(request.UserId)
-                  ?? throw new DomainException("User not found");
+            Debug.WriteLine($"[CreateRedemption] Pending redemption check passed");
 
-        if (user.PointsAccount.CurrentBalance < pointsCost)
-            throw new DomainException("Insufficient points balance");
+            var product = await _productRepo.GetActiveWithDetailsAsync(request.ProductId)
+                         ?? throw new DomainException("Product not found or inactive");
 
-        // Reserve stock
-        product.Inventory.AdjustStock(-request.Quantity, request.UserId);
+            Debug.WriteLine($"[CreateRedemption] Product loaded: {product.Name}, CurrentPricing={product.CurrentPricing}");
 
-        // Deduct points - use current user ID who is making the redemption
-        var currentUserId = _currentUserService.GetCurrentUserId();
-        user.PointsAccount.SpendPoints(pointsCost, currentUserId);
+            var pointsCost = product.CurrentPricing * request.Quantity;
+            if (pointsCost <= 0)
+                throw new DomainException("Invalid points cost");
 
-        var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
-        _redemptionRepo.Add(redemption);
+            Debug.WriteLine($"[CreateRedemption] Points cost calculated: {pointsCost}");
 
-        // Create transaction record for redemption
-        var transaction = UserPointsTransaction.CreateRedeemed(
-            userId: request.UserId,
-            points: pointsCost,
-            source: "Product Redemption",
-            sourceId: request.ProductId,
-            description: $"Redeemed {product.Name} (Qty: {request.Quantity})",
-            balanceAfter: user.PointsAccount.CurrentBalance,
-            processedBy: currentUserId
-        );
+            var user = await _userRepo.GetByIdWithPointsAsync(request.UserId)
+                      ?? throw new DomainException("User not found");
 
-        _transactionRepo.Add(transaction);
+            Debug.WriteLine($"[CreateRedemption] User loaded: {user.Email}, CurrentBalance={user.PointsAccount.CurrentBalance}");
 
-        await _unitOfWork.SaveChangesAsync(ct);
+            // Cast to decimal for proper comparison with account balance
+            var pointsCostDecimal = Convert.ToDecimal(pointsCost);
+            if (user.PointsAccount.CurrentBalance < pointsCostDecimal)
+                throw new DomainException("Insufficient points balance");
 
-        var loaded = await _redemptionRepo.GetByIdWithDetailsAsync(redemption.Id);
-        return _mapper.Map<RedemptionDto>(loaded!);
+            Debug.WriteLine($"[CreateRedemption] Balance check passed");
+
+            // Validate product/user exist before modifying state
+            if (product.Id == Guid.Empty)
+                throw new DomainException("Invalid product reference");
+
+            Debug.WriteLine($"[CreateRedemption] Product reference valid");
+
+            // Reserve stock
+            product.Inventory.AdjustStock(-request.Quantity, request.UserId);
+            Debug.WriteLine($"[CreateRedemption] Stock adjusted. Available={product.Inventory.QuantityAvailable}, Reserved={product.Inventory.QuantityReserved}");
+
+            // Deduct points - use current user ID who is making the redemption
+            var currentUserId = _currentUserService.GetCurrentUserId();
+            Debug.WriteLine($"[CreateRedemption] Current user ID: {currentUserId}");
+            
+            user.PointsAccount.SpendPoints(pointsCostDecimal, currentUserId);
+            Debug.WriteLine($"[CreateRedemption] Points spent. New balance: {user.PointsAccount.CurrentBalance}");
+
+            // Create redemption entity
+            var redemption = new Redemption(request.UserId, request.ProductId, pointsCost, request.Quantity);
+            _redemptionRepo.Add(redemption);
+            Debug.WriteLine($"[CreateRedemption] Redemption entity created with ID: {redemption.Id}");
+
+            // Create transaction record for redemption
+            var transaction = UserPointsTransaction.CreateRedeemed(
+                userId: request.UserId,
+                points: Points.Create(pointsCostDecimal),
+                source: "Product Redemption",
+                sourceId: request.ProductId,
+                description: $"Redeemed {product.Name} (Qty: {request.Quantity})",
+                balanceAfter: user.PointsAccount.CurrentBalance,
+                processedBy: currentUserId
+            );
+
+            _transactionRepo.Add(transaction);
+            Debug.WriteLine($"[CreateRedemption] Transaction entity created with ID: {transaction.Id}");
+
+            Debug.WriteLine($"[CreateRedemption] About to save changes to database...");
+            Debug.WriteLine($"[CreateRedemption] Redemption: {System.Text.Json.JsonSerializer.Serialize(new { redemption.Id, redemption.UserId, redemption.ProductId, redemption.PointsSpent, redemption.Status })}");
+            
+            await _unitOfWork.SaveChangesAsync(ct);
+            Debug.WriteLine($"[CreateRedemption] Changes saved to database successfully");
+
+            var loaded = await _redemptionRepo.GetByIdWithDetailsAsync(redemption.Id);
+            if (loaded == null)
+                throw new InvalidOperationException($"Failed to retrieve saved redemption with ID: {redemption.Id}");
+                
+            var result = _mapper.Map<RedemptionDto>(loaded);
+            Debug.WriteLine($"[CreateRedemption] Redemption mapped to DTO successfully");
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[CreateRedemption] ERROR: {ex.Message}");
+            Debug.WriteLine($"[CreateRedemption] Stack Trace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Debug.WriteLine($"[CreateRedemption] Inner Exception: {ex.InnerException.Message}");
+                Debug.WriteLine($"[CreateRedemption] Inner Stack: {ex.InnerException.StackTrace}");
+            }
+            throw;
+        }
     }
 }

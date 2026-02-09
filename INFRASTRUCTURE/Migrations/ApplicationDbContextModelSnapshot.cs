@@ -82,10 +82,8 @@ namespace INFRASTRUCTURE.Migrations
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<decimal>("DistributedPoints")
-                        .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("EventDate")
                         .HasColumnType("datetime2");
@@ -101,10 +99,6 @@ namespace INFRASTRUCTURE.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<decimal>("PointsPerParticipant")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("RegistrationEndDate")
                         .HasColumnType("datetime2");
@@ -154,12 +148,12 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int?>("EventRank")
-                        .HasColumnType("int");
-
                     b.Property<decimal>("PointsAwarded")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("Rank")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("RegisteredAt")
                         .HasColumnType("datetime2");
@@ -309,8 +303,9 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<DateTime?>("EffectiveTo")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("PointsCost")
-                        .HasColumnType("int");
+                    b.Property<decimal>("PointsCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
@@ -327,7 +322,7 @@ namespace INFRASTRUCTURE.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_ProductPricing_ProductId");
 
-                    b.ToTable("ProductPricings");
+                    b.ToTable("ProductPricing", (string)null);
                 });
 
             modelBuilder.Entity("WIN.AGDATA.WIN.Domain.Entities.Redemptions.Redemption", b =>
@@ -358,8 +353,9 @@ namespace INFRASTRUCTURE.Migrations
                     b.Property<Guid?>("DeliveredBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("PointsSpent")
-                        .HasColumnType("int");
+                    b.Property<decimal>("PointsSpent")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
@@ -612,25 +608,19 @@ namespace INFRASTRUCTURE.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("CurrentBalance")
-                        .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("TotalEarned")
-                        .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("TotalRedeemed")
-                        .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasDefaultValue(0m);
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");

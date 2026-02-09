@@ -553,10 +553,10 @@ public class DeactivateUserHandlerTests
     private User CreateTestUser(Guid userId, string name, bool isAdmin, int pointsBalance = 0)
     {
         var user = new User(
-            $"EMP{userId.ToString()[..8]}",
+            EmployeeId.Create($"EMP{userId.ToString()[..8]}"),
             EmailAddress.Create($"{name.ToLower()}@example.com"),
-            name,
-            "TestUser",
+            PersonName.Create(name),
+            PersonName.Create("TestUser"),
             "TestPassword123!");
 
         // Use reflection to set the Id

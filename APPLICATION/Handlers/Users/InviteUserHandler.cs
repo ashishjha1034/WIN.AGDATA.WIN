@@ -40,10 +40,10 @@ public class InviteUserHandler : IRequestHandler<InviteUserCommand, UserDto>
         var temporaryPassword = request.TemporaryPassword ?? GenerateTemporaryPassword();
 
         var user = new User(
-            employeeId: request.EmployeeId,
+            employeeId: EmployeeId.Create(request.EmployeeId),
             email: email,
-            firstName: request.FirstName,
-            lastName: request.LastName,
+            firstName: PersonName.Create(request.FirstName),
+            lastName: PersonName.Create(request.LastName),
             password: temporaryPassword);
 
         user.RequirePasswordChange();

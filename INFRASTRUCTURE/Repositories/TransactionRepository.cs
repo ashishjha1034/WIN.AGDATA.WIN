@@ -133,10 +133,10 @@ public class TransactionRepository : Repository<UserPointsTransaction>, ITransac
             var search = searchQuery.ToLower();
             query = query.Where(t =>
                 t.Description.ToLower().Contains(search) ||
-                t.User.FirstName.ToLower().Contains(search) ||
-                t.User.LastName.ToLower().Contains(search) ||
+                t.User.FirstName.Value.ToLower().Contains(search) ||
+                t.User.LastName.Value.ToLower().Contains(search) ||
                 t.User.Email.Value.ToLower().Contains(search) ||
-                t.User.EmployeeId.ToLower().Contains(search));
+                t.User.EmployeeId.Value.ToLower().Contains(search));
         }
 
         // Get total count before pagination

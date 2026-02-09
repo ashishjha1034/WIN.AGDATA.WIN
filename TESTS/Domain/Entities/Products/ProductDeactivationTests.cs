@@ -108,6 +108,7 @@ public class ProductTests
         Assert.Throws<ProductDeactivationBlockedException>(
             () => product.Deactivate(
                 "Test reason",
+                Guid.Empty,
                 pendingRedemptions: 1,
                 approvedRedemptions: 0,
                 force: true)); // Even with force, blocks cannot be bypassed
@@ -123,6 +124,7 @@ public class ProductTests
         // Act
         product.Deactivate(
             "Deactivated for testing",
+            Guid.Empty,
             pendingRedemptions: 0,
             approvedRedemptions: 0,
             force: false);
@@ -187,7 +189,7 @@ public class ProductTests
     private Product CreateTestProduct(int stock)
     {
         var categoryId = Guid.NewGuid();
-        var product = new Product("Test Product", "Description", categoryId, 100, null);
+        var product = new Product("Test Product", "Description", categoryId, Points.Create(100), null);
         
         // Adjust inventory stock if needed
         if (product.Inventory != null && stock > 0)

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Events;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -18,7 +19,11 @@ public class EventParticipantConfiguration : IEntityTypeConfiguration<EventParti
         builder.Property(ep => ep.AttendanceStatus).HasConversion<int>();
 
         // Points awarded - use decimal(18,2) for 2 decimal places
-        builder.Property(ep => ep.PointsAwarded).HasPrecision(18, 2);
+        builder.Property(ep => ep.PointsAwarded)
+            .HasPrecision(18, 2)
+            .HasConversion(
+                v => v.Value,
+                v => Points.Create(v));
 
         builder.HasIndex(ep => new { ep.EventId, ep.UserId }).IsUnique();
     }

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Redemptions;
 using WIN.AGDATA.WIN.Domain.Enums;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -13,7 +14,13 @@ public class RedemptionConfiguration : IEntityTypeConfiguration<Redemption>
 
         builder.Property(r => r.UserId).IsRequired();
         builder.Property(r => r.ProductId).IsRequired();
-        builder.Property(r => r.PointsSpent).IsRequired();
+        
+        builder.Property(r => r.PointsSpent)
+            .IsRequired()
+            .HasPrecision(18, 2)
+            .HasConversion(
+                v => v.Value,
+                v => Points.Create(v));
         builder.Property(r => r.Quantity).IsRequired();
         builder.Property(r => r.Status)
                .HasDefaultValue(RedemptionStatus.Pending)

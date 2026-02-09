@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WIN.AGDATA.WIN.Domain.Entities.Users;
+using WIN.AGDATA.WIN.Domain.ValueObjects;
 
 namespace WIN.AGDATA.WIN.Infrastructure.Data.Configurations;
 
@@ -9,14 +10,33 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.HasKey(u => u.Id);
-        builder.Property(u => u.EmployeeId).IsRequired().HasMaxLength(50);
+        
+        builder.Property(u => u.EmployeeId)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasConversion(
+                v => v.Value,
+                v => EmployeeId.Create(v));
         builder.OwnsOne(u => u.Email, e =>
         {
             e.Property(em => em.Value).HasColumnName("Email").IsRequired().HasMaxLength(255);
             e.HasIndex(em => em.Value).IsUnique();
         });
-        builder.Property(u => u.FirstName).IsRequired().HasMaxLength(100);
-        builder.Property(u => u.LastName).IsRequired().HasMaxLength(100);
+        
+        builder.Property(u => u.FirstName)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasConversion(
+                v => v.Value,
+                v => PersonName.Create(v));
+        
+        builder.Property(u => u.LastName)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasConversion(
+                v => v.Value,
+                v => PersonName.Create(v));
+        
         builder.Property(u => u.IsActive).HasDefaultValue(true);
         builder.Property(u => u.MustChangePassword).HasDefaultValue(false);
         builder.Property(u => u.LastPasswordChangedAt).HasColumnType("datetime2").IsRequired(false);
