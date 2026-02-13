@@ -308,29 +308,36 @@ app.MapGet("/health", () =>
 // =======================================================
 // Database Init
 // =======================================================
-using (var scope = app.Services.CreateScope())
+// Skip seeding when in Testing environment - tests handle their own seed data
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        // Ensure database is created and migrations are applied
-        // NOTE: Migrations already applied manually via 'dotnet ef database update'
-        // Comment out to avoid re-running migrations on every startup
-        // await dbContext.Database.MigrateAsync();
-        // logger.LogInformation("✓ Database migrations applied");
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         
-        // Seed initial data (only creates admin if no users exist)
-        await DatabaseSeeder.SeedAsync(dbContext, logger);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error during database initialization");
-        throw;
+        try
+        {
+            // Ensure database is created and migrations are applied
+            // NOTE: Migrations already applied manually via 'dotnet ef database update'
+            // Comment out to avoid re-running migrations on every startup
+            // await dbContext.Database.MigrateAsync();
+            // logger.LogInformation("✓ Database migrations applied");
+            
+            // Seed initial data (only creates admin if no users exist)
+            await DatabaseSeeder.SeedAsync(dbContext, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during database initialization");
+            throw;
+        }
     }
 }
 
 Console.WriteLine("Starting application...");
 app.Run();
 Console.WriteLine("Application ended.");
+
+// Partial class to make Program public for WebApplicationFactory in integration tests
+public partial class Program { }

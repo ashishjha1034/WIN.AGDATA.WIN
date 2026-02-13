@@ -1,0 +1,2 @@
+Module,Title,Precondition,Steps ,Expected Result
+User/Transactions,View paginated transactions,User has transactions,When user opens Transactions then items are paginated/sortable; balances match running balance,Data matches server and pagination works

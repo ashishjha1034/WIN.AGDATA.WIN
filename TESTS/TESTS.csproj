@@ -5,9 +5,14 @@
 		<IsPackable>false</IsPackable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<CollectCoverage>true</CollectCoverage>
+		<CoverletOutputFormat>cobertura,lcov</CoverletOutputFormat>
+		<CoverletOutput>./_Results/coverage/</CoverletOutput>
 	</PropertyGroup>
 
 	<ItemGroup>
+		
+		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
 		
 		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.0" />
 		
@@ -25,12 +30,22 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+		
+		<!-- Integration Testing -->
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\DOMAIN\DOMAIN.csproj" />
 		<ProjectReference Include="..\APPLICATION\APPLICATION.csproj" />
 		<ProjectReference Include="..\INFRASTRUCTURE\INFRASTRUCTURE.csproj" />
+		<ProjectReference Include="..\WIN.AGDATA.WIN.API\API.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="xunit.runner.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 
 </Project>

@@ -419,19 +419,22 @@ public static class SharedValidationRules
 
     /// <summary>
     /// Checks if a string contains only alphanumeric words separated by single spaces.
+    /// No leading/trailing whitespace allowed.
     /// </summary>
     public static bool IsAlphanumericWords(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return false;
 
-        var trimmed = value.Trim();
+        // Reject leading or trailing whitespace
+        if (value != value.Trim())
+            return false;
         
         // Check for consecutive spaces
-        if (trimmed.Contains("  "))
+        if (value.Contains("  "))
             return false;
 
-        var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var words = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var alphanumericPattern = new Regex(@"^[a-zA-Z0-9]+$");
         
         return words.All(w => alphanumericPattern.IsMatch(w));

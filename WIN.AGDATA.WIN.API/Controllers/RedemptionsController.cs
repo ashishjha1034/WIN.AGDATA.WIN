@@ -6,6 +6,7 @@ using Swashbuckle.AspNetCore.Annotations;
 using WIN.AGDATA.WIN.APPLICATION.Commands.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.DTOs.Redemptions;
 using WIN.AGDATA.WIN.APPLICATION.Interfaces;
+using WIN.AGDATA.WIN.Domain.Exceptions;
 
 namespace WIN.AGDATA.WIN.API.Controllers;
 
@@ -72,6 +73,10 @@ public class RedemptionsController : ControllerBase
             var result = await _mediator.Send(command);
 
             return CreatedAtAction(nameof(GetRedemption), new { id = result.Id }, result);
+        }
+        catch (DomainException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {

@@ -8,6 +8,11 @@
 		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
 	</PropertyGroup>
 
+	<!-- Allow test project to access internal types like Program -->
+	<ItemGroup>
+		<InternalsVisibleTo Include="TESTS" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
